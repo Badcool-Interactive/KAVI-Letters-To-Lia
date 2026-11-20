@@ -6,6 +6,7 @@ config/name="VOLT/RUN"
 config/description="Kite runs across a luminous future Europe to reach Lumi."
 config/version="0.1.0"
 run/main_scene="res://main.tscn"
+config/icon="res://icon.svg"
 config/features=PackedStringArray("4.7", "Mobile")
 
 [display]
@@ -30,3 +31,4 @@ renderer/rendering_method="mobile"
 viewport/hdr_2d=true
 environment/defaults/default_clear_color=Color(0.02, 0.03, 0.06, 1)
 textures/canvas_textures/default_texture_filter=1
+textures/vram_compression/import_etc2_astc=true
