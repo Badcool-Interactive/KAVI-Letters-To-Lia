@@ -124,6 +124,18 @@ func test_verbs() -> void:
 		return {"jump_pressed": s2.on_ground and d < 90.0, "jump_held": true, "down_pressed": false, "down_held": false, "gust_pressed": false, "letter_pressed": false}
 	s = run_scripted(tr5, 520.0, plain_jump, 3.0)
 	check(s.dead, "bloom wall cannot be hopped")
+	# Bot dive onto the bloom: exactly one strong bounce, no re-slam loop.
+	var tr7 = Track.new()
+	tr7.obs = [Track.make(Track.BLOOM, 800.0, 520.0, rng)]
+	var s7 = Sim.new()
+	s7.track = tr7
+	var strong_bounces := 0
+	for i in 400:
+		s7.step(1.0 / 120.0, Track.bot_input(s7))
+		for e in s7.events:
+			if e.type == "bloom" and e.strong:
+				strong_bounces += 1
+	check(not s7.dead and strong_bounces == 1, "bloom bounces once (got %d)" % strong_bounces)
 	# Kind mode never fails.
 	var tr6 = Track.new()
 	tr6.gen_segment(0.0, 20.0, 520.0, 1.0, all_types(), 99, false, true)

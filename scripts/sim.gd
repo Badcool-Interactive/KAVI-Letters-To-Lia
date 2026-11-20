@@ -46,6 +46,7 @@ var coyote := 0.0
 var jump_buf := 0.0
 var air_t := 0.0
 var land_t := 0.0
+var bloom_lock := 0.0
 var planes: Array = []
 var events: Array = []
 var kind_mode := false
@@ -78,6 +79,7 @@ func step(dt: float, inp: Dictionary) -> void:
 	letter_cd = maxf(letter_cd - dt, 0.0)
 	coyote = maxf(coyote - dt, 0.0)
 	jump_buf = maxf(jump_buf - dt, 0.0)
+	bloom_lock = maxf(bloom_lock - dt, 0.0)
 	land_t += dt
 	if letters < LETTER_MAX:
 		letter_t += dt
@@ -104,7 +106,7 @@ func step(dt: float, inp: Dictionary) -> void:
 			sliding = want_slide
 	if not on_ground:
 		air_t += dt
-		if inp.down_pressed and not diving and coyote <= 0.0:
+		if inp.down_pressed and not diving and coyote <= 0.0 and bloom_lock <= 0.0:
 			diving = true
 			hovering = false
 			vy = maxf(vy, DIVE_V)
@@ -175,13 +177,16 @@ func _land(inp: Dictionary, sp: float) -> void:
 	if pad != null:
 		var strong := impact > 1300.0
 		vy = -BLOOM_V if strong else -720.0
-		if strong and absf(x - (pad.x + pad.w * 0.5)) < 38.0:
+		var newly := false
+		if strong and not pad.perf and absf(x - (pad.x + pad.w * 0.5)) < 38.0:
 			pad.perf = true
+			newly = true
+		bloom_lock = 0.3
 		diving = false
 		hovering = false
 		jump_cut = true
 		hover_fuel = HOVER_FUEL
-		_emit("bloom", {"strong": strong, "o": pad})
+		_emit("bloom", {"strong": strong, "o": pad, "perfect": newly})
 		return
 	on_ground = true
 	hover_fuel = HOVER_FUEL

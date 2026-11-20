@@ -1,0 +1,4 @@
+asset,source,licence,ai_tool,prompt,human_modifications
+all visuals (characters, world, obstacles, UI),procedural GDScript in scripts/,project-original,Claude Opus 5.5 (code author),n/a,owner review pending
+all audio (music loops, sfx),procedural synthesis in scripts/synth.gd,project-original,Claude Opus 5.5 (code author),n/a,owner review pending
+UI font,device system font via SystemFont (not shipped),system,none,n/a,none
