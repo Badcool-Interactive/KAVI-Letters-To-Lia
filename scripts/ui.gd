@@ -109,7 +109,9 @@ func show_none() -> void:
 
 func show_title() -> void:
 	var v = _panel(0.64, 640, false)
-	var first = _btn(v, "Story  ·  Find Lumi", main.menu_story, 44)
+	var ch := int(main.save.data.story_chapter)
+	var cont: bool = ch > 0 and not main.save.data.story_done
+	var first = _btn(v, ("Story  ·  Continue chapter %d" % (ch + 1)) if cont else "Story  ·  Find Lumi", main.menu_story, 44)
 	_btn(v, "Endless Road", main.menu_endless)
 	_btn(v, "Daily Relay", main.menu_daily)
 	var row = HBoxContainer.new()
@@ -170,6 +172,13 @@ func show_settings() -> void:
 	_cycle(v, "Music", "music", [0.0, 0.4, 0.8, 1.0])
 	_cycle(v, "Sound effects", "sfx", [0.0, 0.5, 0.9, 1.0])
 	_cycle(v, "Button size", "controls_scale", [0.8, 1.0, 1.2, 1.4])
+	var gq: String = st.get("graphics", "auto")
+	_btn(v, "Graphics:  %s" % gq.capitalize(), func():
+		var opts := ["auto", "low", "medium", "high"]
+		st["graphics"] = opts[(opts.find(gq) + 1) % opts.size()]
+		main.save.save()
+		main._apply_settings()
+		show_settings(), 28)
 	_btn(v, "Back", main.go_title)
 
 func _toggle(v: Container, text: String, key: String) -> void:
@@ -210,6 +219,13 @@ func show_results(r: Dictionary) -> void:
 	_label(v, "Best %d" % r.best, 28, Color(1, 1, 1, 0.6))
 	var b = _btn(v, "Run again", main.menu_retry, 44)
 	_btn(v, "Main menu", main.go_title)
+	b.grab_focus.call_deferred()
+
+func show_story_over(ch: int) -> void:
+	var v := _panel(0.5, 720)
+	_label(v, "Out of hearts", 68, Color(1.0, 0.6, 0.7))
+	_label(v, "Kite needs a rest. Your progress is saved: next time you start at chapter %d." % (ch + 1), 32, Color(1, 1, 1, 0.85))
+	var b := _btn(v, "Back to home", main.go_title, 44)
 	b.grab_focus.call_deferred()
 
 func show_tutorial_skip() -> void:

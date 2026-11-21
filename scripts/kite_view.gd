@@ -220,18 +220,27 @@ static func _ik(a: Vector2, b: Vector2, l1: float, l2: float, bend: float) -> Ve
 # ------------------------------------------------------------------ paint
 func _poly(ci: Node2D, pts: PackedVector2Array, fill: Color, ink := true) -> void:
 	ci.draw_colored_polygon(pts, fill)
-	if ink:
+	if ink and Art.Q >= 1:
 		var c = pts.duplicate()
 		c.append(pts[0])
-		ci.draw_polyline(c, INK, 2.2, true)
+		ci.draw_polyline(c, INK, 2.2, Art.AA)
 
+## A limb is one inked capsule: 2 draw calls instead of 6.
 func _limb(ci: Node2D, a: Vector2, b: Vector2, w: float, col: Color) -> void:
-	ci.draw_line(a, b, INK, w + 4.0, true)
-	ci.draw_circle(a, (w + 4.0) * 0.5, INK)
-	ci.draw_circle(b, (w + 4.0) * 0.5, INK)
-	ci.draw_line(a, b, col, w, true)
-	ci.draw_circle(a, w * 0.5, col)
-	ci.draw_circle(b, w * 0.5, col)
+	ci.draw_colored_polygon(_capsule(a, b, (w + 4.0) * 0.5), INK)
+	ci.draw_colored_polygon(_capsule(a, b, w * 0.5), col)
+
+static func _capsule(a: Vector2, b: Vector2, r: float) -> PackedVector2Array:
+	var d := b - a
+	var ang := d.angle() if d.length() > 0.01 else 0.0
+	var p := PackedVector2Array()
+	for i in 7:
+		var t := ang + PI * 0.5 + PI * float(i) / 6.0
+		p.append(a + Vector2(cos(t), sin(t)) * r)
+	for i in 7:
+		var t := ang - PI * 0.5 + PI * float(i) / 6.0
+		p.append(b + Vector2(cos(t), sin(t)) * r)
+	return p
 
 func _paint(ci: Node2D, add: bool) -> void:
 	var p = _pose_params()
@@ -241,7 +250,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 		for k in range(1, _trail.size()):
 			var a = float(k) / _trail.size()
 			var w = 1.5 + a * 2.5 * (tier - 1)
-			ci.draw_line(ci.to_local(_trail[k - 1]), ci.to_local(_trail[k]), Art.hdr(Color(tc, a * 0.35), 1.3), w, true)
+			ci.draw_line(ci.to_local(_trail[k - 1]), ci.to_local(_trail[k]), Art.hdr(Color(tc, a * 0.35), 1.3), w, Art.AA)
 	# ground contact shadow
 	if not add and pose in ["run", "walk", "idle", "slide", "gust", "throw", "wave", "eat", "drink", "map", "photo", "read", "stretch"]:
 		ci.draw_colored_polygon(Art.ellipse(Vector2(0, 2), Vector2(30 * s, 5 * s), 16), Color(0, 0, 0, 0.35))
@@ -270,13 +279,13 @@ func _paint(ci: Node2D, add: bool) -> void:
 			var pts = PackedVector2Array()
 			for q in _scarf_pts:
 				pts.append(ci.to_local(q))
-			ci.draw_polyline(pts, INK, 11.0 * s, true)
-			ci.draw_polyline(pts, sc, 7.5 * s, true)
+			ci.draw_polyline(pts, INK, 11.0 * s, Art.AA)
+			ci.draw_polyline(pts, sc, 7.5 * s, Art.AA)
 			var tail2 = PackedVector2Array()
 			for k in range(1, pts.size()):
 				tail2.append(pts[k] + Vector2(2, 7 + sin(t * 12.0 + k) * 2.0) * s)
-			ci.draw_polyline(tail2, INK, 9.0 * s, true)
-			ci.draw_polyline(tail2, sc.darkened(0.15), 5.5 * s, true)
+			ci.draw_polyline(tail2, INK, 9.0 * s, Art.AA)
+			ci.draw_polyline(tail2, sc.darkened(0.15), 5.5 * s, Art.AA)
 			ci.draw_set_transform(p.off * s, p.rot, p.sq * s)
 		# backpack + thrusters
 		_poly(ci, Art.rrect(Rect2(-27, -66, 18, 30), 6), PACK)
@@ -322,7 +331,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 	if not add:
 		# ear pod (back side)
 		_poly(ci, Art.ellipse(hc + Vector2(-17, 2), Vector2(8, 9), 16), SHELL)
-		ci.draw_arc(hc + Vector2(-17, 2), 5.5, 0, TAU, 16, TEAL, 2.5, true)
+		ci.draw_arc(hc + Vector2(-17, 2), 5.5, 0, TAU, 16, TEAL, 2.5, Art.AA)
 		_poly(ci, Art.ellipse(hc, Vector2(29, 26), 30), SHADE)
 		ci.draw_colored_polygon(Art.ellipse(hc + Vector2(2, -2), Vector2(26, 23), 30), SHELL)
 		# teal crest stripe over the top
@@ -330,7 +339,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 		for k in 9:
 			var a = lerpf(PI * 1.18, PI * 1.62, float(k) / 8.0)
 			crest.append(hc + Vector2(cos(a) * 26.5, sin(a) * 23.5))
-		ci.draw_polyline(crest, TEAL, 6.0, true)
+		ci.draw_polyline(crest, TEAL, 6.0, Art.AA)
 		# visor
 		var vc = hc + Vector2(9, 2)
 		_poly(ci, Art.ellipse(vc, Vector2(19, 15), 26), TEAL)
@@ -339,14 +348,14 @@ func _paint(ci: Node2D, add: bool) -> void:
 		# antenna + kite
 		var a0 = hc + Vector2(12, -22)
 		var a1 = a0 + Vector2(7, -15) + Vector2(sin(t * 6.0) * 1.5, 0)
-		ci.draw_line(a0, a1, TEAL, 2.5, true)
+		ci.draw_line(a0, a1, TEAL, 2.5, Art.AA)
 		var kd = a1 + Vector2(0, -6)
 		_poly(ci, PackedVector2Array([kd + Vector2(0, -7), kd + Vector2(5, 0), kd + Vector2(-5, 0)]), Color(1.0, 0.55, 0.35))
 		_poly(ci, PackedVector2Array([kd + Vector2(-5, 0), kd + Vector2(5, 0), kd + Vector2(0, 9)]), Color(0.35, 0.55, 1.0))
 		var tail = PackedVector2Array()
 		for k in 5:
 			tail.append(kd + Vector2(-k * 4.0, 9 + k * 2.0 + sin(t * 10.0 + k) * 2.0))
-		ci.draw_polyline(tail, Color(1.0, 0.55, 0.35), 1.5, true)
+		ci.draw_polyline(tail, Color(1.0, 0.55, 0.35), 1.5, Art.AA)
 		# scarf wrap at the neck
 		var sc2: Color = SCARVES[scarf % SCARVES.size()]
 		ci.draw_set_transform(p.off * s, p.rot, p.sq * s)
@@ -417,10 +426,10 @@ func _eyes(ci: Node2D, vc: Vector2) -> void:
 				ci.draw_line(c + Vector2(-3, 1), c + Vector2(3, 1), col, 2.0)
 		"happy":
 			for c in [l, r]:
-				ci.draw_polyline(PackedVector2Array([c + Vector2(-4, 2), c + Vector2(0, -3), c + Vector2(4, 2)]), col, 2.5, true)
+				ci.draw_polyline(PackedVector2Array([c + Vector2(-4, 2), c + Vector2(0, -3), c + Vector2(4, 2)]), col, 2.5, Art.AA)
 		"wow":
 			for c in [l, r]:
-				ci.draw_arc(c, 4.5, 0, TAU, 16, col, 2.5, true)
+				ci.draw_arc(c, 4.5, 0, TAU, 16, col, 2.5, Art.AA)
 		"heart":
 			for c in [l, r]:
 				_heart(ci, c, 4.5, Art.hdr(Color(1.0, 0.45, 0.7), 2.4))
@@ -432,10 +441,10 @@ func _eyes(ci: Node2D, vc: Vector2) -> void:
 				ci.draw_line(c + Vector2(-3, 3), c + Vector2(3, -3), col, 2.0)
 		"scared":
 			for c in [l, r]:
-				ci.draw_polyline(PackedVector2Array([c + Vector2(-4, -3), c + Vector2(2, 0), c + Vector2(-4, 3)]) if c == l else PackedVector2Array([c + Vector2(4, -3), c + Vector2(-2, 0), c + Vector2(4, 3)]), col, 2.5, true)
+				ci.draw_polyline(PackedVector2Array([c + Vector2(-4, -3), c + Vector2(2, 0), c + Vector2(-4, 3)]) if c == l else PackedVector2Array([c + Vector2(4, -3), c + Vector2(-2, 0), c + Vector2(4, 3)]), col, 2.5, Art.AA)
 		"calm":
 			for c in [l, r]:
-				ci.draw_arc(c + Vector2(0, -1), 3.5, 0.2, PI - 0.2, 8, col, 2.0, true)
+				ci.draw_arc(c + Vector2(0, -1), 3.5, 0.2, PI - 0.2, 8, col, 2.0, Art.AA)
 
 static func _heart(ci: Node2D, c: Vector2, r: float, col: Color) -> void:
 	ci.draw_circle(c + Vector2(-r * 0.5, -r * 0.2), r * 0.55, col)

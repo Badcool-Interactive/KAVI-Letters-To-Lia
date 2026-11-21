@@ -55,8 +55,8 @@ func _draw() -> void:
 		draw_circle(q.p, q.s * (0.4 + f * 0.6), Color(c.r, c.g, c.b, f))
 	for r in rings:
 		var f2: float = 1.0 - r.l / r.m
-		draw_arc(r.p, r.r * ease(f2, 0.4), 0.0, TAU, 40, Color(r.c, (1.0 - f2) * 0.9), r.w * (1.0 - f2) + 1.0, true)
+		draw_arc(r.p, r.r * ease(f2, 0.4), 0.0, TAU, 40, Color(r.c, (1.0 - f2) * 0.9), r.w * (1.0 - f2) + 1.0, Art.AA)
 	for w in winds:
 		var f3: float = w.l / w.m
 		var c3 = Color(0.6, 1.0, 0.85, f3 * 0.8)
-		draw_arc(w.p, 26.0 + (1.0 - f3) * 40.0, -0.9, 0.9, 12, c3, 3.0, true)
+		draw_arc(w.p, 26.0 + (1.0 - f3) * 40.0, -0.9, 0.9, 12, c3, 3.0, Art.AA)

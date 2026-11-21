@@ -24,12 +24,31 @@ static func rrect(r: Rect2, rad: float, seg := 5) -> PackedVector2Array:
 			p.append(cs[k] + Vector2(cos(a), sin(a)) * rad)
 	return p
 
-static func glow(ci: CanvasItem, p: Vector2, r: float, col: Color, steps := 6) -> void:
-	for i in steps:
-		var f := 1.0 - float(i) / float(steps)
-		var c := col
-		c.a = col.a * (0.12 + 0.88 * (1.0 - f)) / float(steps) * 2.2
-		ci.draw_circle(p, r * f, c)
+## Global render quality: 0 low, 1 medium, 2 high. AA = antialiased lines.
+static var Q := 2
+static var AA := true
+static var _dot: Texture2D
+
+## Soft radial dot shared by every glow: one textured quad per glow, which
+## batches into a single draw call (was 5-6 stacked circles each).
+static func dot() -> Texture2D:
+	if _dot == null:
+		var g := Gradient.new()
+		g.set_color(0, Color(1, 1, 1, 1))
+		g.set_color(1, Color(1, 1, 1, 0))
+		g.add_point(0.35, Color(1, 1, 1, 0.45))
+		var t := GradientTexture2D.new()
+		t.gradient = g
+		t.fill = GradientTexture2D.FILL_RADIAL
+		t.fill_from = Vector2(0.5, 0.5)
+		t.fill_to = Vector2(1.0, 0.5)
+		t.width = 64
+		t.height = 64
+		_dot = t
+	return _dot
+
+static func glow(ci: CanvasItem, p: Vector2, r: float, col: Color, _steps := 6) -> void:
+	ci.draw_texture_rect(dot(), Rect2(p.x - r, p.y - r, r * 2.0, r * 2.0), false, Color(col.r, col.g, col.b, col.a * 0.8))
 
 static func hash01(a: int, b: int) -> float:
 	var h := (a * 374761393 + b * 668265263) & 0x7fffffff

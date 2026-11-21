@@ -74,7 +74,8 @@ func _draw_base(ci: Node2D) -> void:
 			PackedColorArray([band_top, band_top, band_mid, band_mid]))
 		ci.draw_polygon(PackedVector2Array([Vector2(a, 60), Vector2(b, 60), Vector2(b, 260), Vector2(a, 260)]),
 			PackedColorArray([band_mid, band_mid, gcol, gcol]))
-		_strata(ci, a, b, gcol)
+		if Art.Q >= 2:
+			_strata(ci, a, b, gcol)
 		_tufts(ci, a, b, gcol)
 	# holes: dark depth
 	for h in holes:
@@ -116,25 +117,31 @@ func _strata(ci: Node2D, a: float, b: float, gcol: Color) -> void:
 		var y: float = 50.0 + Art.hash01(c, 32) * 120.0
 		var r := Vector2(26.0 + Art.hash01(c, 33) * 40.0, 12.0 + Art.hash01(c, 34) * 14.0)
 		ci.draw_colored_polygon(Art.ellipse(Vector2(x, y), r, 16, Art.hash01(c, 35) * 0.4 - 0.2), dark)
-		ci.draw_arc(Vector2(x, y), r.x * 0.9, PI * 1.15, PI * 1.85, 8, Color(lit, 0.5), 2.0, true)
+		ci.draw_arc(Vector2(x, y), r.x * 0.9, PI * 1.15, PI * 1.85, 8, Color(lit, 0.5), 2.0, Art.AA)
 		if Art.hash01(c, 36) < 0.45:
 			var pts := PackedVector2Array()
 			for k in 7:
 				pts.append(Vector2(x + k * 18.0, 16.0 + k * 14.0 + sin(k + c) * 6.0))
-			ci.draw_polyline(pts, dark, 5.0, true)
+			ci.draw_polyline(pts, dark, 5.0, Art.AA)
 
+## Grass along a ground segment as ONE zigzag polygon (was ~60 triangles).
 func _tufts(ci: Node2D, a: float, b: float, gcol: Color) -> void:
-	var c0 = int(maxf(a, view_l - 50.0) / 34.0)
-	var c1 = int(minf(b, view_r + 50.0) / 34.0)
+	var x0 := maxf(a + 6.0, view_l - 50.0)
+	var x1 := minf(b - 6.0, view_r + 50.0)
+	if x1 - x0 < 20.0:
+		return
+	var pts := PackedVector2Array([Vector2(x0, 4)])
+	var c0 := int(x0 / 17.0) + 1
+	var c1 := int(x1 / 17.0)
 	for c in range(c0, c1 + 1):
-		var x = c * 34.0 + Art.hash01(c, 3) * 20.0
-		if x < a + 6.0 or x > b - 6.0:
-			continue
-		var h = 6.0 + Art.hash01(c, 4) * 16.0
-		var sway = sin(t * 2.0 + c * 0.7) * 3.0
-		ci.draw_colored_polygon(PackedVector2Array([Vector2(x - 5, 1), Vector2(x + sway, -h), Vector2(x + 5, 1)]), gcol)
-		if Art.hash01(c, 9) < 0.3:
-			ci.draw_colored_polygon(PackedVector2Array([Vector2(x + 4, 1), Vector2(x + 10 + sway, -h * 0.7), Vector2(x + 12, 1)]), gcol)
+		var x := c * 17.0
+		var h := 3.0 + Art.hash01(c, 4) * 15.0
+		var sway := sin(t * 2.0 + c * 0.7) * 3.0
+		pts.append(Vector2(x - 6.0, 1.0))
+		pts.append(Vector2(x + sway, -h))
+	pts.append(Vector2(x1, 1.0))
+	pts.append(Vector2(x1, 4.0))
+	ci.draw_colored_polygon(pts, gcol)
 
 # Obstacles are solid, light "ceramic" shapes with an ink outline and a
 # colour-coded band, so they read on any screen without relying on glow.
@@ -147,7 +154,7 @@ func _solid(ci: Node2D, pts: PackedVector2Array, fill: Color, ink_w := 3.0) -> v
 	ci.draw_colored_polygon(pts, fill)
 	var c := pts.duplicate()
 	c.append(pts[0])
-	ci.draw_polyline(c, INK, ink_w, true)
+	ci.draw_polyline(c, INK, ink_w, Art.AA)
 
 func _hurdle(ci: Node2D, o: Dictionary) -> void:
 	var body := _mat()
@@ -155,7 +162,7 @@ func _hurdle(ci: Node2D, o: Dictionary) -> void:
 	ci.draw_colored_polygon(Art.rrect(Rect2(o.x + 5, -o.h * 0.45, o.w - 10, o.h * 0.45 - 2), 8.0), body.darkened(0.18))
 	ci.draw_colored_polygon(Art.rrect(Rect2(o.x + 6, -o.h + 6, o.w - 12, 10), 5.0), AMBER.darkened(0.05))
 	var c := Vector2(o.x + o.w * 0.5, -o.h * 0.5)
-	ci.draw_polyline(PackedVector2Array([c + Vector2(-11, 6), c + Vector2(0, -6), c + Vector2(11, 6)]), INK, 4.0, true)
+	ci.draw_polyline(PackedVector2Array([c + Vector2(-11, 6), c + Vector2(0, -6), c + Vector2(11, 6)]), INK, 4.0, Art.AA)
 
 func _beam(ci: Node2D, o: Dictionary) -> void:
 	var body := _mat()
@@ -169,7 +176,7 @@ func _beam(ci: Node2D, o: Dictionary) -> void:
 		var c := Vector2(o.x + 60.0 + k * 120.0, bottom - 42)
 		if c.x > o.x + o.w - 30.0:
 			break
-		ci.draw_polyline(PackedVector2Array([c + Vector2(-11, -6), c + Vector2(0, 6), c + Vector2(11, -6)]), INK, 4.0, true)
+		ci.draw_polyline(PackedVector2Array([c + Vector2(-11, -6), c + Vector2(0, 6), c + Vector2(11, -6)]), INK, 4.0, Art.AA)
 
 func _gate(ci: Node2D, o: Dictionary) -> void:
 	var body := _mat()
@@ -287,7 +294,7 @@ func _draw_add(ci: Node2D) -> void:
 					var fc: Color = pal.mote
 					Art.glow(ci, Vector2(x, -10), 16.0, Color(fc, 0.45 * pulse), 3)
 					ci.draw_circle(Vector2(x, -10), 2.2, Art.hdr(fc, 2.0 * pulse))
-	for e in edges:
+	for e in (edges if Art.Q >= 1 else []):
 		var c0b := int(maxf(e[0], view_l) / 210.0)
 		var c1b := int(minf(e[1], view_r) / 210.0)
 		for c in range(c0b, c1b + 1):
@@ -307,7 +314,7 @@ func _draw_add(ci: Node2D) -> void:
 				PackedColorArray([Color(rim, 0.6), Color(rim, 0.6), Color(rim, 0.0), Color(rim, 0.0)]))
 		# mist rising out of the depth
 		var o: Dictionary = h[2]
-		for k in 8:
+		for k in [2, 4, 8][Art.Q]:
 			var mx: float = h[0] + Art.hash01(o.seed, k) * (h[1] - h[0])
 			var my = 260.0 - fposmod(t * 40.0 + k * 50.0, 260.0)
 			Art.glow(ci, Vector2(mx, my), 40.0, Color(pal.fog, 0.10), 3)
@@ -326,7 +333,7 @@ func _draw_add(ci: Node2D) -> void:
 				var c = AMBER
 				var rr := Art.rrect(Rect2(o.x, -o.h, o.w, o.h + 4), 14.0)
 				rr.append(rr[0])
-				ci.draw_polyline(rr, Color(c, 0.45), 2.0, true)
+				ci.draw_polyline(rr, Color(c, 0.45), 2.0, Art.AA)
 				ci.draw_polygon(PackedVector2Array([Vector2(o.x + 6, -o.h + 6), Vector2(o.x + o.w - 6, -o.h + 6), Vector2(o.x + o.w - 6, 0), Vector2(o.x + 6, 0)]),
 					PackedColorArray([Color(c, 0.22), Color(c, 0.22), Color(c, 0.0), Color(c, 0.0)]))
 				ci.draw_line(Vector2(o.x + 10, -o.h + 3), Vector2(o.x + o.w - 10, -o.h + 3), Art.hdr(c, 1.7), 4.0)
@@ -334,7 +341,7 @@ func _draw_add(ci: Node2D) -> void:
 			BEAM:
 				var br := Art.rrect(Rect2(o.x, -o.h - 70, o.w, 70), 16.0)
 				br.append(br[0])
-				ci.draw_polyline(br, Color(ROSE, 0.4), 2.0, true)
+				ci.draw_polyline(br, Color(ROSE, 0.4), 2.0, Art.AA)
 				ci.draw_polygon(PackedVector2Array([Vector2(o.x + 10, -o.h - 4), Vector2(o.x + o.w - 10, -o.h - 4), Vector2(o.x + o.w - 10, -o.h + 40), Vector2(o.x + 10, -o.h + 40)]),
 					PackedColorArray([Color(ROSE, 0.16), Color(ROSE, 0.16), Color(ROSE, 0.0), Color(ROSE, 0.0)]))
 				ci.draw_line(Vector2(o.x + 14, -o.h - 3), Vector2(o.x + o.w - 14, -o.h - 3), Art.hdr(ROSE, 1.6), 4.0)
@@ -355,13 +362,13 @@ func _draw_add(ci: Node2D) -> void:
 				var bp = Vector2(o.bell_x - 20, o.bell_y + 26)
 				var pulse = 0.6 + 0.4 * sin(t * 4.0)
 				if not o.open:
-					ci.draw_arc(bp, 54.0 + pulse * 8.0, 0.0, TAU, 40, Art.hdr(Color(GOLD, 0.8), 1.5), 3.0, true)
-					ci.draw_arc(bp, 34.0, 0.0, TAU, 32, Color(GOLD, 0.35), 2.0, true)
+					ci.draw_arc(bp, 54.0 + pulse * 8.0, 0.0, TAU, 40, Art.hdr(Color(GOLD, 0.8), 1.5), 3.0, Art.AA)
+					ci.draw_arc(bp, 34.0, 0.0, TAU, 32, Color(GOLD, 0.35), 2.0, Art.AA)
 					Art.glow(ci, bp, 60.0, Color(GOLD, 0.3), 4)
 				else:
 					for k in 3:
 						var rr: float = fposmod(o.open_t * 260.0 + k * 90.0, 270.0)
-						ci.draw_arc(bp, rr, 0.0, TAU, 48, Color(GOLD, 0.6 * (1.0 - rr / 270.0)), 4.0, true)
+						ci.draw_arc(bp, rr, 0.0, TAU, 48, Color(GOLD, 0.6 * (1.0 - rr / 270.0)), 4.0, Art.AA)
 			BLOOM:
 				var c2 = Vector2(o.x + o.w * 0.5, -10)
 				var pulse2 = 0.7 + 0.3 * sin(t * 3.0)
@@ -399,18 +406,18 @@ func _chevron(ci: Node2D, p: Vector2, dir: float, c: Color) -> void:
 	var bob = sin(t * 5.0) * 3.0 * dir
 	for k in pts.size():
 		pts[k] += Vector2(0, bob)
-	ci.draw_polyline(pts, Art.hdr(c, 1.8), 4.0, true)
+	ci.draw_polyline(pts, Art.hdr(c, 1.8), 4.0, Art.AA)
 
 func _spiral(ci: Node2D, p: Vector2, c: Color) -> void:
 	var pts = PackedVector2Array()
 	for k in 18:
 		var a = k * 0.55 - t * 3.0
 		pts.append(p + Vector2(cos(a), sin(a)) * (3.0 + k * 1.3))
-	ci.draw_polyline(pts, Art.hdr(Color(c, 0.9), 1.5), 3.0, true)
+	ci.draw_polyline(pts, Art.hdr(Color(c, 0.9), 1.5), 3.0, Art.AA)
 
 func _updraft(ci: Node2D, o: Dictionary) -> void:
 	for k in 7:
 		var x: float = o.x + o.w * (0.12 + 0.13 * k)
 		var y = -fposmod(t * 160.0 + k * 70.0, 320.0) + 40.0
 		var a = 1.0 - (-y + 40.0) / 360.0
-		ci.draw_arc(Vector2(x, y), 14.0, PI * 1.1, PI * 1.9, 10, Art.hdr(Color(CYAN, 0.55 * a), 1.3), 3.0, true)
+		ci.draw_arc(Vector2(x, y), 14.0, PI * 1.1, PI * 1.9, 10, Art.hdr(Color(CYAN, 0.55 * a), 1.3), 3.0, Art.AA)

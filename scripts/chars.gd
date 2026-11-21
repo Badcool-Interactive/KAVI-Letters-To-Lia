@@ -9,7 +9,7 @@ static func _poly(ci: Node2D, pts: PackedVector2Array, fill: Color) -> void:
 	ci.draw_colored_polygon(pts, fill)
 	var c = pts.duplicate()
 	c.append(pts[0])
-	ci.draw_polyline(c, INK, 2.2, true)
+	ci.draw_polyline(c, INK, 2.2, Art.AA)
 
 static func _heart(ci: Node2D, c: Vector2, r: float, col: Color) -> void:
 	ci.draw_circle(c + Vector2(-r * 0.5, -r * 0.2), r * 0.55, col)
@@ -58,7 +58,7 @@ static func lumi(ci: Node2D, at: Vector2, add: bool, t: float, mood := "normal",
 			ci.draw_circle(fp, 2.0, Color(1.0, 0.82, 0.3))
 		# stem antenna with a flower
 		var st = hc + Vector2(14, -20)
-		ci.draw_polyline(PackedVector2Array([st, st + Vector2(6, -8), st + Vector2(3, -16)]), Color(0.5, 0.8, 0.5), 2.0, true)
+		ci.draw_polyline(PackedVector2Array([st, st + Vector2(6, -8), st + Vector2(3, -16)]), Color(0.5, 0.8, 0.5), 2.0, Art.AA)
 		for pi in 5:
 			var a3 = TAU * pi / 5.0
 			ci.draw_circle(st + Vector2(3, -18) + Vector2(cos(a3), sin(a3)) * 3.5, 2.8, Color(0.85, 0.7, 1.0))
@@ -73,7 +73,7 @@ static func lumi(ci: Node2D, at: Vector2, add: bool, t: float, mood := "normal",
 				_heart(ci, r, 4.5, Art.hdr(Color(1.0, 0.5, 0.75), 2.4))
 			"happy":
 				for c in [l, r]:
-					ci.draw_polyline(PackedVector2Array([c + Vector2(-4, 2), c + Vector2(0, -3), c + Vector2(4, 2)]), ec, 2.5, true)
+					ci.draw_polyline(PackedVector2Array([c + Vector2(-4, 2), c + Vector2(0, -3), c + Vector2(4, 2)]), ec, 2.5, Art.AA)
 			_:
 				for c in [l, r]:
 					ci.draw_colored_polygon(Art.ellipse(c, Vector2(3.2, 4.8), 12), ec)
@@ -111,7 +111,7 @@ static func npc(ci: Node2D, at: Vector2, add: bool, t: float, kind: String, wave
 		ci.draw_line(Vector2(10, -44), arm_end, d.head, 5.0)
 		match d.item:
 			"koulouri":
-				ci.draw_arc(arm_end + Vector2(8, -2), 8.0, 0, TAU, 18, Color(0.85, 0.55, 0.25), 5.0, true)
+				ci.draw_arc(arm_end + Vector2(8, -2), 8.0, 0, TAU, 18, Color(0.85, 0.55, 0.25), 5.0, Art.AA)
 			"water":
 				ci.draw_rect(Rect2(arm_end.x + 2, arm_end.y - 16, 9, 18), Color(0.6, 0.85, 1.0, 0.9))
 			"fruit":
@@ -122,7 +122,7 @@ static func npc(ci: Node2D, at: Vector2, add: bool, t: float, kind: String, wave
 	else:
 		var ec = Art.hdr(d.eye, 2.0)
 		for ex in [0.0, 10.0]:
-			ci.draw_polyline(PackedVector2Array([Vector2(ex - 3, -69), Vector2(ex, -73), Vector2(ex + 3, -69)]), ec, 2.0, true)
+			ci.draw_polyline(PackedVector2Array([Vector2(ex - 3, -69), Vector2(ex, -73), Vector2(ex + 3, -69)]), ec, 2.0, Art.AA)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # ------------------------------------------------------------------ bikers
@@ -178,7 +178,7 @@ static func biker(ci: Node2D, at: Vector2, add: bool, t: float, v: int, lean := 
 		var sp = PackedVector2Array()
 		for k in 6:
 			sp.append(hc + Vector2(-10 - k * 12, 16 + sin(t * 12.0 - k) * 4.0 + k * 2))
-		ci.draw_polyline(sp, b.light.darkened(0.2), 5.0, true)
+		ci.draw_polyline(sp, b.light.darkened(0.2), 5.0, Art.AA)
 	else:
 		ci.draw_line(Vector2(-66, y0 + 22), Vector2(-24, y0 + 22), Art.hdr(b.light, 2.0), 4.0)
 		ci.draw_line(Vector2(24, y0 + 20), Vector2(68, y0 + 20), Art.hdr(b.light, 2.0), 4.0)

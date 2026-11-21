@@ -18,6 +18,7 @@ var sub := ""
 var prompted := {}
 var reprompt := false
 var lessons := 0
+var touch_mode := true
 
 ## Builds the practice course into `track`; returns the end x.
 static func build(track) -> float:
@@ -50,35 +51,36 @@ static func build(track) -> float:
 	return end_x
 
 func _set_text(need: String, o: Dictionary, sim) -> void:
-	var touch := "  ·  touch: "
+	# Prompts name the controls the player actually uses (touch or keys).
+	var k := func(keys: String, tap: String) -> String: return tap if touch_mode else keys
 	match need:
 		"jump":
 			title = "HOP"
-			sub = "Press UP or Space" + touch + "top of the left pad"
+			sub = k.call("Press W, Up or Space", "Tap the top of the left pad")
 			if o.t == GAP:
-				sub = "Jump right at the edge" + touch + "top of the left pad"
+				sub = "Jump right at the edge: " + k.call("press W / Space", "tap the top of the left pad")
 			elif o.t == BLOOM:
 				title = "HOP toward the flower"
-				sub = "Get airborne first" + touch + "top of the left pad"
+				sub = "Get airborne first: " + k.call("press W / Space", "tap the top of the left pad")
 		"hover":
 			title = "HOLD to HOVER"
-			sub = "Keep holding UP: Kite's thrusters glide over wide gaps"
+			sub = k.call("Keep holding W / Space", "Keep your thumb on the top of the left pad") + ": the thrusters glide over wide gaps"
 		"down":
 			if o.t == BLOOM:
 				title = "DIVE!"
-				sub = "Press DOWN in the air to slam the bloom: it bounces you sky-high"
+				sub = k.call("Press S / Down", "Tap the bottom of the left pad") + " in the air to slam the bloom"
 			elif not sim.on_ground:
 				title = "SWOOP"
-				sub = "Press DOWN in the air to dive, keep holding to turbo-slide"
+				sub = k.call("Press S / Down", "Tap the bottom of the left pad") + " in the air, keep holding to turbo-slide"
 			else:
 				title = "SCOOT"
-				sub = "Hold DOWN or S" + touch + "bottom of the left pad"
+				sub = k.call("Hold S / Down", "Hold the bottom of the left pad") + " to slide under"
 		"gust":
 			title = "GUST"
-			sub = "Press X" + touch + "big right button: blow the gate open"
+			sub = k.call("Press X", "Tap the big right button") + ": blow the gate open"
 		"letter":
 			title = "LETTER"
-			sub = "Press C" + touch + "small right button: the paper plane rings the bell"
+			sub = k.call("Press C", "Tap the small right button") + ": the paper plane rings the bell"
 
 func _need(bot: Dictionary, sim, sp: float) -> String:
 	if bot.jump_pressed and sim.on_ground:

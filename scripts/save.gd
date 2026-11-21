@@ -30,6 +30,7 @@ var data := {
 		"sfx": 0.9,
 		"left_handed": false,
 		"controls_scale": 1.0,
+		"graphics": "auto",
 	},
 }
 

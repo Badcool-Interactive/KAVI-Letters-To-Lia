@@ -63,6 +63,8 @@ func set_biome(b: int) -> void:
 	if b == biome and _task == -1:
 		return
 	biome = b
+	if not _cache.has(b):
+		_load_prerendered(b)
 	if _cache.has(b):
 		_start_music(b)
 		return
@@ -94,6 +96,22 @@ func _start_music(b: int) -> void:
 	_drv.stream = pair[1]
 	_pad.play()
 	_drv.play()
+
+## Loads the loops pre-rendered by tools/render_music.gd (instant, no hitch
+## on phones or in browsers). Falls back to runtime synthesis if missing.
+func _load_prerendered(b: int) -> void:
+	var pad_path := "res://assets/music/b%d_pad.wav" % (b % KEYS.size())
+	var drv_path := "res://assets/music/b%d_drive.wav" % (b % KEYS.size())
+	if not (ResourceLoader.exists(pad_path) and ResourceLoader.exists(drv_path)):
+		return
+	var pair := []
+	for path in [pad_path, drv_path]:
+		var w: AudioStreamWAV = load(path)
+		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		w.loop_begin = 0
+		w.loop_end = int(w.get_length() * w.mix_rate)
+		pair.append(w)
+	_cache[b] = pair
 
 # ------------------------------------------------------------------ rendering
 static func _wav(buf: PackedFloat32Array, loop := false) -> AudioStreamWAV:

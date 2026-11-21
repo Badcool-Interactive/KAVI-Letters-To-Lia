@@ -128,13 +128,13 @@ func _draw() -> void:
 	# gust
 	var g: Vector2 = z.gust
 	draw_colored_polygon(Art.ellipse(g, Vector2(105, 105) * k, 32), Color(0.45, 1.0, 0.6, 0.12 + (0.3 if state.gust else 0.0) + _flash.gust * 0.3))
-	draw_arc(g, 105 * k, 0, TAU, 40, line, 3.0, true)
+	draw_arc(g, 105 * k, 0, TAU, 40, line, 3.0, Art.AA)
 	for i in 3:
-		draw_arc(g + Vector2(-20 * k + i * 16 * k, 0), (26 + i * 10) * k, -0.8, 0.8, 10, line, 4.0, true)
+		draw_arc(g + Vector2(-20 * k + i * 16 * k, 0), (26 + i * 10) * k, -0.8, 0.8, 10, line, 4.0, Art.AA)
 	# letter
 	var l: Vector2 = z.letter
 	draw_colored_polygon(Art.ellipse(l, Vector2(70, 70) * k, 28), Color(1.0, 0.85, 0.4, 0.10 + (0.3 if state.letter else 0.0) + _flash.letter * 0.3))
-	draw_arc(l, 70 * k, 0, TAU, 32, line, 3.0, true)
+	draw_arc(l, 70 * k, 0, TAU, 32, line, 3.0, Art.AA)
 	var pl = PackedVector2Array([l + Vector2(26, 0) * k, l + Vector2(-20, -16) * k, l + Vector2(-10, 0) * k, l + Vector2(-20, 16) * k])
 	draw_colored_polygon(pl, Color(1, 1, 1, 0.6))
 	for i in 3:
@@ -143,8 +143,8 @@ func _draw() -> void:
 
 func _pulse(c: Vector2, r: float) -> void:
 	var k := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * 7.0)
-	draw_arc(c, r * (1.05 + 0.12 * k), 0, TAU, 48, Color(0.7, 1.0, 0.95, 0.5 + 0.5 * k), 6.0, true)
-	draw_arc(c, r * (1.25 + 0.2 * k), 0, TAU, 48, Color(0.7, 1.0, 0.95, 0.3 * (1.0 - k)), 4.0, true)
+	draw_arc(c, r * (1.05 + 0.12 * k), 0, TAU, 48, Color(0.7, 1.0, 0.95, 0.5 + 0.5 * k), 6.0, Art.AA)
+	draw_arc(c, r * (1.25 + 0.2 * k), 0, TAU, 48, Color(0.7, 1.0, 0.95, 0.3 * (1.0 - k)), 4.0, Art.AA)
 
 func _arrow(c: Vector2, dir: float, k: float, col: Color) -> void:
-	draw_polyline(PackedVector2Array([c + Vector2(-24, -12 * dir) * k, c + Vector2(0, 12 * dir) * k, c + Vector2(24, -12 * dir) * k]), col, 6.0, true)
+	draw_polyline(PackedVector2Array([c + Vector2(-24, -12 * dir) * k, c + Vector2(0, 12 * dir) * k, c + Vector2(24, -12 * dir) * k]), col, 6.0, Art.AA)

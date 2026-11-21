@@ -96,6 +96,14 @@ var last_result = {}
 
 # capture director
 var capture_dir = ""
+var bench = {}
+var input_mode := "touch"   # "touch" or "keys": decides touch buttons vs key hints
+var hearts := 2
+const MAX_HEARTS := 2
+var env: Environment
+var forced_quality := -1
+var q_frames: Array = []
+var q_cool := 0.0
 var cap_steps: Array = []
 var cap_i = 0
 var cap_wait = 0.0
@@ -112,9 +120,18 @@ func _ready() -> void:
 	font.font_weight = 800
 	font.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
 	_build_scene()
+	input_mode = "touch" if DisplayServer.is_touchscreen_available() else "keys"
+	if OS.has_feature("web") or OS.has_feature("mobile"):
+		Engine.max_fps = 60
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--capture="):
 			capture_dir = a.substr(10)
+		if a.begins_with("--hide="):
+			set_meta("hide", a.substr(7).split(","))
+		if a.begins_with("--quality="):
+			forced_quality = ["low", "medium", "high"].find(a.substr(10))
+		if a.begins_with("--bench="):
+			bench = {"out": a.substr(8), "frames": [], "script": [], "draws": [], "prims": [], "t": 0.0}
 	_apply_settings()
 	if capture_dir != "":
 		_setup_capture()
@@ -123,11 +140,21 @@ func _ready() -> void:
 		save.data.tutorial_done = true
 		save.save()
 	go_title()
-	if capture_dir == "" and not save.data.tutorial_done:
+	if has_meta("hide"):
+		var nodes = {"world": world_view, "track": track_view, "kite": kite, "hud": hud, "fg": fg, "fx": fx, "cast": cast_base, "touch": touch}
+		for k in get_meta("hide"):
+			if nodes.has(k):
+				nodes[k].visible = false
+	if bench.size() > 0:
+		autopilot = true
+		save.data.tutorial_done = true
+		start_story(1)
+		card = {}
+	elif capture_dir == "" and not save.data.tutorial_done:
 		start_tutorial()
 
 func _build_scene() -> void:
-	var env = Environment.new()
+	env = Environment.new()
 	env.background_mode = Environment.BG_CANVAS
 	env.background_canvas_max_layer = 4
 	env.glow_enabled = true
@@ -209,6 +236,48 @@ func _build_scene() -> void:
 	synth = Synth.new()
 	add_child(synth)
 
+## Quality: 0 low (no HDR/glow, sparse detail), 1 medium, 2 high.
+## "Auto" starts at medium on phones and browsers, high on desktop, and steps
+## down by itself if frames stay slow during play.
+func _initial_quality() -> int:
+	if forced_quality >= 0:
+		return forced_quality
+	var g = save.data.settings.get("graphics", "auto")
+	var i = ["low", "medium", "high"].find(g)
+	if i >= 0:
+		return i
+	return 1 if (OS.has_feature("web") or OS.has_feature("mobile")) else 2
+
+func apply_quality(q: int) -> void:
+	Art.Q = clampi(q, 0, 2)
+	Art.AA = Art.Q >= 2
+	set_meta("quality_name", ["low", "medium", "high"][Art.Q])
+	if env:
+		env.glow_enabled = Art.Q >= 1
+	get_viewport().use_hdr_2d = Art.Q >= 1
+	fx.density = [0.35, 0.7, 1.0][Art.Q] * (0.5 if save.data.settings.reduced_motion else 1.0)
+	fx.max_parts = [120, 300, 600][Art.Q]
+	kite.trail_on = Art.Q >= 1
+	q_frames.clear()
+
+func _adapt_quality(real_dt: float) -> void:
+	if forced_quality >= 0 or capture_dir != "" or save.data.settings.get("graphics", "auto") != "auto":
+		return
+	q_cool = maxf(q_cool - real_dt, 0.0)
+	if state != "run" or Art.Q == 0 or q_cool > 0.0:
+		return
+	q_frames.append(real_dt)
+	if q_frames.size() < 120:
+		return
+	var sum := 0.0
+	for f in q_frames:
+		sum += f
+	q_frames.clear()
+	if sum / 120.0 > 0.021:
+		apply_quality(Art.Q - 1)
+		q_cool = 4.0
+		_toast("Graphics: " + str(get_meta("quality_name")) + " (smoother)", Vector2(get_viewport_rect().size.x * 0.5, get_viewport_rect().size.y * 0.2), Color(1, 1, 1, 0.7), 28)
+
 func _apply_settings() -> void:
 	var st: Dictionary = save.data.settings
 	synth.music_vol = st.music
@@ -216,7 +285,7 @@ func _apply_settings() -> void:
 	touch.left_handed = st.left_handed
 	touch.scale_k = st.controls_scale
 	kite.reduced_motion = st.reduced_motion
-	fx.density = 0.5 if st.reduced_motion else 1.0
+	apply_quality(_initial_quality())
 	if sim != null:
 		sim.kind_mode = st.kind_mode
 		sim.assist_hover = st.assist_hover
@@ -270,6 +339,7 @@ func speed_mult() -> float:
 
 func start_story(from_chapter := 0) -> void:
 	mode = "story"
+	hearts = MAX_HEARTS
 	_new_world(from_chapter)
 	chapter = from_chapter
 	stage = "intro"
@@ -294,7 +364,6 @@ func start_tutorial() -> void:
 	dist_start = sim.x
 	seg_end = Tutorial.build(track)
 	_enter_run()
-	touch.visible_controls = true
 	ui.show_tutorial_skip()
 	_show_card("Welcome, courier", "Kite runs on their own. You make the moves.", 0.2)
 
@@ -360,6 +429,7 @@ func _begin_story_segment() -> void:
 
 func start_endless(daily := false) -> void:
 	mode = "daily" if daily else "endless"
+	hearts = MAX_HEARTS
 	_new_world(0)
 	seg_idx = 0
 	route = "scenic"
@@ -409,7 +479,7 @@ func _enter_run() -> void:
 	sim.frozen = false
 	lb_target = 0.0
 	zoom_target = run_zoom()
-	touch.visible_controls = capture_dir == ""
+	touch.visible_controls = _want_touch()
 	touch.release_all()
 	ui.show_none()
 	synth.set_drive(1.0)
@@ -469,6 +539,8 @@ func _enter_recovery(then_junction: bool) -> void:
 	elif activity.next_chapter:
 		chapter += 1
 		stage = "intro"
+		save.data.story_chapter = maxi(int(save.data.story_chapter), chapter)
+		save.save()
 		set_biome(chapter)
 		_show_card(Art.biome(chapter).name, "Chapter %d · %s" % [chapter + 1, Art.biome(chapter).country], 2.0)
 	ui.show_skip()
@@ -678,6 +750,8 @@ func _on_fail() -> void:
 		tut.reprompt = true
 	else:
 		tw.mistake()
+		hearts -= 1
+		_toast("%d heart%s left" % [hearts, "" if hearts == 1 else "s"] if hearts > 0 else "Out of hearts", _kite_screen() + Vector2(0, -170), Color(1.0, 0.55, 0.65), 44)
 	shake = 14.0 if save.data.settings.shake else 0.0
 	synth.play("fail")
 	kite.expr = "dizzy"
@@ -701,7 +775,11 @@ func _update_fail(dt: float) -> void:
 			state_t = 0.0
 			_toast("Try again!", _kite_screen() + Vector2(0, -150), Color(1, 0.9, 0.7), 40)
 		return
-	if mode == "story":
+	if hearts <= 0:
+		if state_t > 1.3:
+			_game_over()
+		return
+	if true:
 		if state_t > 0.75 and fade_target == 0.0:
 			fade_target = 1.0
 		if state_t > 1.05:
@@ -716,9 +794,23 @@ func _update_fail(dt: float) -> void:
 			fade_target = 0.0
 			state = "run"
 			state_t = 0.0
+
+## Two hearts per run. When they are gone the run is over: story players go
+## back to the home screen (their reached chapter is kept); endless shows results.
+func _game_over() -> void:
+	if mode == "story":
+		state = "results"
+		state_t = 0.0
+		sim.frozen = true
+		touch.visible_controls = false
+		toasts.clear()
+		save.data.story_chapter = maxi(int(save.data.story_chapter), chapter)
+		save.data.runs = int(save.data.runs) + 1
+		save.save()
+		synth.set_drive(0.0)
+		ui.show_story_over(chapter)
 	else:
-		if state_t > 1.2:
-			_end_run()
+		_end_run()
 
 func _end_run() -> void:
 	toasts.clear()
@@ -827,6 +919,7 @@ func _physics_process(dt: float) -> void:
 		return
 	var inp: Dictionary
 	if mode == "tutorial":
+		tut.touch_mode = input_mode == "touch"
 		var f = tut.filter(_read_input(), sim, dt, autopilot)
 		touch.highlight = tut.highlight_zone()
 		if f == null:
@@ -942,6 +1035,7 @@ func _perfect(text: String, col: Color) -> void:
 # ------------------------------------------------------------------ frame update
 func _process(delta: float) -> void:
 	var real_dt = delta / maxf(Engine.time_scale, 0.01)
+	_adapt_quality(real_dt)
 	t += real_dt
 	state_t += real_dt
 	if slowmo_t > 0.0:
@@ -985,6 +1079,8 @@ func _process(delta: float) -> void:
 	zoom = lerpf(zoom, zoom_target, 1.0 - exp(-real_dt * 2.0))
 	if capture_dir != "":
 		_capture_tick(real_dt)
+	if bench.size() > 0:
+		_bench_tick(real_dt)
 
 func _update_kite_view(dt: float) -> void:
 	var p = Vector2(sim.x, sim.y)
@@ -1207,7 +1303,7 @@ func _draw_hud(ci: Node2D) -> void:
 		var hw = font.get_string_size(hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
 		var hy = sz.y * 0.26
 		ci.draw_colored_polygon(Art.rrect(Rect2(sz.x * 0.5 - hw * 0.5 - 34, hy - 44, hw + 68, 64), 30), Color(0.02, 0.05, 0.09, 0.66 * a3))
-		ci.draw_polyline(Art.rrect(Rect2(sz.x * 0.5 - hw * 0.5 - 34, hy - 44, hw + 68, 64), 30), Color(0.4, 1, 1, 0.5 * a3), 2.0, true)
+		ci.draw_polyline(Art.rrect(Rect2(sz.x * 0.5 - hw * 0.5 - 34, hy - 44, hw + 68, 64), 30), Color(0.4, 1, 1, 0.5 * a3), 2.0, Art.AA)
 		_text(ci, hint, Vector2(sz.x * 0.5, hy), 34, Color(0.85, 1, 1, a3))
 	# chapter card
 	if card.size() > 0 and card.t > 0.0:
@@ -1220,7 +1316,7 @@ func _draw_hud(ci: Node2D) -> void:
 	if state == "recovery":
 		var rem: float = activity.dur - state_t
 		var c = Vector2(sz.x - 120, sz.y * 0.09 * lb + 230)
-		ci.draw_arc(c, 40, -PI * 0.5, -PI * 0.5 + TAU * clampf(rem / activity.dur, 0, 1), 40, Color(1, 1, 1, 0.8), 5.0, true)
+		ci.draw_arc(c, 40, -PI * 0.5, -PI * 0.5 + TAU * clampf(rem / activity.dur, 0, 1), 40, Color(1, 1, 1, 0.8), 5.0, Art.AA)
 		_text(ci, str(int(ceil(rem))), c + Vector2(0, 14), 40, Color(1, 1, 1, 0.9))
 		_text(ci, "breather", c + Vector2(0, 76), 24, Color(1, 1, 1, 0.6))
 	if state == "finale" and state_t > 6.0:
@@ -1231,12 +1327,12 @@ func _draw_hud(ci: Node2D) -> void:
 		ci.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.0, 0.01, 0.03, 0.38 * k))
 		var kp = _kite_screen()
 		var pulse = 0.5 + 0.5 * sin(t * 6.0)
-		ci.draw_arc(kp, 90.0 + pulse * 10.0, 0.0, TAU, 48, Color(0.6, 1.0, 0.95, 0.6 * k), 3.0, true)
+		ci.draw_arc(kp, 90.0 + pulse * 10.0, 0.0, TAU, 48, Color(0.6, 1.0, 0.95, 0.6 * k), 3.0, Art.AA)
 		var py = sz.y * 0.30
 		var sw = font.get_string_size(tut.sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
 		var pw = maxf(sw, 420.0) + 90.0
 		ci.draw_colored_polygon(Art.rrect(Rect2(sz.x * 0.5 - pw * 0.5, py - 96, pw, 170), 40), Color(0.02, 0.04, 0.08, 0.82 * k))
-		ci.draw_polyline(Art.rrect(Rect2(sz.x * 0.5 - pw * 0.5, py - 96, pw, 170), 40), Color(0.6, 1.0, 0.95, 0.55 * k), 2.0, true)
+		ci.draw_polyline(Art.rrect(Rect2(sz.x * 0.5 - pw * 0.5, py - 96, pw, 170), 40), Color(0.6, 1.0, 0.95, 0.55 * k), 2.0, Art.AA)
 		_text(ci, tut.title, Vector2(sz.x * 0.5, py - 10), 76, Color(0.75, 1.0, 0.95, k), HORIZONTAL_ALIGNMENT_CENTER, 8)
 		_text(ci, tut.sub, Vector2(sz.x * 0.5, py + 46), 34, Color(1, 1, 1, 0.92 * k))
 	if fade > 0.001:
@@ -1251,6 +1347,26 @@ func _draw_title(ci: Node2D, sz: Vector2) -> void:
 	_text(ci, "VOLT/RUN", Vector2(sz.x * 0.5, y), 168, Color(1, 0.98, 0.95, k), HORIZONTAL_ALIGNMENT_CENTER, 6)
 	_text(ci, "a long way to Lumi", Vector2(sz.x * 0.5, y + 70), 40, Color(pal.rim, k * 0.9))
 
+## Keyboard players see a hint bar at the bottom instead of touch buttons.
+func _key_hints(ci: Node2D, sz: Vector2) -> void:
+	var items := [["W / Up / Space", "Hop · hold to hover"], ["S / Down", "Scoot · dive in air"], ["X", "Gust"], ["C", "Letter"], ["Esc", "Pause"]]
+	var fs := 24
+	var widths := []
+	var total := 0.0
+	for it in items:
+		var w: float = font.get_string_size(it[0], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 28.0 + font.get_string_size(it[1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 46.0
+		widths.append(w)
+		total += w
+	var x := sz.x * 0.5 - total * 0.5
+	var y: float = sz.y - 46.0 - sz.y * 0.09 * lb
+	ci.draw_colored_polygon(Art.rrect(Rect2(x - 20, y - 30, total + 40, 52), 26), Color(0.02, 0.03, 0.07, 0.55))
+	for i in items.size():
+		var kw: float = font.get_string_size(items[i][0], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x + 20.0
+		ci.draw_colored_polygon(Art.rrect(Rect2(x, y - 22, kw, 36), 9), Color(1, 1, 1, 0.16))
+		ci.draw_string(font, Vector2(x + 10, y + 5), items[i][0], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.95))
+		ci.draw_string(font, Vector2(x + kw + 10, y + 5), items[i][1], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.7))
+		x += widths[i]
+
 func _draw_run_hud(ci: Node2D, sz: Vector2) -> void:
 	var top = sz.y * 0.09 * lb + 26.0
 	# tailwind badge
@@ -1258,9 +1374,14 @@ func _draw_run_hud(ci: Node2D, sz: Vector2) -> void:
 	var tc: Color = KiteView.TIER_COL[tier - 1]
 	var c = Vector2(90, top + 64)
 	ci.draw_circle(c, 52, Color(0.02, 0.04, 0.08, 0.55))
-	ci.draw_arc(c, 52, -PI * 0.5, -PI * 0.5 + TAU * tw.progress(), 40, Art.hdr(tc, 1.0), 6.0, true)
+	ci.draw_arc(c, 52, -PI * 0.5, -PI * 0.5 + TAU * tw.progress(), 40, Art.hdr(tc, 1.0), 6.0, Art.AA)
 	_text(ci, "x%d" % tier, c + Vector2(0, 16), 46, tc)
 	_text(ci, "TAILWIND", c + Vector2(0, 82), 20, Color(tc, 0.8))
+	if mode != "tutorial" and not save.data.settings.kind_mode:
+		for i in MAX_HEARTS:
+			KiteView._heart(ci, Vector2(184 + i * 40, top + 112), 15.0, Color(1.0, 0.45, 0.6, 0.95) if i < hearts else Color(1, 1, 1, 0.18))
+	if input_mode == "keys" and state in ["run", "fail"]:
+		_key_hints(ci, sz)
 	# letters
 	for i in 3:
 		var lc = Color(1, 0.9, 0.6, 0.95 if i < sim.letters else 0.18)
@@ -1277,8 +1398,8 @@ func _draw_run_hud(ci: Node2D, sz: Vector2) -> void:
 		var w = sz.x * 0.36
 		var x0 = sz.x * 0.5 - w * 0.5
 		var prog = clampf((story_done_px + maxf(sim.x - _seg_start_estimate(), 0.0)) / maxf(story_total, 1.0), 0.0, 1.0)
-		ci.draw_line(Vector2(x0, top + 40), Vector2(x0 + w, top + 40), Color(1, 1, 1, 0.25), 4.0, true)
-		ci.draw_line(Vector2(x0, top + 40), Vector2(x0 + w * prog, top + 40), Art.hdr(Color(pal.rim, 0.95), 1.2), 4.0, true)
+		ci.draw_line(Vector2(x0, top + 40), Vector2(x0 + w, top + 40), Color(1, 1, 1, 0.25), 4.0, Art.AA)
+		ci.draw_line(Vector2(x0, top + 40), Vector2(x0 + w * prog, top + 40), Art.hdr(Color(pal.rim, 0.95), 1.2), 4.0, Art.AA)
 		ci.draw_circle(Vector2(x0 + w * prog, top + 40), 9, Color(0.3, 1, 1))
 		KiteView._heart(ci, Vector2(x0 + w + 22, top + 38), 13.0, Color(1.0, 0.55, 0.8))
 		var km = (story_total - story_done_px - maxf(sim.x - _seg_start_estimate(), 0.0)) / PX_PER_M / 1000.0
@@ -1307,7 +1428,22 @@ func pause_hit(p: Vector2) -> bool:
 	var top = sz.y * 0.09 * lb + 26.0
 	return p.distance_to(Vector2(sz.x - 64, top + 50)) < 50.0
 
+func _want_touch() -> bool:
+	return input_mode == "touch" and capture_dir == "" and bench.size() == 0
+
+## Switch between touch buttons and keyboard hints by what the player uses.
+func _set_input_mode(m: String) -> void:
+	if m == input_mode:
+		return
+	input_mode = m
+	if state in ["run", "fail"]:
+		touch.visible_controls = _want_touch()
+
 func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and event.pressed:
+		_set_input_mode("touch")
+	elif (event is InputEventKey and event.pressed) or (event is InputEventJoypadButton and event.pressed):
+		_set_input_mode("keys")
 	if state in ["run", "recovery", "junction"] and event is InputEventScreenTouch and event.pressed and pause_hit(event.position):
 		toggle_pause()
 		get_viewport().set_input_as_handled()
@@ -1315,6 +1451,13 @@ func _input(event: InputEvent) -> void:
 # ------------------------------------------------------------------ menus glue (called by ui.gd)
 func menu_story() -> void:
 	synth.play("ui")
+	var ch := int(save.data.story_chapter)
+	start_story(ch if (ch > 0 and not save.data.story_done) else 0)
+
+func menu_story_restart() -> void:
+	synth.play("ui")
+	save.data.story_chapter = 0
+	save.save()
 	start_story(0)
 
 func menu_endless() -> void:
@@ -1369,8 +1512,41 @@ func _setup_capture() -> void:
 		{"do": "force_finale"}, {"do": "wait", "s": 7.5}, {"shot": "16-finale"},
 		{"do": "endless"}, {"do": "wait", "s": 14.0}, {"shot": "17-endless"},
 		{"do": "end_run"}, {"do": "wait", "s": 0.6}, {"shot": "18-results"},
+		{"do": "story", "ch": 0}, {"do": "wait", "s": 5.0}, {"do": "die"}, {"do": "wait", "s": 2.2}, {"shot": "19-one-heart-left"},
+		{"do": "die"}, {"do": "wait", "s": 2.4}, {"shot": "20-out-of-hearts"},
 		{"do": "quit"},
 	]
+
+## Benchmark: 3 s warm-up then 15 s of autopilot in chapter 2 (the densest
+## forest). Frame time, GDScript draw-generation time, draw calls, primitives.
+func _bench_tick(dt: float) -> void:
+	bench.t += dt
+	var script_ms: float = Painter.cost_usec / 1000.0
+	Painter.cost_usec = 0
+	if bench.t < 3.0:
+		return
+	bench.frames.append(dt * 1000.0)
+	bench.script.append(script_ms)
+	bench.draws.append(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
+	bench.prims.append(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME))
+	if bench.t >= 18.0:
+		var res := {}
+		for k in ["frames", "script", "draws", "prims"]:
+			var a: Array = bench[k].duplicate()
+			a.sort()
+			var sum := 0.0
+			for v in a:
+				sum += v
+			res[k] = {"avg": snappedf(sum / a.size(), 0.01), "p95": snappedf(a[int(a.size() * 0.95)], 0.01)}
+		res["n"] = bench.frames.size()
+		res["quality"] = str(get_meta("quality_name", "baseline"))
+		var f := FileAccess.open(bench.out, FileAccess.WRITE)
+		f.store_string(JSON.stringify(res, "  "))
+		f.close()
+		print("bench: ", JSON.stringify(res))
+		set_process(false)
+		set_physics_process(false)
+		get_tree().quit()
 
 func _capture_tick(dt: float) -> void:
 	if cap_i >= cap_steps.size():
@@ -1412,6 +1588,10 @@ func _capture_tick(dt: float) -> void:
 			var o = Track.make(RESCUE, sim.x + sim.v * 0.6, sim.v, RandomNumberGenerator.new())
 			track.obs.insert(track.first_index_after(sim.x), o)
 			_start_rescue(o)
+		"die":
+			if state == "run":
+				sim.dead = true
+				_on_fail()
 		"tutorial":
 			start_tutorial()
 			card = {}

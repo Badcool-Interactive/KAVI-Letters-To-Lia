@@ -63,13 +63,14 @@ func _draw_sky(ci: Node2D) -> void:
 	ci.draw_rect(Rect2(0, hy, w, h - hy), hor)
 	# stars
 	if pal.stars > 0.01:
-		for i in 140:
+		for i in [30, 70, 120][Art.Q]:
 			var sx = fmod(Art.hash01(i, 11) * w * 1.3 - cam_x * 0.01, w * 1.3) - w * 0.15
 			if sx < 0.0: sx += w * 1.3
 			var sy = Art.hash01(i, 23) * h * 0.55
 			var tw = 0.55 + 0.45 * sin(t * (1.0 + Art.hash01(i, 5) * 2.0) + i)
 			var a: float = pal.stars * tw * (1.0 - sy / (h * 0.6)) * 0.85
-			ci.draw_circle(Vector2(sx, sy), 0.8 + Art.hash01(i, 7) * 1.6, Color(0.9, 0.95, 1.0, a))
+			var sr = 1.0 + Art.hash01(i, 7) * 1.8
+			ci.draw_rect(Rect2(sx - sr * 0.5, sy - sr * 0.5, sr, sr), Color(0.9, 0.95, 1.0, a))
 
 func _draw_sky_light(ci: Node2D) -> void:
 	var w = size.x
@@ -78,9 +79,8 @@ func _draw_sky_light(ci: Node2D) -> void:
 	var sc: Color = pal.sun
 	var r: float = pal.sun_r
 	# wide atmospheric halo
-	for i in 10:
-		var f = float(i) / 10.0
-		ci.draw_circle(sp, r * (6.0 - f * 5.0), Color(sc.r, sc.g, sc.b, 0.025 + f * 0.02))
+	Art.glow(ci, sp, r * 6.0, Color(sc, 0.30))
+	Art.glow(ci, sp, r * 2.6, Color(sc, 0.30))
 	ci.draw_circle(sp, r * 0.62, Color(sc, 0.35))
 	ci.draw_circle(sp, r * 0.44, Art.hdr(sc, 1.05))
 	ci.draw_circle(sp, r * 0.30, Art.hdr(sc.lerp(Color(1, 1, 1), 0.6), 1.25))
@@ -93,8 +93,9 @@ func _draw_sky_light(ci: Node2D) -> void:
 			var pts = PackedVector2Array()
 			var cols = PackedColorArray()
 			var base_y = h * (0.16 + band * 0.07)
-			for k in 41:
-				var x = -40.0 + (w + 80.0) * k / 40.0
+			var na = [10, 20, 40][Art.Q]
+			for k in na + 1:
+				var x = -40.0 + (w + 80.0) * k / float(na)
 				var lx = x + cam_x * 0.02
 				var y = base_y + sin(lx * 0.004 + t * 0.35 + band) * 50.0 + sin(lx * 0.011 - t * 0.6) * 18.0
 				pts.append(Vector2(x, y))
@@ -104,11 +105,11 @@ func _draw_sky_light(ci: Node2D) -> void:
 				var p = pts[k]
 				ci.draw_line(p, p + Vector2(0, 160 + band * 40), Color(ac, 0.045 * a * pal.aurora), 30.0)
 				ci.draw_line(p, p + Vector2(0, 70), Color(ac, 0.06 * a * pal.aurora), 18.0)
-			ci.draw_polyline(pts, Color(ac, 0.22 * pal.aurora), 2.0, true)
+			ci.draw_polyline(pts, Color(ac, 0.22 * pal.aurora), 2.0, Art.AA)
 	# water shimmer under the horizon
 	if pal.water > 0.01:
 		var wy = size.y * BASE[0] + 6.0 - cam_y * 0.01
-		for i in 46:
+		for i in [12, 26, 46][Art.Q]:
 			var yy = wy + pow(Art.hash01(i, 3), 1.6) * (h * 0.12)
 			var spread = 40.0 + (yy - wy) * 2.2
 			var cx = sp.x + (Art.hash01(i, 9) - 0.5) * spread * 2.0 + sin(t * 1.5 + i) * 10.0
@@ -145,7 +146,7 @@ func _draw_layer(ci: Node2D, i: int) -> void:
 	var kinds: Array = pal.kinds[i]
 	for c in range(c0, c1 + 1):
 		var r = Art.hash01(c, 101 + i * 31)
-		if r > DENS[i] * (0.6 if quality == 0 else 1.0):
+		if r > DENS[i] * [0.55, 0.8, 1.0][Art.Q]:
 			continue
 		var kind: String = kinds[int(Art.hash01(c, 7 + i) * kinds.size()) % kinds.size()]
 		var lx = c * cw + Art.hash01(c, 13 + i) * cw * 0.7
@@ -156,7 +157,7 @@ func _draw_layer(ci: Node2D, i: int) -> void:
 	# rim light along the ridge, facing the sun
 	var rim: Color = pal.rim
 	var rim_pts = pts.slice(0, pts.size() - 2)
-	ci.draw_polyline(rim_pts, Color(rim, 0.05 + 0.05 * i), 1.5 + i * 0.5, true)
+	ci.draw_polyline(rim_pts, Color(rim, 0.05 + 0.05 * i), 1.5 + i * 0.5, Art.AA)
 
 func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: Color, seed: int) -> void:
 	var acc: Color = pal.accent
@@ -168,7 +169,7 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-22 * s, 0), p + Vector2(-7 * s, -hgt * 0.8), p + Vector2(0, -hgt), p + Vector2(7 * s, -hgt * 0.8), p + Vector2(22 * s, 0)]), col)
 			var ring = Art.ellipse(p + Vector2(0, -hgt * 0.55), Vector2(48 * s, 12 * s), 24)
 			ring.append(ring[0])
-			ci.draw_polyline(ring, col.lightened(0.15), 4.0 * s, true)
+			ci.draw_polyline(ring, col.lightened(0.15), 4.0 * s, Art.AA)
 			L.append([p + Vector2(0, -hgt), 7.0 * s, acc])
 			L.append([p + Vector2(0, -hgt * 0.55), 4.0 * s, acc])
 		"dome":
@@ -185,8 +186,8 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			var c = p + Vector2(0, -(330.0 + Art.hash01(seed, 8) * 120.0) * s)
 			var R = (120.0 + Art.hash01(seed, 9) * 70.0) * s
 			ci.draw_line(p, c + Vector2(0, R), col, 10.0 * s)
-			ci.draw_arc(c, R, 0.0, TAU, 48, col, 14.0 * s, true)
-			ci.draw_arc(c, R - 9.0 * s, PI * 1.1, PI * 1.9, 20, Color(pal.rim, 0.35), 3.0 * s, true)
+			ci.draw_arc(c, R, 0.0, TAU, 48, col, 14.0 * s, Art.AA)
+			ci.draw_arc(c, R - 9.0 * s, PI * 1.1, PI * 1.9, 20, Color(pal.rim, 0.35), 3.0 * s, Art.AA)
 			L.append([c + Vector2(0, -R), 6.0 * s, acc])
 			L.append([c, 3.0 * s, Color(acc, 0.5)])
 		"column":
@@ -235,7 +236,7 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			for k in 25:
 				var f = float(k) / 24.0
 				arc.append(p + Vector2(-bl * 0.5 + bl * f, top + sin(f * PI) * -90.0 * s))
-			ci.draw_polyline(arc, col, 9.0 * s, true)
+			ci.draw_polyline(arc, col, 9.0 * s, Art.AA)
 			ci.draw_line(p + Vector2(-bl * 0.5, -120 * s), p + Vector2(bl * 0.5, -120 * s), col, 12.0 * s)
 			for k in 12:
 				var q: Vector2 = arc[k * 2]
@@ -292,7 +293,7 @@ func _draw_haze(ci: Node2D, i: int) -> void:
 	ci.draw_rect(Rect2(0, y + h, size.x, size.y), Color(fog, 0.30 - i * 0.08))
 
 func _draw_shafts(ci: Node2D) -> void:
-	if quality == 0:
+	if Art.Q == 0:
 		return
 	var sp = Vector2(pal.sun_pos.x * size.x - cam_x * 0.004, pal.sun_pos.y * size.y - 200.0)
 	var sc: Color = pal.sun
@@ -309,7 +310,7 @@ func _draw_shafts(ci: Node2D) -> void:
 			PackedColorArray([Color(sc, al), Color(sc, al), Color(sc, 0.0), Color(sc, 0.0)]))
 
 func _draw_motes(ci: Node2D) -> void:
-	var n = [10, 22, 32][quality]
+	var n = [8, 18, 30][Art.Q]
 	var mc: Color = pal.mote
 	for i in n:
 		var par = 0.25 + Art.hash01(i, 1) * 0.9
@@ -347,6 +348,6 @@ func draw_foreground(ci: Node2D, gy: float) -> void:
 			var pts = PackedVector2Array()
 			for k in 12:
 				pts.append(Vector2(x0 + sin(k * 0.6 + t * 0.6 + c) * 12.0, -20.0 + k * 22.0))
-			ci.draw_polyline(pts, col, 7.0, true)
+			ci.draw_polyline(pts, col, 7.0, Art.AA)
 			for k in range(2, 12, 2):
 				ci.draw_colored_polygon(Art.ellipse(pts[k] + Vector2(10, 0), Vector2(18, 8), 10, 0.5), col)
