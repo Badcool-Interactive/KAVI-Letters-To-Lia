@@ -123,6 +123,8 @@ func show_title() -> void:
 	if main.ads.can_show():
 		_btn(v, "Free gift: watch a short ad for +1 Spark  (%d left today)" % main.ads.remaining_today(), main.watch_ad_for_spark, 26)
 	_label(v, "Sparks: %d   ·   Stamps: %d   ·   Best: %d" % [main.save.data.sparks, main.save.data.stamps, main.save.data.best_endless], 26, Color(1, 1, 1, 0.65))
+	var tb := _btn(v, "Tutorial", main.menu_tutorial, 24)
+	tb.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	first.grab_focus.call_deferred()
 
 func show_garage() -> void:
@@ -209,6 +211,37 @@ func show_results(r: Dictionary) -> void:
 	var b = _btn(v, "Run again", main.menu_retry, 44)
 	_btn(v, "Main menu", main.go_title)
 	b.grab_focus.call_deferred()
+
+func show_tutorial_skip() -> void:
+	_corner_button("Skip tutorial  >", main.skip_tutorial, 28)
+
+func show_tutorial_done() -> void:
+	var v := _panel(0.55, 700)
+	_label(v, "Nice moves, courier!", 60, Color(0.75, 1.0, 0.95))
+	_label(v, "Perfect timing builds TAILWIND (x2, x3, x4): more points, a brighter trail. A mistake only drops one tier.", 30, Color(1, 1, 1, 0.85))
+	var b := _btn(v, "Start the story", main.menu_story, 44)
+	_btn(v, "Main menu", main.go_title)
+	b.grab_focus.call_deferred()
+
+func _corner_button(text: String, cb: Callable, size: int) -> void:
+	_clear()
+	var c := Control.new()
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(c)
+	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var b := Button.new()
+	b.text = text
+	b.add_theme_font_size_override("font_size", size)
+	b.anchor_left = 1.0
+	b.anchor_right = 1.0
+	b.offset_left = -420
+	b.offset_right = -120
+	b.offset_top = 130
+	b.offset_bottom = 196
+	b.focus_mode = Control.FOCUS_NONE
+	b.pressed.connect(cb)
+	c.add_child(b)
+	_box = c
 
 func show_skip() -> void:
 	_clear()

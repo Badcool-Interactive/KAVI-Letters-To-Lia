@@ -26,7 +26,8 @@ Get the latest build from **[Releases](../../releases/latest)**:
 | Letter (paper plane: bells and bridges, max 3) | C / K | Y | right thumb, small button |
 | Pause | Esc | Start | top-right button |
 
-## What is in this build (v0.2.0)
+## What is in this build (v0.3.0)
+- **Practice run tutorial:** auto-starts on first launch, skippable, replayable from the title screen.
 - **Story, "Find Lumi":** 4 chapters (Kalymera Bay, Rhodope Lanterns, Danube Mirror, Carpathian Aurora). First-time hints, chapter cards, Scenic/Wild junctions (Wild is shorter and harder), one scripted hover-biker rescue, and the Lumi finale.
 - **Endless Road** and **Daily Relay** (date-seeded). Speed and difficulty ramp per segment, biomes cycle, Wild route scores ×1.5. Local bests.
 - **Tailwind** ×1–×4 (3/8/15 perfects; a mistake drops one tier). In-key notes, glowing thrusters, trail, slow-mo on tier-up.

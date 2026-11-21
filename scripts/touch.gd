@@ -10,6 +10,7 @@ var left_handed = false
 var scale_k = 1.0
 var letters = 3
 var visible_controls = true
+var highlight = "" # tutorial: pulse the zone to press
 var state = {"jump": false, "down": false, "gust": false, "letter": false}
 var pressed = {"jump": false, "down": false, "gust": false, "letter": false}
 var _touch_zone = {}
@@ -119,6 +120,11 @@ func _draw() -> void:
 	draw_colored_polygon(Art.ellipse(r + Vector2(0, 88 * k), Vector2(70, 70) * k, 28), Color(1.0, 0.4, 0.8, dn_a * 0.4))
 	_arrow(r + Vector2(0, -88 * k), -1.0, k, line)
 	_arrow(r + Vector2(0, 88 * k), 1.0, k, line)
+	match highlight:
+		"jump": _pulse(r + Vector2(0, -88 * k), 70 * k)
+		"down": _pulse(r + Vector2(0, 88 * k), 70 * k)
+		"gust": _pulse(z.gust, 105 * k)
+		"letter": _pulse(z.letter, 70 * k)
 	# gust
 	var g: Vector2 = z.gust
 	draw_colored_polygon(Art.ellipse(g, Vector2(105, 105) * k, 32), Color(0.45, 1.0, 0.6, 0.12 + (0.3 if state.gust else 0.0) + _flash.gust * 0.3))
@@ -134,6 +140,11 @@ func _draw() -> void:
 	for i in 3:
 		var c = Color(1.0, 0.85, 0.4, 0.9 if i < letters else 0.15)
 		draw_circle(l + Vector2((-22 + i * 22) * k, 92 * k), 7 * k, c)
+
+func _pulse(c: Vector2, r: float) -> void:
+	var k := 0.5 + 0.5 * sin(Time.get_ticks_msec() / 1000.0 * 7.0)
+	draw_arc(c, r * (1.05 + 0.12 * k), 0, TAU, 48, Color(0.7, 1.0, 0.95, 0.5 + 0.5 * k), 6.0, true)
+	draw_arc(c, r * (1.25 + 0.2 * k), 0, TAU, 48, Color(0.7, 1.0, 0.95, 0.3 * (1.0 - k)), 4.0, true)
 
 func _arrow(c: Vector2, dir: float, k: float, col: Color) -> void:
 	draw_polyline(PackedVector2Array([c + Vector2(-24, -12 * dir) * k, c + Vector2(0, 12 * dir) * k, c + Vector2(24, -12 * dir) * k]), col, 6.0, true)

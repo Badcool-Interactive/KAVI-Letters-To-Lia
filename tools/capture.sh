@@ -12,6 +12,6 @@ Xvfb "$DISP" -screen 0 1920x1080x24 >/dev/null 2>&1 &
 XPID=$!
 trap 'kill $XPID 2>/dev/null || true; rm -rf "$ISO"' EXIT
 sleep 1
-XDG_DATA_HOME="$ISO" DISPLAY="$DISP" WAYLAND_DISPLAY= timeout 240 "$GODOT" --path . --display-driver x11 \
+XDG_DATA_HOME="$ISO" DISPLAY="$DISP" WAYLAND_DISPLAY= timeout 480 "$GODOT" --path . --display-driver x11 \
   --resolution 1920x1080 ${VOLT_RENDER:+--rendering-driver $VOLT_RENDER} -- --capture="$OUT" 2>&1 | grep -v "^\s*at:" | tail -25
 ls "$OUT"

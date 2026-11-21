@@ -10,6 +10,7 @@ var data := {
 	"stamps": 0,
 	"sparks": 0,
 	"story_done": false,
+	"tutorial_done": false,
 	"story_chapter": 0,
 	"runs": 0,
 	"runs_since_rescue": 0,

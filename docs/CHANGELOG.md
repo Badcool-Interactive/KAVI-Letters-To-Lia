@@ -1,4 +1,7 @@
 # Changelog
+## 0.3.0 (2026-11-21)
+- **Interactive tutorial ("Practice run"):** starts automatically on the first launch. At each new move the game freezes on a prompt ("HOP", "SCOOT", "HOLD to HOVER", "GUST", "LETTER", "DIVE", "SWOOP"), the matching touch button pulses, and play resumes when you do it. Mistakes just pop Kite back to retry. It can be skipped at any time; returning players (with earlier progress) are never forced into it. A **Tutorial** button on the title screen replays it.
+- Test suite now also boots the real game (catches script errors the unit tests can't).
 ## 0.2.0 (2026-11-21)
 - **Fixed:** obstacles were nearly invisible in chapter 2 (Rhodope Lanterns) and hard to read elsewhere. They are now solid, light shapes with an outline and a colour band (amber = hop, rose = scoot, green = gust, gold = letter, pink = dive bloom), readable without glow.
 - **Fixed:** after a biker rescue, leftover obstacles could overlap the next stretch.

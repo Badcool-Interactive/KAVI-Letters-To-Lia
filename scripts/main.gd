@@ -17,6 +17,7 @@ const Fx = preload("res://scripts/fx.gd")
 const Synth = preload("res://scripts/synth.gd")
 const Touch = preload("res://scripts/touch.gd")
 const UI = preload("res://scripts/ui.gd")
+const Tutorial = preload("res://scripts/tutorial.gd")
 
 enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE }
 const PX_PER_M := 40.0
@@ -25,6 +26,7 @@ const PX_PER_M := 40.0
 var save = Save.new()
 var ads = Ads.new()
 var tw = Tailwind.new()
+var tut = null
 var sim
 var track
 var world_view
@@ -116,7 +118,13 @@ func _ready() -> void:
 	_apply_settings()
 	if capture_dir != "":
 		_setup_capture()
+	# Returning players (any earlier progress) are never forced into it.
+	if not save.data.tutorial_done and (int(save.data.runs) > 0 or save.data.story_done or (save.data.seen_hints as Array).size() > 0):
+		save.data.tutorial_done = true
+		save.save()
 	go_title()
+	if capture_dir == "" and not save.data.tutorial_done:
+		start_tutorial()
 
 func _build_scene() -> void:
 	var env = Environment.new()
@@ -226,6 +234,8 @@ func go_title() -> void:
 	lb_target = 0.0
 	zoom_target = 1.3
 	touch.visible_controls = false
+	touch.highlight = ""
+	mode = "story"
 	ui.show_title()
 	synth.set_drive(0.0)
 
@@ -273,6 +283,45 @@ func start_story(from_chapter := 0) -> void:
 	_begin_story_segment()
 	_enter_run()
 	_show_card(Art.biome(chapter).name, "Chapter %d · %s" % [chapter + 1, Art.biome(chapter).country])
+
+func start_tutorial() -> void:
+	mode = "tutorial"
+	_new_world(0)
+	set_biome(0, true)
+	tut = Tutorial.new()
+	sim.v = Tutorial.SPEED
+	sim.kind_mode = false
+	dist_start = sim.x
+	seg_end = Tutorial.build(track)
+	_enter_run()
+	touch.visible_controls = true
+	ui.show_tutorial_skip()
+	_show_card("Welcome, courier", "Kite runs on their own. You make the moves.", 0.2)
+
+func finish_tutorial() -> void:
+	state = "tut_done"
+	state_t = 0.0
+	sim.frozen = true
+	touch.visible_controls = false
+	touch.highlight = ""
+	save.data.tutorial_done = true
+	# The story's first-time hints would repeat what was just learned.
+	save.data.seen_hints = ["hurdle", "beam", "gap", "wide_gap", "gate", "bell", "bloom"]
+	save.save()
+	synth.play("tier")
+	_toast("YOU'RE READY!", Vector2(get_viewport_rect().size.x * 0.5, get_viewport_rect().size.y * 0.3), Color(0.6, 1.0, 0.9), 72)
+	ui.show_tutorial_done()
+
+func skip_tutorial() -> void:
+	save.data.tutorial_done = true
+	save.save()
+	touch.highlight = ""
+	synth.play("ui")
+	go_title()
+
+func menu_tutorial() -> void:
+	synth.play("ui")
+	start_tutorial()
 
 func _story_params(ch: int, stg: String, rt: String) -> Dictionary:
 	var base_v: float = [500.0, 540.0, 580.0, 620.0][ch] * speed_mult()
@@ -367,6 +416,9 @@ func _enter_run() -> void:
 
 func _segment_finished() -> void:
 	# called when Kite passes seg_end
+	if mode == "tutorial":
+		finish_tutorial()
+		return
 	if mode == "story":
 		story_done_px += _story_params(chapter, stage, route).v * _story_params(chapter, stage, route).secs
 		if stage == "intro":
@@ -622,7 +674,10 @@ func _ground_kite() -> void:
 
 # ------------------------------------------------------------------ fail
 func _on_fail() -> void:
-	tw.mistake()
+	if mode == "tutorial":
+		tut.reprompt = true
+	else:
+		tw.mistake()
 	shake = 14.0 if save.data.settings.shake else 0.0
 	synth.play("fail")
 	kite.expr = "dizzy"
@@ -632,6 +687,20 @@ func _on_fail() -> void:
 	fail_t = 0.0
 
 func _update_fail(dt: float) -> void:
+	if mode == "tutorial":
+		if state_t > 0.7:
+			var back2: float = sim.x - Tutorial.SPEED * 1.6
+			var g2 = 0
+			while track.hole_at(back2) and g2 < 50:
+				back2 -= 30.0
+				g2 += 1
+			sim.respawn(back2)
+			kite.reset_scarf()
+			kite.expr = "focus"
+			state = "run"
+			state_t = 0.0
+			_toast("Try again!", _kite_screen() + Vector2(0, -150), Color(1, 0.9, 0.7), 40)
+		return
 	if mode == "story":
 		if state_t > 0.75 and fade_target == 0.0:
 			fade_target = 1.0
@@ -740,6 +809,8 @@ func resume() -> void:
 		ui.show_none()
 		if state == "recovery":
 			ui.show_skip()
+		elif mode == "tutorial" and state == "run":
+			ui.show_tutorial_skip()
 		elif state == "junction":
 			ui.show_junction(mode == "story")
 		touch.release_all()
@@ -755,14 +826,25 @@ func _physics_process(dt: float) -> void:
 	if state == "fail":
 		return
 	var inp: Dictionary
-	if autopilot:
+	if mode == "tutorial":
+		var f = tut.filter(_read_input(), sim, dt, autopilot)
+		touch.highlight = tut.highlight_zone()
+		if f == null:
+			if tut.wait_t == 0.0:
+				note_capture_event("tut_prompt")
+				synth.play("ui", 1.2, -6.0)
+			_prev_x = sim.x
+			_prev_y = sim.y
+			return
+		inp = f
+	elif autopilot:
 		inp = Track.bot_input(sim)
 	else:
 		inp = _read_input()
 	_prev_x = sim.x
 	_prev_y = sim.y
 	# ease into speed at the start of every stretch
-	sim.speed_scale = clampf(0.72 + 0.28 * state_t / 2.5, 0.72, 1.0)
+	sim.speed_scale = 1.0 if mode == "tutorial" else clampf(0.72 + 0.28 * state_t / 2.5, 0.72, 1.0)
 	sim.step(dt, inp)
 	for e in sim.events:
 		_on_event(e)
@@ -1104,7 +1186,7 @@ func _draw_hud(ci: Node2D) -> void:
 		ci.draw_rect(Rect2(0, sz.y - h, sz.x, h), Color(0, 0, 0, 0.92))
 	if state == "title":
 		_draw_title(ci, sz)
-	if state in ["run", "fail", "paused", "recovery", "junction"]:
+	if state in ["run", "fail", "paused", "recovery", "junction", "tut_done"]:
 		_draw_run_hud(ci, sz)
 	# toasts
 	for ts in toasts:
@@ -1144,6 +1226,19 @@ func _draw_hud(ci: Node2D) -> void:
 	if state == "finale" and state_t > 6.0:
 		var a5 = minf((state_t - 6.0) / 1.5, 1.0)
 		_text(ci, "If you wanted to, you would.", Vector2(sz.x * 0.5, sz.y * 0.28), 72, Color(1, 0.9, 0.95, a5), HORIZONTAL_ALIGNMENT_CENTER, 12)
+	if mode == "tutorial" and tut != null and tut.waiting != "" and state == "run":
+		var k = minf(tut.wait_t / 0.25, 1.0)
+		ci.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.0, 0.01, 0.03, 0.38 * k))
+		var kp = _kite_screen()
+		var pulse = 0.5 + 0.5 * sin(t * 6.0)
+		ci.draw_arc(kp, 90.0 + pulse * 10.0, 0.0, TAU, 48, Color(0.6, 1.0, 0.95, 0.6 * k), 3.0, true)
+		var py = sz.y * 0.30
+		var sw = font.get_string_size(tut.sub, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
+		var pw = maxf(sw, 420.0) + 90.0
+		ci.draw_colored_polygon(Art.rrect(Rect2(sz.x * 0.5 - pw * 0.5, py - 96, pw, 170), 40), Color(0.02, 0.04, 0.08, 0.82 * k))
+		ci.draw_polyline(Art.rrect(Rect2(sz.x * 0.5 - pw * 0.5, py - 96, pw, 170), 40), Color(0.6, 1.0, 0.95, 0.55 * k), 2.0, true)
+		_text(ci, tut.title, Vector2(sz.x * 0.5, py - 10), 76, Color(0.75, 1.0, 0.95, k), HORIZONTAL_ALIGNMENT_CENTER, 8)
+		_text(ci, tut.sub, Vector2(sz.x * 0.5, py + 46), 34, Color(1, 1, 1, 0.92 * k))
 	if fade > 0.001:
 		ci.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.01, 0.01, 0.03, fade))
 
@@ -1172,7 +1267,13 @@ func _draw_run_hud(ci: Node2D, sz: Vector2) -> void:
 		var lp = Vector2(180 + i * 34, top + 64)
 		ci.draw_colored_polygon(PackedVector2Array([lp + Vector2(14, 0), lp + Vector2(-10, -9), lp + Vector2(-5, 0), lp + Vector2(-10, 9)]), lc)
 	# progress / score
-	if mode == "story":
+	if mode == "tutorial":
+		_text(ci, "PRACTICE RUN", Vector2(sz.x * 0.5, top + 46), 34, Color(1, 1, 1, 0.85))
+		var n: int = mini(tut.lessons, Tutorial.TOTAL_LESSONS)
+		for i in Tutorial.TOTAL_LESSONS:
+			var px = sz.x * 0.5 + (i - (Tutorial.TOTAL_LESSONS - 1) * 0.5) * 30.0
+			ci.draw_circle(Vector2(px, top + 76), 7.0, Color(0.5, 1.0, 0.9, 0.95) if i < n else Color(1, 1, 1, 0.22))
+	elif mode == "story":
 		var w = sz.x * 0.36
 		var x0 = sz.x * 0.5 - w * 0.5
 		var prog = clampf((story_done_px + maxf(sim.x - _seg_start_estimate(), 0.0)) / maxf(story_total, 1.0), 0.0, 1.0)
@@ -1225,7 +1326,9 @@ func menu_daily() -> void:
 	start_endless(true)
 
 func menu_retry() -> void:
-	if mode == "story":
+	if mode == "tutorial":
+		start_tutorial()
+	elif mode == "story":
 		start_story(chapter)
 	else:
 		start_endless(mode == "daily")
@@ -1247,6 +1350,9 @@ func _setup_capture() -> void:
 	save.data.seen_hints = []
 	cap_steps = [
 		{"do": "wait", "s": 3.0}, {"shot": "01-title"},
+		{"do": "tutorial"}, {"until": "tut_prompt", "max": 12.0}, {"do": "wait", "s": 0.4}, {"shot": "01a-tutorial-hop"},
+		{"until_tut": 4, "max": 40.0}, {"until": "tut_prompt", "max": 20.0}, {"do": "wait", "s": 0.4}, {"shot": "01b-tutorial-hover"},
+		{"until_state": "tut_done", "max": 90.0}, {"do": "wait", "s": 0.6}, {"shot": "01c-tutorial-done"},
 		{"do": "story", "ch": 0}, {"do": "wait", "s": 2.2}, {"shot": "02-chapter-card"},
 		{"until": "jump", "max": 8.0}, {"do": "wait", "s": 0.25}, {"shot": "03-hop"},
 		{"until": "slide", "max": 12.0}, {"do": "wait", "s": 0.12}, {"shot": "04-scoot"},
@@ -1282,6 +1388,12 @@ func _capture_tick(dt: float) -> void:
 			cap_i += 1
 			cap_wait = 0.0
 		return
+	if st.has("until_tut"):
+		if (tut != null and tut.lessons >= st.until_tut) or cap_wait > st.max:
+			cap_events.clear()
+			cap_i += 1
+			cap_wait = 0.0
+		return
 	if st.has("until_state"):
 		if state == st.until_state or cap_wait > st.max:
 			cap_i += 1
@@ -1300,6 +1412,9 @@ func _capture_tick(dt: float) -> void:
 			var o = Track.make(RESCUE, sim.x + sim.v * 0.6, sim.v, RandomNumberGenerator.new())
 			track.obs.insert(track.first_index_after(sim.x), o)
 			_start_rescue(o)
+		"tutorial":
+			start_tutorial()
+			card = {}
 		"endless":
 			start_endless(false)
 			card = {}
@@ -1312,7 +1427,10 @@ func _capture_tick(dt: float) -> void:
 			_enter_finale()
 		"quit":
 			print("capture: %d shots -> %s" % [cap_shots.size(), capture_dir])
+			set_process(false)
+			set_physics_process(false)
 			get_tree().quit()
+			return
 	cap_events.clear()
 	cap_i += 1
 	cap_wait = 0.0

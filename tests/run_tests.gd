@@ -6,6 +6,7 @@ const Track = preload("res://scripts/track.gd")
 const Sim = preload("res://scripts/sim.gd")
 const Tailwind = preload("res://scripts/tailwind.gd")
 const Save = preload("res://scripts/save.gd")
+const Tutorial = preload("res://scripts/tutorial.gd")
 
 var failures := 0
 var checks := 0
@@ -19,6 +20,7 @@ func _initialize() -> void:
 	test_fairness()
 	test_unfair_detected()
 	test_smooth_start()
+	test_tutorial()
 	test_verbs()
 	test_tailwind()
 	test_save_roundtrip()
@@ -68,6 +70,40 @@ func test_smooth_start() -> void:
 			if o.x < sp * 55.0 * 0.25: early += 1
 			elif o.x > sp * 55.0 * 0.75: late += 1
 	check(late > early * 1.3, "difficulty ramps up within a stretch (early %d, late %d)" % [early, late])
+
+## The tutorial course is clearable, every lesson prompts, and a player who
+## does each prompted move (autopilot) finishes without failing.
+func test_tutorial() -> void:
+	var tr = Track.new()
+	var end: float = Tutorial.build(tr)
+	check(tr.bot_run(tr.obs.duplicate(true), 0.0, end, Tutorial.SPEED) < 0, "tutorial course is clearable")
+	var tu = Tutorial.new()
+	var s = Sim.new()
+	s.track = tr
+	s.v = Tutorial.SPEED
+	var none := {"jump_pressed": false, "jump_held": false, "down_pressed": false, "down_held": false, "gust_pressed": false, "letter_pressed": false}
+	var frozen_ticks := 0
+	for i in 120 * 120:
+		var f = tu.filter(none, s, 1.0 / 120.0, true)
+		if f == null:
+			frozen_ticks += 1
+			continue
+		s.step(1.0 / 120.0, f)
+		if s.dead or s.x > end:
+			break
+	check(not s.dead and s.x > end, "autopilot finishes the tutorial (dead=%s x=%.0f end=%.0f)" % [s.dead, s.x, end])
+	check(tu.lessons >= Tutorial.TOTAL_LESSONS, "all lessons prompted (%d of %d)" % [tu.lessons, Tutorial.TOTAL_LESSONS])
+	check(frozen_ticks > 0, "game freezes on prompts")
+	# A player who ignores a prompt never moves on: the game waits for them.
+	var tu2 = Tutorial.new()
+	var s2 = Sim.new()
+	s2.track = tr
+	s2.v = Tutorial.SPEED
+	for i in 120 * 10:
+		var f2 = tu2.filter(none, s2, 1.0 / 120.0, false)
+		if f2 != null:
+			s2.step(1.0 / 120.0, f2)
+	check(not s2.dead and tu2.waiting == "jump", "first prompt waits for HOP (waiting=%s)" % tu2.waiting)
 
 func test_unfair_detected() -> void:
 	var tr = Track.new()
