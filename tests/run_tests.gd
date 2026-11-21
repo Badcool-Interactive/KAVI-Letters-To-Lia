@@ -18,6 +18,7 @@ func _initialize() -> void:
 		return
 	test_fairness()
 	test_unfair_detected()
+	test_smooth_start()
 	test_verbs()
 	test_tailwind()
 	test_save_roundtrip()
@@ -53,6 +54,21 @@ func test_fairness() -> void:
 	print("fairness: %d obstacles, %d spacing fixes, %d drops" % [total, fixes, drops])
 
 ## A deliberately impossible layout must be caught by the validator.
+## Every stretch starts with ~3 s of free running, and the first quarter is
+## sparser than the last (the ramp gets harder).
+func test_smooth_start() -> void:
+	var early := 0
+	var late := 0
+	for seed_i in 40:
+		var tr = Track.new()
+		var sp := 560.0
+		tr.gen_segment(0.0, 55.0, sp, 0.8, all_types(), seed_i * 31 + 5, false, true)
+		check(tr.obs.size() > 0 and tr.obs[0].x >= sp * 2.9, "seed %d: first obstacle after the lead-in (%.0f px)" % [seed_i, tr.obs[0].x if tr.obs.size() > 0 else -1.0])
+		for o in tr.obs:
+			if o.x < sp * 55.0 * 0.25: early += 1
+			elif o.x > sp * 55.0 * 0.75: late += 1
+	check(late > early * 1.3, "difficulty ramps up within a stretch (early %d, late %d)" % [early, late])
+
 func test_unfair_detected() -> void:
 	var tr = Track.new()
 	var rng := RandomNumberGenerator.new()

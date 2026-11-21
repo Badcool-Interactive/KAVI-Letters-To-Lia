@@ -51,47 +51,51 @@ static func mixc(a: Color, b: Color, t: float) -> Color:
 const BIOMES := [
 	{
 		"name": "Kalymera Bay", "country": "Greece",
-		"sky": [Color(0.03, 0.10, 0.20), Color(0.16, 0.34, 0.48), Color(1.0, 0.72, 0.45)],
-		"sun": Color(1.0, 0.78, 0.48), "sun_pos": Vector2(0.72, 0.56), "sun_r": 180.0,
-		"fog": Color(0.55, 0.55, 0.62),
-		"layers": [Color(0.24, 0.33, 0.45), Color(0.13, 0.20, 0.30), Color(0.06, 0.10, 0.17)],
-		"ground": Color(0.025, 0.045, 0.075), "rim": Color(1.0, 0.82, 0.55),
-		"accent": Color(0.30, 1.0, 0.95), "mote": Color(1.0, 0.85, 0.55),
+		"sky": [Color(0.10, 0.17, 0.27), Color(0.30, 0.42, 0.52), Color(0.96, 0.76, 0.58)],
+		"sun": Color(1.0, 0.84, 0.64), "sun_pos": Vector2(0.72, 0.56), "sun_r": 150.0,
+		"fog": Color(0.70, 0.66, 0.68),
+		"layers": [Color(0.36, 0.43, 0.53), Color(0.21, 0.28, 0.37), Color(0.10, 0.14, 0.21)],
+		"ground": Color(0.05, 0.07, 0.10), "rim": Color(1.0, 0.86, 0.66),
+		"accent": Color(0.55, 0.92, 0.90), "mote": Color(1.0, 0.88, 0.68),
+		"obstacle": Color(0.93, 0.88, 0.80),
 		"kinds": [["ring", "spire", "dome"], ["dome", "column", "spire"], ["olive", "column", "cypress"]],
-		"stars": 0.2, "aurora": 0.0, "water": 1.0,
+		"stars": 0.15, "aurora": 0.0, "water": 1.0,
 	},
 	{
 		"name": "Rhodope Lanterns", "country": "Bulgaria",
-		"sky": [Color(0.01, 0.03, 0.08), Color(0.03, 0.12, 0.16), Color(0.20, 0.42, 0.40)],
-		"sun": Color(0.75, 1.0, 0.9), "sun_pos": Vector2(0.30, 0.30), "sun_r": 70.0,
-		"fog": Color(0.20, 0.42, 0.40),
-		"layers": [Color(0.07, 0.19, 0.22), Color(0.04, 0.11, 0.14), Color(0.02, 0.05, 0.07)],
-		"ground": Color(0.01, 0.025, 0.03), "rim": Color(0.55, 1.0, 0.75),
-		"accent": Color(1.0, 0.70, 0.30), "mote": Color(0.75, 1.0, 0.45),
+		"sky": [Color(0.07, 0.13, 0.20), Color(0.17, 0.30, 0.35), Color(0.48, 0.64, 0.60)],
+		"sun": Color(0.86, 1.0, 0.94), "sun_pos": Vector2(0.30, 0.32), "sun_r": 70.0,
+		"fog": Color(0.42, 0.58, 0.56),
+		"layers": [Color(0.22, 0.35, 0.38), Color(0.13, 0.23, 0.26), Color(0.06, 0.12, 0.14)],
+		"ground": Color(0.03, 0.06, 0.07), "rim": Color(0.70, 1.0, 0.86),
+		"accent": Color(1.0, 0.78, 0.45), "mote": Color(0.85, 1.0, 0.65),
+		"obstacle": Color(0.88, 0.93, 0.88),
 		"kinds": [["pine", "pine", "peak"], ["pine", "lantern", "pine"], ["fern", "pine", "lantern"]],
-		"stars": 1.0, "aurora": 0.0, "water": 0.0,
+		"stars": 0.7, "aurora": 0.0, "water": 0.0,
 	},
 	{
 		"name": "Danube Mirror", "country": "Bulgaria · Romania",
-		"sky": [Color(0.09, 0.04, 0.16), Color(0.36, 0.16, 0.36), Color(1.0, 0.52, 0.52)],
-		"sun": Color(1.0, 0.55, 0.60), "sun_pos": Vector2(0.50, 0.62), "sun_r": 150.0,
-		"fog": Color(0.65, 0.40, 0.55),
-		"layers": [Color(0.33, 0.20, 0.38), Color(0.18, 0.10, 0.24), Color(0.08, 0.04, 0.12)],
-		"ground": Color(0.04, 0.02, 0.06), "rim": Color(1.0, 0.62, 0.78),
-		"accent": Color(0.55, 0.85, 1.0), "mote": Color(1.0, 0.65, 0.85),
+		"sky": [Color(0.14, 0.11, 0.22), Color(0.38, 0.28, 0.42), Color(0.94, 0.68, 0.62)],
+		"sun": Color(1.0, 0.72, 0.66), "sun_pos": Vector2(0.50, 0.62), "sun_r": 130.0,
+		"fog": Color(0.70, 0.56, 0.62),
+		"layers": [Color(0.38, 0.30, 0.42), Color(0.23, 0.17, 0.29), Color(0.11, 0.08, 0.15)],
+		"ground": Color(0.06, 0.04, 0.08), "rim": Color(1.0, 0.76, 0.82),
+		"accent": Color(0.66, 0.86, 1.0), "mote": Color(1.0, 0.80, 0.88),
+		"obstacle": Color(0.95, 0.88, 0.88),
 		"kinds": [["bridge", "turbine", "ring"], ["turbine", "reed", "lily"], ["reed", "lily", "reed"]],
-		"stars": 0.4, "aurora": 0.0, "water": 1.0,
+		"stars": 0.3, "aurora": 0.0, "water": 1.0,
 	},
 	{
 		"name": "Carpathian Aurora", "country": "Romania",
-		"sky": [Color(0.02, 0.01, 0.07), Color(0.10, 0.06, 0.22), Color(0.25, 0.42, 0.60)],
-		"sun": Color(0.80, 0.70, 1.0), "sun_pos": Vector2(0.62, 0.24), "sun_r": 60.0,
-		"fog": Color(0.30, 0.36, 0.60),
-		"layers": [Color(0.16, 0.15, 0.32), Color(0.08, 0.07, 0.19), Color(0.03, 0.02, 0.08)],
-		"ground": Color(0.015, 0.01, 0.035), "rim": Color(0.65, 0.80, 1.0),
-		"accent": Color(0.85, 0.50, 1.0), "mote": Color(0.55, 0.95, 1.0),
+		"sky": [Color(0.06, 0.06, 0.14), Color(0.16, 0.15, 0.30), Color(0.38, 0.50, 0.66)],
+		"sun": Color(0.88, 0.84, 1.0), "sun_pos": Vector2(0.62, 0.24), "sun_r": 60.0,
+		"fog": Color(0.44, 0.48, 0.66),
+		"layers": [Color(0.24, 0.24, 0.40), Color(0.14, 0.14, 0.27), Color(0.07, 0.06, 0.14)],
+		"ground": Color(0.04, 0.03, 0.07), "rim": Color(0.78, 0.86, 1.0),
+		"accent": Color(0.86, 0.68, 1.0), "mote": Color(0.70, 0.95, 1.0),
+		"obstacle": Color(0.88, 0.88, 0.96),
 		"kinds": [["peak", "castle", "peak"], ["castle", "pine", "pine"], ["pine", "fern", "pine"]],
-		"stars": 1.0, "aurora": 1.0, "water": 0.0,
+		"stars": 0.8, "aurora": 0.7, "water": 0.0,
 	},
 ]
 
@@ -107,7 +111,7 @@ static func blend_biome(a: Dictionary, b: Dictionary, t: float) -> Dictionary:
 	var o := a.duplicate()
 	o.sky = [a.sky[0].lerp(b.sky[0], t), a.sky[1].lerp(b.sky[1], t), a.sky[2].lerp(b.sky[2], t)]
 	o.layers = [a.layers[0].lerp(b.layers[0], t), a.layers[1].lerp(b.layers[1], t), a.layers[2].lerp(b.layers[2], t)]
-	for k in ["sun", "fog", "ground", "rim", "accent", "mote"]:
+	for k in ["sun", "fog", "ground", "rim", "accent", "mote", "obstacle"]:
 		o[k] = a[k].lerp(b[k], t)
 	o.sun_pos = a.sun_pos.lerp(b.sun_pos, t)
 	o.sun_r = lerpf(a.sun_r, b.sun_r, t)

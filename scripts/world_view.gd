@@ -36,6 +36,7 @@ func _ready() -> void:
 			var m = CanvasItemMaterial.new()
 			m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 			p.material = m
+			p.modulate = Color(1, 1, 1, 0.6)
 		add_child(p)
 		_painters.append(p)
 
@@ -303,12 +304,12 @@ func _draw_shafts(ci: Node2D) -> void:
 		var dir = Vector2(cos(a), sin(a))
 		var nrm = Vector2(-dir.y, dir.x)
 		var e = sp + dir * len
-		var al = (0.035 + 0.03 * sin(t * 0.4 + k * 2.1)) * (1.0 + calm * 0.6)
+		var al = (0.025 + 0.015 * sin(t * 0.4 + k * 2.1)) * (1.0 + calm * 0.5)
 		ci.draw_polygon(PackedVector2Array([sp + nrm * w0, sp - nrm * w0, e - nrm * w1, e + nrm * w1]),
 			PackedColorArray([Color(sc, al), Color(sc, al), Color(sc, 0.0), Color(sc, 0.0)]))
 
 func _draw_motes(ci: Node2D) -> void:
-	var n = [30, 60, 90][quality]
+	var n = [10, 22, 32][quality]
 	var mc: Color = pal.mote
 	for i in n:
 		var par = 0.25 + Art.hash01(i, 1) * 0.9

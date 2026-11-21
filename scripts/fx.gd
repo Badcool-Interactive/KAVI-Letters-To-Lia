@@ -14,6 +14,7 @@ func _ready() -> void:
 	var m = CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	material = m
+	modulate = Color(1, 1, 1, 0.7)
 
 func burst(p: Vector2, col: Color, n: int, spd := 300.0, life := 0.6, size := 4.0, grav := 0.0, spread := TAU, dir := 0.0) -> void:
 	n = int(n * density)
@@ -51,7 +52,7 @@ func _draw() -> void:
 	for q in parts:
 		var f: float = q.l / q.m
 		var c: Color = q.c
-		draw_circle(q.p, q.s * (0.4 + f * 0.6), Color(c.r * 1.6, c.g * 1.6, c.b * 1.6, f))
+		draw_circle(q.p, q.s * (0.4 + f * 0.6), Color(c.r, c.g, c.b, f))
 	for r in rings:
 		var f2: float = 1.0 - r.l / r.m
 		draw_arc(r.p, r.r * ease(f2, 0.4), 0.0, TAU, 40, Color(r.c, (1.0 - f2) * 0.9), r.w * (1.0 - f2) + 1.0, true)

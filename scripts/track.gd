@@ -92,10 +92,13 @@ static func make(t: int, x: float, sp: float, rng: RandomNumberGenerator) -> Dic
 ## Generates one segment of `secs` seconds at speed `sp` starting at `x0`.
 ## Returns the end x. `types` lists allowed obstacle types; `diff` is 0..1.
 func gen_segment(x0: float, secs: float, sp: float, diff: float, types: Array,
-		seed_val: int, rescue := false, combos := false) -> float:
+		seed_val: int, rescue := false, combos := false, lead_in := 3.0) -> float:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_val
-	var t := 1.1 # lead-in seconds
+	var t := lead_in # free running before the first obstacle
+	var easy: Array = types.filter(func(x): return x in [HURDLE, BEAM, GAP])
+	if easy.is_empty():
+		easy = types
 	var placed: Array = []
 	var rescue_at := secs * rng.randf_range(0.45, 0.7) if rescue else -1.0
 	while t < secs - 0.6:
@@ -105,7 +108,11 @@ func gen_segment(x0: float, secs: float, sp: float, diff: float, types: Array,
 			t += r.w / sp + 1.6
 			rescue_at = -1.0
 			continue
-		var phrase := _pick_phrase(rng, types, diff, combos)
+		# Smooth ramp: gentle, well-spaced, easy obstacles first; full
+		# difficulty only after ~45% of the stretch.
+		var ramp := clampf((t - lead_in) / maxf(secs * 0.45, 1.0), 0.0, 1.0)
+		var ld := diff * lerpf(0.2, 1.0, ramp)
+		var phrase := _pick_phrase(rng, easy if ramp < 0.3 else types, ld, combos and ramp > 0.6)
 		for step in phrase:
 			if step is float:
 				t += step
@@ -113,7 +120,7 @@ func gen_segment(x0: float, secs: float, sp: float, diff: float, types: Array,
 			var o := make(step, x0 + t * sp, sp, rng)
 			placed.append(o)
 			t += obstacle_extent(o) / sp
-		t += lerpf(1.45, 0.62, diff) + rng.randf_range(0.0, lerpf(0.5, 0.25, diff))
+		t += lerpf(1.45, 0.62, ld) + rng.randf_range(0.0, lerpf(0.5, 0.25, ld)) + (1.0 - ramp) * 0.8
 	var seg_end := x0 + secs * sp
 	_validate(placed, x0, seg_end, sp)
 	for o in placed:

@@ -31,6 +31,7 @@ func _ready() -> void:
 	var m = CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_add.material = m
+	_add.modulate = Color(1, 1, 1, 0.5)
 	add_child(_add)
 
 func refresh() -> void:
@@ -135,76 +136,97 @@ func _tufts(ci: Node2D, a: float, b: float, gcol: Color) -> void:
 		if Art.hash01(c, 9) < 0.3:
 			ci.draw_colored_polygon(PackedVector2Array([Vector2(x + 4, 1), Vector2(x + 10 + sway, -h * 0.7), Vector2(x + 12, 1)]), gcol)
 
+# Obstacles are solid, light "ceramic" shapes with an ink outline and a
+# colour-coded band, so they read on any screen without relying on glow.
+const INK := Color(0.04, 0.05, 0.09)
+
+func _mat() -> Color:
+	return pal.get("obstacle", Color(0.85, 0.82, 0.76))
+
+func _solid(ci: Node2D, pts: PackedVector2Array, fill: Color, ink_w := 3.0) -> void:
+	ci.draw_colored_polygon(pts, fill)
+	var c := pts.duplicate()
+	c.append(pts[0])
+	ci.draw_polyline(c, INK, ink_w, true)
+
 func _hurdle(ci: Node2D, o: Dictionary) -> void:
-	var body: Color = pal.ground.lerp(pal.layers[2], 0.5).lightened(0.05)
-	var r = Rect2(o.x, -o.h, o.w, o.h + 4)
-	ci.draw_colored_polygon(Art.rrect(r, 14.0), body)
-	ci.draw_rect(Rect2(o.x + 8, -o.h + 18, o.w - 16, 6), body.darkened(0.3))
+	var body := _mat()
+	_solid(ci, Art.rrect(Rect2(o.x, -o.h, o.w, o.h + 4), 14.0), body)
+	ci.draw_colored_polygon(Art.rrect(Rect2(o.x + 5, -o.h * 0.45, o.w - 10, o.h * 0.45 - 2), 8.0), body.darkened(0.18))
+	ci.draw_colored_polygon(Art.rrect(Rect2(o.x + 6, -o.h + 6, o.w - 12, 10), 5.0), AMBER.darkened(0.05))
+	var c := Vector2(o.x + o.w * 0.5, -o.h * 0.5)
+	ci.draw_polyline(PackedVector2Array([c + Vector2(-11, 6), c + Vector2(0, -6), c + Vector2(11, 6)]), INK, 4.0, true)
 
 func _beam(ci: Node2D, o: Dictionary) -> void:
-	var body: Color = pal.ground.lerp(pal.layers[2], 0.45).lightened(0.04)
+	var body := _mat()
 	var bottom: float = -o.h
-	ci.draw_colored_polygon(Art.rrect(Rect2(o.x, bottom - 70, o.w, 70), 16.0), body)
-	ci.draw_rect(Rect2(o.x + 18, bottom - 1400, 26, 1340), body)
-	ci.draw_rect(Rect2(o.x + o.w - 44, bottom - 1400, 26, 1340), body)
-	# hanging vines on the underside
-	for k in int(o.w / 40.0):
-		var vx: float = o.x + 20 + k * 40.0
-		var vl = 8.0 + Art.hash01(o.seed, k) * 14.0
-		ci.draw_line(Vector2(vx, bottom), Vector2(vx + sin(t * 2.0 + k) * 2.0, bottom + vl), body, 3.0)
+	var pillar := body.darkened(0.45)
+	ci.draw_rect(Rect2(o.x + 18, bottom - 1400, 24, 1340), pillar)
+	ci.draw_rect(Rect2(o.x + o.w - 42, bottom - 1400, 24, 1340), pillar)
+	_solid(ci, Art.rrect(Rect2(o.x, bottom - 72, o.w, 72), 16.0), body)
+	ci.draw_colored_polygon(Art.rrect(Rect2(o.x + 6, bottom - 18, o.w - 12, 12), 6.0), ROSE.darkened(0.1))
+	for k in maxi(1, int(o.w / 120.0)):
+		var c := Vector2(o.x + 60.0 + k * 120.0, bottom - 42)
+		if c.x > o.x + o.w - 30.0:
+			break
+		ci.draw_polyline(PackedVector2Array([c + Vector2(-11, -6), c + Vector2(0, 6), c + Vector2(11, -6)]), INK, 4.0, true)
 
 func _gate(ci: Node2D, o: Dictionary) -> void:
-	var body: Color = pal.ground.lerp(pal.layers[2], 0.5).lightened(0.06)
+	var body := _mat()
 	var x: float = o.x
-	ci.draw_rect(Rect2(x - 6, -o.h, 12, o.h), body)
-	ci.draw_rect(Rect2(x + o.w - 6, -o.h, 12, o.h), body)
+	_solid(ci, Art.rrect(Rect2(x - 10, -o.h, 14, o.h), 6.0), body.darkened(0.1))
+	_solid(ci, Art.rrect(Rect2(x + o.w - 4, -o.h, 14, o.h), 6.0), body.darkened(0.1))
 	var f = clampf(o.open_t / 0.45, 0.0, 1.0)
 	var swing = ease(f, 0.4) * 1.45
 	var hinge = Vector2(x + o.w * 0.5, -o.h)
 	ci.draw_set_transform(hinge, -swing, Vector2.ONE)
-	ci.draw_rect(Rect2(-o.w * 0.5 + 2, 0, o.w - 4, o.h - 6), Color(body, 0.92))
+	_solid(ci, Art.rrect(Rect2(-o.w * 0.5 + 4, 4, o.w - 8, o.h - 10), 8.0), body)
 	var hub = Vector2(0, o.h * 0.55)
-	var spin = t * (1.0 + f * 14.0)
+	var spin = t * (0.8 + f * 14.0)
 	for k in 4:
 		var a = spin + TAU * k / 4.0
-		var tip = hub + Vector2(cos(a), sin(a)) * 60.0
-		ci.draw_colored_polygon(PackedVector2Array([hub, tip, hub + Vector2(cos(a + 0.6), sin(a + 0.6)) * 40.0]), body.lightened(0.1))
+		var tip = hub + Vector2(cos(a), sin(a)) * 19.0
+		_solid(ci, PackedVector2Array([hub, tip, hub + Vector2(cos(a + 0.9), sin(a + 0.9)) * 14.0]), LEAF.darkened(0.15), 2.0)
+	ci.draw_circle(hub, 4.0, INK)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _bell(ci: Node2D, o: Dictionary) -> void:
-	var body: Color = pal.ground.lerp(pal.layers[2], 0.5).lightened(0.06)
+	var body := _mat()
 	var bp = Vector2(o.bell_x, o.bell_y)
-	ci.draw_line(Vector2(o.bell_x, 0), bp + Vector2(0, -40), body, 10.0)
-	ci.draw_line(bp + Vector2(-50, -40), bp + Vector2(30, -40), body, 8.0)
+	ci.draw_line(Vector2(o.bell_x, 0), bp + Vector2(0, -40), INK, 14.0)
+	ci.draw_line(Vector2(o.bell_x, 0), bp + Vector2(0, -40), body.darkened(0.2), 9.0)
+	ci.draw_line(bp + Vector2(-52, -40), bp + Vector2(32, -40), INK, 12.0)
+	ci.draw_line(bp + Vector2(-50, -40), bp + Vector2(30, -40), body.darkened(0.2), 7.0)
 	var swing = sin(o.open_t * 18.0) * exp(-o.open_t * 2.5) * 0.6 if o.open else sin(t * 1.6) * 0.06
 	ci.draw_set_transform(bp + Vector2(-20, -40), swing, Vector2.ONE)
-	ci.draw_colored_polygon(PackedVector2Array([Vector2(-14, 4), Vector2(14, 4), Vector2(26, 46), Vector2(-26, 46)]), body.lightened(0.12))
-	ci.draw_circle(Vector2(0, 50), 7, body.lightened(0.2))
+	_solid(ci, PackedVector2Array([Vector2(-14, 4), Vector2(14, 4), Vector2(28, 48), Vector2(-28, 48)]), GOLD.darkened(0.08))
+	ci.draw_circle(Vector2(0, 52), 7, INK)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	# drawbridge halves
 	var f = clampf(o.open_t / 0.6, 0.0, 1.0) if o.open else 0.0
 	var ang = lerpf(1.35, 0.0, ease(f, 0.35))
 	var half: float = o.w * 0.5 + 4.0
-	var plank = Color(body.lightened(0.05))
 	ci.draw_set_transform(Vector2(o.x, 0), -ang, Vector2.ONE)
-	ci.draw_rect(Rect2(0, -6, half, 18), plank)
+	_solid(ci, PackedVector2Array([Vector2(0, -6), Vector2(half, -6), Vector2(half, 12), Vector2(0, 12)]), body)
 	for k in int(half / 36.0):
-		ci.draw_line(Vector2(k * 36.0 + 18, -6), Vector2(k * 36.0 + 18, 12), plank.darkened(0.35), 2.0)
+		ci.draw_line(Vector2(k * 36.0 + 18, -6), Vector2(k * 36.0 + 18, 12), INK, 2.0)
 	ci.draw_set_transform(Vector2(o.x + o.w, 0), ang, Vector2.ONE)
-	ci.draw_rect(Rect2(-half, -6, half, 18), plank)
+	_solid(ci, PackedVector2Array([Vector2(-half, -6), Vector2(0, -6), Vector2(0, 12), Vector2(-half, 12)]), body)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _bloom(ci: Node2D, o: Dictionary) -> void:
-	var body: Color = pal.ground.lerp(pal.layers[2], 0.5)
+	var body := _mat()
 	var c = Vector2(o.x + o.w * 0.5, -6)
-	ci.draw_colored_polygon(Art.ellipse(c + Vector2(0, 8), Vector2(o.w * 0.5, 14), 24), body.lightened(0.08))
-	# crystal wall
+	for k in 6:
+		var a := PI + PI * (float(k) + 0.5) / 6.0
+		_solid(ci, Art.ellipse(c + Vector2(cos(a) * 44, sin(a) * 10 + 2), Vector2(30, 11), 14, a), ROSE.lerp(Color(1, 1, 1), 0.25), 2.0)
+	_solid(ci, Art.ellipse(c, Vector2(16, 8), 14), GOLD, 2.0)
 	var wx: float = o.wall_x
-	ci.draw_colored_polygon(PackedVector2Array([Vector2(wx, 2), Vector2(wx + 6, -o.wall_h + 30), Vector2(wx + o.wall_w * 0.5, -o.wall_h),
-		Vector2(wx + o.wall_w - 4, -o.wall_h + 40), Vector2(wx + o.wall_w, 2)]), body.lightened(0.1))
+	_solid(ci, PackedVector2Array([Vector2(wx, 2), Vector2(wx + 6, -o.wall_h + 30), Vector2(wx + o.wall_w * 0.5, -o.wall_h),
+		Vector2(wx + o.wall_w - 4, -o.wall_h + 40), Vector2(wx + o.wall_w, 2)]), body.lerp(pal.accent, 0.25))
+	ci.draw_line(Vector2(wx + o.wall_w * 0.5, -o.wall_h + 8), Vector2(wx + o.wall_w * 0.5, -10), body.darkened(0.2), 3.0)
 
 func _rescue(ci: Node2D, o: Dictionary) -> void:
-	var body: Color = pal.ground.lerp(pal.layers[2], 0.5).lightened(0.05)
+	var body := _mat().darkened(0.15)
 	var ft: float = o.get("fall_t", -1.0)
 	var n = int(o.w / 60.0)
 	for k in n:
@@ -216,10 +238,9 @@ func _rescue(ci: Node2D, o: Dictionary) -> void:
 			drop = 900.0 * tk * tk
 			rot = tk * (2.0 if k % 2 == 0 else -2.4)
 		ci.draw_set_transform(Vector2(px + 28, 4 + drop), rot, Vector2.ONE)
-		ci.draw_rect(Rect2(-28, -8, 54, 16), body)
+		_solid(ci, PackedVector2Array([Vector2(-28, -8), Vector2(26, -8), Vector2(26, 8), Vector2(-28, 8)]), body, 2.0)
 		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if ft >= 0.0:
-		# tumbling cargo pods from the storm
 		for k in 7:
 			var tk = ft * 1.6 - k * 0.12
 			if tk < 0.0:
@@ -227,7 +248,7 @@ func _rescue(ci: Node2D, o: Dictionary) -> void:
 			var cx: float = o.x + 200.0 + k * (o.w / 8.0)
 			var cy = -900.0 + tk * tk * 1100.0
 			ci.draw_set_transform(Vector2(cx, cy), tk * 3.0 + k, Vector2.ONE)
-			ci.draw_colored_polygon(Art.rrect(Rect2(-40, -40, 80, 80), 14.0), body.lightened(0.1))
+			_solid(ci, Art.rrect(Rect2(-40, -40, 80, 80), 14.0), body.lightened(0.1))
 			ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _plane(ci: Node2D, p: Vector2, v: Vector2) -> void:

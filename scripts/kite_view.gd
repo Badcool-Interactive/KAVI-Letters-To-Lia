@@ -99,7 +99,7 @@ func _update_scarf(dt: float) -> void:
 		_scarf_pts[k] = p
 
 func _update_trail() -> void:
-	if not trail_on or tier < 2 or pose in ["idle", "sit", "wave", "walk"]:
+	if not trail_on or tier < 3 or pose in ["idle", "sit", "wave", "walk"]:
 		if _trail.size() > 0:
 			_trail.pop_front()
 		return

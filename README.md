@@ -1,9 +1,17 @@
-# VOLT/RUN (2D luminous rebuild)
+# VOLT/RUN
 
 Kite, a little courier robot, runs from Greece through Bulgaria to Romania to see Lumi again.
 Precision auto-runner with a cinematic, glowing 2D look. Godot 4.7.2, all art and audio generated in code.
 
-## Play
+## Download and play
+Get the latest build from **[Releases](../../releases/latest)**:
+| Platform | File | How to run |
+|---|---|---|
+| Android (64-bit phones) | `VOLT-RUN-android.apk` | Copy it to the phone, open it, allow "install unknown apps". Play in landscape. |
+| Windows 10/11 (64-bit) | `VOLT-RUN-windows.exe` | Double-click it. SmartScreen may warn because the exe isn't signed: choose *More info → Run anyway*. |
+| Linux (x86_64) | `VOLT-RUN-linux.x86_64` | `chmod +x VOLT-RUN-linux.x86_64 && ./VOLT-RUN-linux.x86_64` |
+
+## Play from source
 ```bash
 ../../tools/bin/path/godot --path .
 ```
@@ -15,7 +23,7 @@ Precision auto-runner with a cinematic, glowing 2D look. Godot 4.7.2, all art an
 | Letter (paper plane: bells and bridges, max 3) | C / K | Y | right thumb, small button |
 | Pause | Esc | Start | top-right button |
 
-## What is in this build (v0.1.0)
+## What is in this build (v0.2.0)
 - **Story, "Find Lumi":** 4 chapters (Kalymera Bay, Rhodope Lanterns, Danube Mirror, Carpathian Aurora). First-time hints, chapter cards, Scenic/Wild junctions (Wild is shorter and harder), one scripted hover-biker rescue, and the Lumi finale.
 - **Endless Road** and **Daily Relay** (date-seeded). Speed and difficulty ramp per segment, biomes cycle, Wild route scores ×1.5. Local bests.
 - **Tailwind** ×1–×4 (3/8/15 perfects; a mistake drops one tier). In-key notes, glowing thrusters, trail, slow-mo on tier-up.

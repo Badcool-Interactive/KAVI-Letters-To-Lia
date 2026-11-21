@@ -123,14 +123,14 @@ func _build_scene() -> void:
 	env.background_mode = Environment.BG_CANVAS
 	env.background_canvas_max_layer = 4
 	env.glow_enabled = true
-	env.glow_intensity = 0.85
-	env.glow_strength = 1.05
-	env.glow_bloom = 0.04
-	env.glow_hdr_threshold = 0.95
-	env.glow_hdr_scale = 1.6
+	env.glow_intensity = 0.32
+	env.glow_strength = 0.85
+	env.glow_bloom = 0.0
+	env.glow_hdr_threshold = 1.15
+	env.glow_hdr_scale = 1.2
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 	for i in 7:
-		env.set_glow_level(i, [0.0, 0.6, 1.0, 0.9, 0.7, 0.5, 0.3][i])
+		env.set_glow_level(i, [0.0, 0.5, 0.8, 0.5, 0.3, 0.0, 0.0][i])
 	var we = WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -178,7 +178,7 @@ func _build_scene() -> void:
 	gt.fill_to = Vector2(1.08, 1.08)
 	var g = Gradient.new()
 	g.set_color(0, Color(0, 0, 0, 0))
-	g.set_color(1, Color(0, 0, 0, 0.62))
+	g.set_color(1, Color(0, 0, 0, 0.45))
 	g.add_point(0.55, Color(0, 0, 0, 0.0))
 	gt.gradient = g
 	gt.width = 256
@@ -280,15 +280,15 @@ func _story_params(ch: int, stg: String, rt: String) -> Dictionary:
 		[HURDLE, BEAM, GAP, WIDE_GAP, GATE, BLOOM, BELL], [HURDLE, BEAM, GAP, WIDE_GAP, GATE, BLOOM, BELL]][ch]
 	if ch == 0 and stg == "route":
 		types = [HURDLE, BEAM, GAP, WIDE_GAP]
-	var p = {"v": base_v, "secs": 30.0, "diff": [0.1, 0.25, 0.35, 0.45][ch], "types": types, "combos": ch >= 2}
+	var p = {"v": base_v, "secs": 50.0, "diff": [0.1, 0.25, 0.35, 0.45][ch], "types": types, "combos": ch >= 2}
 	if stg == "route":
 		if rt == "wild":
 			p.v = base_v * 1.1
-			p.secs = 22.0
+			p.secs = 40.0
 			p.diff = minf(p.diff + 0.45, 1.0)
 			p.combos = ch >= 1
 		else:
-			p.secs = 38.0
+			p.secs = 62.0
 			p.diff = p.diff + 0.05
 	return p
 
@@ -334,10 +334,10 @@ func _endless_params(n: int, rt: String) -> Dictionary:
 	if n >= 1: types += [WIDE_GAP, GATE]
 	if n >= 2: types += [BLOOM]
 	if n >= 3: types += [BELL]
-	var p = {"v": v, "secs": 30.0, "diff": minf(0.15 + 0.12 * n, 0.95), "types": types, "combos": n >= 2}
+	var p = {"v": v, "secs": 55.0, "diff": minf(0.1 + 0.13 * n, 0.95), "types": types, "combos": n >= 2}
 	if rt == "wild":
 		p.v += 40.0
-		p.secs = 22.0
+		p.secs = 42.0
 		p.diff = minf(p.diff + 0.25, 1.0)
 		p.combos = true
 	return p
@@ -395,11 +395,12 @@ const ACTIVITIES := [
 
 func _enter_recovery(then_junction: bool) -> void:
 	_ground_kite()
+	_clear_ahead()
 	state = "recovery"
 	state_t = 0.0
 	sim.frozen = true
 	activity = ACTIVITIES[randi() % ACTIVITIES.size()].duplicate()
-	activity.dur = 12.0 if mode == "story" else 8.0
+	activity.dur = 10.0 if mode == "story" else 7.0
 	activity.junction = then_junction
 	activity.next_chapter = (mode == "story" and stage == "route")
 	npc_x = sim.x + 300.0
@@ -601,6 +602,15 @@ func _update_finale(dt: float) -> void:
 		save.save()
 		ui.show_finale_end()
 
+## A break can start mid-stretch (after a rescue): drop what is left of
+## that stretch so it never overlaps the next one.
+func _clear_ahead() -> void:
+	if mode == "story" and seg_end > sim.x:
+		story_done_px += maxf(seg_end - sim.x, 0.0)
+	track.obs = track.obs.filter(func(o): return o.x + Track.obstacle_extent(o) < sim.x - 10.0 or (o.t == RESCUE and o.passed))
+	track.motes = track.motes.filter(func(m): return m.x < sim.x)
+	seg_end = minf(seg_end, sim.x)
+
 func _ground_kite() -> void:
 	sim.y = 0.0
 	sim.vy = 0.0
@@ -751,6 +761,8 @@ func _physics_process(dt: float) -> void:
 		inp = _read_input()
 	_prev_x = sim.x
 	_prev_y = sim.y
+	# ease into speed at the start of every stretch
+	sim.speed_scale = clampf(0.72 + 0.28 * state_t / 2.5, 0.72, 1.0)
 	sim.step(dt, inp)
 	for e in sim.events:
 		_on_event(e)
@@ -1125,7 +1137,7 @@ func _draw_hud(ci: Node2D) -> void:
 	# recovery countdown
 	if state == "recovery":
 		var rem: float = activity.dur - state_t
-		var c = Vector2(sz.x - 120, sz.y * 0.09 * lb + 90)
+		var c = Vector2(sz.x - 120, sz.y * 0.09 * lb + 230)
 		ci.draw_arc(c, 40, -PI * 0.5, -PI * 0.5 + TAU * clampf(rem / activity.dur, 0, 1), 40, Color(1, 1, 1, 0.8), 5.0, true)
 		_text(ci, str(int(ceil(rem))), c + Vector2(0, 14), 40, Color(1, 1, 1, 0.9))
 		_text(ci, "breather", c + Vector2(0, 76), 24, Color(1, 1, 1, 0.6))
