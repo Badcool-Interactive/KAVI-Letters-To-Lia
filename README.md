@@ -3,6 +3,9 @@
 Kite, a little courier robot, runs from Greece through Bulgaria to Romania to see Lumi again.
 Precision auto-runner with a cinematic, glowing 2D look. Godot 4.7.2, all art and audio generated in code.
 
+## Play in your browser (no install)
+**▶ https://singh679.github.io/volt-run-luminous/**: works on iPhone/iPad (Safari), Android (Chrome) and desktop. Turn the phone sideways. The first load is about 10 MB.
+
 ## Download and play
 Get the latest build from **[Releases](../../releases/latest)**:
 | Platform | File | How to run |

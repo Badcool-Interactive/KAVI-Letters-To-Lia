@@ -3,3 +3,4 @@
 /captures/
 *.import
 !icon.svg.import
+.claude/
