@@ -32,6 +32,7 @@ var data := {
 		"left_handed": false,
 		"controls_scale": 1.0,
 		"graphics": "auto",
+		"kavi_limbs": "floating",
 	},
 }
 

@@ -1,4 +1,13 @@
 # Changelog
+## 0.8.5 (2026-11-23): Kavi E is in the game
+- **New Kavi, the owner's pick:** design E ("keystone floating") from the Codex concept round, built to Codex's handoff (`studio/docs/brand/characters/codex-r1/`):
+  - a big keystone helmet whose front is a dark screen face (one glowing eye and a mouth in side view, two eyes in front view), a teal side panel and a teal diamond antenna,
+  - a small cream body with a teal collar, a brown courier satchel with an envelope and two jet nozzles, and an orange scarf,
+  - dark mittens with cream cuffs, and cream boots with teal toes.
+- **Run:** played straight from Codex's comparison rig (`assets/kavi/stride.json`, one 28-frame cycle), interpolated smoothly. Planted boots move back at exactly road speed. The stride stretches with speed (up to 1.9×), and the pelvis bob is calmed to 60%.
+- **Two body treatments for comparison**, under Settings → Kavi's limbs: Floating (hands and boots, the default) or Jointed (thin limbs with teal knees and dark joints).
+- **Other poses** (jump, fall, hover with limb jets, scoot, wave, gust, rough landing) use the same parts. The reunion front view shows the keystone face with both eyes and both mittens, and he waves beside his head.
+- **Garage looks carry over:** Kitty ears, Explorer lamp and band, paints, visors, scarf patterns, and the star, heart and leaf tips. The default tip is now the diamond, and the Classic paint is cream and teal.
 ## 0.8.4 (2026-11-23): obstacles that belong, closer layers, the fisher
 - **Obstacles reworked for a courier's journey:**
   - Hop over tied parcels with a shipping label and a red stamp (stacked when tall).

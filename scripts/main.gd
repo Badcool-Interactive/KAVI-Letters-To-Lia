@@ -1223,6 +1223,7 @@ func _update_kite_view(dt: float) -> void:
 		kite.speed = debug_speed
 	else:
 		kite.speed = 120.0
+	kite.limbs = str(save.data.settings.get("kavi_limbs", "floating"))
 	kite.vy = sim.vy
 	kite.grounded = sim.on_ground or state != "run"
 	kite.tier = tw.tier()
@@ -1746,6 +1747,13 @@ func _setup_capture() -> void:
 		# Character sheet: Kavi in close-up in each pose / expression.
 		save.data.tutorial_done = true
 		cap_steps = [{"do": "kavi_zoom"}, {"do": "wait", "s": 2.0}]
+		var modes: Array = ["floating", "jointed"]
+		for md in modes:
+			cap_steps.append({"do": "limbs", "v": md})
+			cap_steps.append_array([{"do": "kpose", "pose": "run", "speed": 600.0, "expr": ""}, {"do": "wait", "s": 0.8}])
+			for fi in 8:
+				cap_steps.append_array([{"do": "wait", "s": 0.035}, {"shot": "%s-run-%d" % [md, fi]}])
+		cap_steps.append({"do": "limbs", "v": "floating"})
 		for ps in [["idle", 0.0, "normal", "k0-idle"], ["idle", 0.0, "happy", "k1-happy"], ["run", 450.0, "", "k2-jog"],
 				["run", 450.0, "", "k3-jog-b"], ["run", 900.0, "focus", "k4-sprint"], ["run", 900.0, "", "k5-sprint-b"],
 				["jump", 0.0, "wow", "k6-jump"], ["hover", 0.0, "", "k7-hover"], ["slide", 0.0, "", "k8-scoot"],
@@ -1914,6 +1922,8 @@ func _capture_tick(dt: float) -> void:
 		"kavi_zoom":
 			garage_open = true
 			ui.show_none()
+		"limbs":
+			save.data.settings.kavi_limbs = st.v
 		"kpose":
 			debug_pose = st.pose
 			debug_speed = st.speed

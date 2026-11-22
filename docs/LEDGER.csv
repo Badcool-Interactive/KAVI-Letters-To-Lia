@@ -7,3 +7,5 @@ assets/splash.png (loading screen) + itch banner,3x in-game render of the finale
 assets/fonts/Fredoka.ttf,github.com/google/fonts ofl/fredoka (variable font; sha256 2ba02e68…),SIL OFL 1.1 (assets/fonts/Fredoka-OFL.txt),none,n/a,none
 assets/fonts/Nunito.ttf,github.com/google/fonts ofl/nunito (variable font; sha256 bb55a5ca…),SIL OFL 1.1 (assets/fonts/Nunito-OFL.txt),none,n/a,none
 assets/splash.png (v0.8 key art, KAVI logo),in-game render of the finale via capture director --keyart; logo drawn in-engine with Fredoka,project-original; Fredoka OFL,Claude Opus 5.5 (code author),n/a,owner review pending
+assets/kavi/stride.json (Kavi E run cycle),Codex comparison rig (studio/docs/brand/characters/codex-r1/stride.json),project-original (owner-commissioned via Codex),OpenAI Codex (rig data generated from Codex animation study),see codex-r1/generation-records.json,none
+Kavi E look (procedural in scripts/kite_view.gd),redrawn in code from codex-r1/kavi-e-keystone-floating.png,project-original,Claude Opus 5.5 (code) from OpenAI built-in image_gen concept,see codex-r1/generation-records.json,owner review pending
