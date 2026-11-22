@@ -393,7 +393,7 @@ static func _capsule(a: Vector2, b: Vector2, r: float) -> PackedVector2Array:
 ## floating hands and boots (default) or jointed limbs.
 ## Everything is drawn in the reference rig's pixels (origin at the pelvis,
 ## +y down, floor 73.5 below) and scaled by K into body units.
-const K := 0.52
+const K := 0.56
 const FLOOR := 73.5
 const THIGH := 33.5
 const SHIN := 33.0
@@ -404,7 +404,7 @@ const STRAP := Color(0.36, 0.20, 0.14)
 const MITT := Color(0.17, 0.18, 0.21)
 const INK4 := Color(0.07, 0.07, 0.09)
 static var _stride: Dictionary = {}
-var limbs := "floating"   # or "jointed" (Settings: Kavi's limbs)
+var limbs := "jointed"   # or "floating" (Settings: Kavi's limbs)
 
 static func _load_stride() -> void:
 	if not _stride.is_empty():
@@ -513,22 +513,50 @@ static func _xf(pts: Array, at: Vector2, rot: float, sc := 1.0) -> PackedVector2
 	return out
 
 func _boot4(ci: Node2D, at: Vector2, rot: float, dark := 0.0) -> void:
-	var upper := _xf([Vector2(-15, -9), Vector2(3, -12), Vector2(11, -7), Vector2(19, 1), Vector2(19, 7), Vector2(-16, 7), Vector2(-18, 0)], at, rot)
+	# chunky boot with cel shading: lit top, shaded heel, teal toe cap, thick sole
+	var sc := 1.3
+	var upper := _xf([Vector2(-15, -10), Vector2(3, -13), Vector2(11, -8), Vector2(19, 0), Vector2(19, 7), Vector2(-16, 7), Vector2(-18, 0)], at, rot, sc)
 	_poly4(ci, upper, SHELL.darkened(dark))
-	ci.draw_colored_polygon(_xf([Vector2(6, -6), Vector2(11, -7), Vector2(19, 1), Vector2(19, 5), Vector2(4, 5)], at, rot), TEAL.darkened(dark))
-	ci.draw_colored_polygon(_xf([Vector2(-16, 5), Vector2(19, 5), Vector2(19, 9), Vector2(-16, 9)], at, rot), INK4)
+	ci.draw_colored_polygon(_xf([Vector2(-16, -2), Vector2(-4, -3), Vector2(-4, 6), Vector2(-16, 6)], at, rot, sc), SHADE.darkened(dark))
+	ci.draw_colored_polygon(_xf([Vector2(6, -7), Vector2(11, -8), Vector2(19, 0), Vector2(19, 5), Vector2(4, 5)], at, rot, sc), TEAL.darkened(dark))
+	ci.draw_line(at + (Vector2(8, -6) * sc).rotated(rot), at + (Vector2(15, -1) * sc).rotated(rot), Color(1, 1, 1, 0.55 * (1.0 - dark)), 2.5, true)
+	ci.draw_line(at + (Vector2(-12, -9) * sc).rotated(rot), at + (Vector2(2, -11) * sc).rotated(rot), Color(1, 1, 1, 0.6 * (1.0 - dark)), 3.0, true)
+	ci.draw_colored_polygon(_xf([Vector2(-16, 5), Vector2(19, 5), Vector2(19, 10), Vector2(-16, 10)], at, rot, sc), INK4)
 
 func _mitten4(ci: Node2D, at: Vector2, rot: float, dark := 0.0) -> void:
-	var cuff := _xf([Vector2(-14, -7), Vector2(-4, -7), Vector2(-4, 7), Vector2(-14, 7)], at, rot)
+	# a big fist: cuff, round mitten with a shaded underside and a gloss spot
+	var cuff := _xf([Vector2(-17, -8), Vector2(-5, -8), Vector2(-5, 8), Vector2(-17, 8)], at, rot)
 	_poly4(ci, cuff, SHELL.darkened(dark), 4.0)
-	ci.draw_circle(at, 11.5, INK4)
-	ci.draw_circle(at, 9.0, MITT.lightened(dark * 0.2))
-	ci.draw_circle(at + Vector2(-2, -6).rotated(rot), 3.4, MITT.lightened(0.12))
+	ci.draw_line(at + Vector2(-15, -5).rotated(rot), at + Vector2(-7, -5).rotated(rot), Color(1, 1, 1, 0.5), 2.0)
+	ci.draw_circle(at, 14.0, INK4)
+	ci.draw_circle(at, 11.5, MITT.lightened(dark * 0.2))
+	ci.draw_circle(at + Vector2(2.5, 3.0), 8.0, MITT.darkened(0.25))
+	ci.draw_circle(at + Vector2(-1, -1), 8.0, MITT.lightened(dark * 0.2))
+	ci.draw_circle(at + Vector2(-4, -5), 3.2, Color(1, 1, 1, 0.28))
+	ci.draw_circle(at + Vector2(0, -8).rotated(rot), 4.5, MITT.lightened(0.1))
 
+## A dark ball joint with a gloss highlight.
+func _ball(ci: Node2D, c: Vector2, r: float, dark := 0.0) -> void:
+	ci.draw_circle(c, r + 2.5, INK4)
+	ci.draw_circle(c, r, MITT.lightened(0.12 - dark * 0.1))
+	ci.draw_circle(c + Vector2(r * 0.15, r * 0.2), r * 0.7, MITT.darkened(0.15))
+	ci.draw_circle(c + Vector2(-r * 0.35, -r * 0.35), r * 0.3, Color(1, 1, 1, 0.35))
+
+## A cylinder limb segment: ink outline, base colour, a shadow band along
+## the underside and a highlight along the top (reads as round, "3D").
 func _seg(ci: Node2D, a: Vector2, b: Vector2, w: float, col: Color) -> void:
+	var d := b - a
+	if d.length() < 0.01:
+		return
+	var n := d.normalized().orthogonal()
+	if n.y > 0.0:
+		n = -n  # n points up: the lit side
 	ci.draw_line(a, b, INK4, w + 5.0, true)
+	ci.draw_circle(a, (w + 5.0) * 0.5, INK4)
+	ci.draw_circle(b, (w + 5.0) * 0.5, INK4)
 	ci.draw_line(a, b, col, w, true)
-	ci.draw_circle(a, w * 0.5, col)
+	ci.draw_line(a - n * w * 0.28, b - n * w * 0.28, col.darkened(0.22), w * 0.42, true)
+	ci.draw_line(a + n * w * 0.30, b + n * w * 0.30, col.lightened(0.35), w * 0.18, true)
 
 ## Head in its own space (centre at origin, facing right).
 const HEAD_SIDE := [Vector2(-44, -34), Vector2(26, -36), Vector2(46, -20), Vector2(48, 22), Vector2(38, 36), Vector2(-30, 38), Vector2(-46, 24), Vector2(-48, -20)]
@@ -579,21 +607,29 @@ func _paint(ci: Node2D, add: bool) -> void:
 		_draw_scarf(ci, p)
 		ci.draw_set_transform(base, p.rot, p.sq * sc)
 		# satchel high on the back, two jet nozzles under it
-		var bagc := pel + Vector2(-26, -30).rotated(tilt * 0.5)
-		for nx in [-8.0, 4.0]:
-			_poly4(ci, Art.rrect(Rect2(bagc.x + nx - 4, bagc.y + 12, 9, 9), 3.0), SHELL, 3.0)
-			ci.draw_circle(Vector2(bagc.x + nx + 0.5, bagc.y + 21), 3.2, TEAL)
-		_poly4(ci, Art.rrect(Rect2(bagc.x - 17, bagc.y - 15, 32, 28), 6.0), BAG)
-		ci.draw_colored_polygon(Art.rrect(Rect2(bagc.x - 17, bagc.y - 15, 32, 11), 5.0), BAG.darkened(0.18))
-		var env := Rect2(bagc.x - 8, bagc.y - 4, 16, 11)
+		var bagc := pel + Vector2(-28, -30).rotated(tilt * 0.5)
+		for nx in [-9.0, 5.0]:
+			_poly4(ci, Art.rrect(Rect2(bagc.x + nx - 5, bagc.y + 14, 11, 11), 3.0), SHELL, 3.0)
+			ci.draw_circle(Vector2(bagc.x + nx + 0.5, bagc.y + 25), 3.8, TEAL)
+		_poly4(ci, Art.rrect(Rect2(bagc.x - 20, bagc.y - 17, 38, 32), 7.0), BAG)
+		ci.draw_colored_polygon(Art.rrect(Rect2(bagc.x - 19, bagc.y + 6, 36, 8), 4.0), BAG.darkened(0.2))
+		ci.draw_colored_polygon(Art.rrect(Rect2(bagc.x - 20, bagc.y - 17, 38, 13), 6.0), BAG.darkened(0.12))
+		ci.draw_line(Vector2(bagc.x - 16, bagc.y - 14), Vector2(bagc.x + 12, bagc.y - 14), Color(1, 1, 1, 0.25), 2.0)
+		var env := Rect2(bagc.x - 9, bagc.y - 3, 18, 12)
 		ci.draw_rect(env, Color(0.97, 0.93, 0.84))
 		ci.draw_polyline(PackedVector2Array([env.position, env.position + Vector2(8, 6), env.position + Vector2(16, 0)]), STRAP, 1.6)
 		# body: a small cream bean with a teal chest plate
-		var body := _xf([Vector2(-15, -2), Vector2(-17, -22), Vector2(-10, -40), Vector2(8, -44), Vector2(18, -30), Vector2(17, -8), Vector2(6, 4)], pel, tilt * 0.5)
+		# body: a sturdy rounded torso, cel-shaded (lit front-top, shaded back),
+		# a big teal chest plate and a dark waist joint
+		_ball(ci, pel + Vector2(1, 2), 9.0)
+		var body := _xf([Vector2(-19, -4), Vector2(-21, -24), Vector2(-14, -44), Vector2(8, -48), Vector2(22, -34), Vector2(21, -10), Vector2(8, 2)], pel, tilt * 0.5)
 		_poly4(ci, _smooth_closed(body), SHELL)
-		ci.draw_colored_polygon(_xf([Vector2(2, -36), Vector2(13, -34), Vector2(14, -20), Vector2(4, -20)], pel, tilt * 0.5), TEAL)
+		ci.draw_colored_polygon(_smooth_closed(_xf([Vector2(-18, -6), Vector2(-20, -24), Vector2(-13, -42), Vector2(-5, -44), Vector2(-7, -22), Vector2(-4, -4)], pel, tilt * 0.5)), Color(SHADE, 0.9))
+		ci.draw_colored_polygon(_xf([Vector2(2, -40), Vector2(16, -37), Vector2(18, -18), Vector2(4, -17)], pel, tilt * 0.5), TEAL)
+		ci.draw_line(pel + Vector2(3, -38).rotated(tilt * 0.5), pel + Vector2(15, -35).rotated(tilt * 0.5), TEAL.lightened(0.35), 2.5, true)
+		ci.draw_colored_polygon(_xf([Vector2(4, -22), Vector2(18, -22), Vector2(18, -18), Vector2(4, -17)], pel, tilt * 0.5), TEAL.darkened(0.2))
 		if Art.Q >= 1:
-			ci.draw_arc(pel + Vector2(-2, -24).rotated(tilt * 0.5), 12.0, PI * 1.15, PI * 1.55, 8, Color(1, 1, 1, 0.6), 3.0, Art.AA)
+			ci.draw_arc(pel + Vector2(4, -26).rotated(tilt * 0.5), 16.0, PI * 1.25, PI * 1.6, 8, Color(1, 1, 1, 0.65), 3.5, Art.AA)
 		# strap across the body
 		ci.draw_line(chest + Vector2(-14, -2), pel + Vector2(14, -4), INK4, 8.0, true)
 		ci.draw_line(chest + Vector2(-14, -2), pel + Vector2(14, -4), STRAP, 5.0, true)
@@ -602,11 +638,17 @@ func _paint(ci: Node2D, add: bool) -> void:
 		# head: collar, helmet, screen face, side panel, antenna
 		ci.draw_colored_polygon(Art.ellipse(chest + Vector2(2, -2), Vector2(15, 6), 14), TEAL.darkened(0.1))
 		_poly4(ci, _xf(HEAD_SIDE, headc, head_rot), SHELL, 5.0)
-		if Art.Q >= 1:
-			ci.draw_colored_polygon(_xf([Vector2(-44, 14), Vector2(36, 14), Vector2(36, 34), Vector2(-28, 36), Vector2(-44, 24)], headc, head_rot), Color(SHADE, 0.45))
-			ci.draw_line(headc + Vector2(-34, -26).rotated(head_rot), headc + Vector2(6, -28).rotated(head_rot), Color(1, 1, 1, 0.7), 3.0, true)
+		# faceted shading: lit top plane, shaded lower band and back facet
+		ci.draw_colored_polygon(_xf([Vector2(-42, -32), Vector2(24, -34), Vector2(40, -22), Vector2(-44, -20)], headc, head_rot), SHELL.lightened(0.12))
+		ci.draw_colored_polygon(_xf([Vector2(-46, 14), Vector2(38, 14), Vector2(37, 34), Vector2(-28, 36), Vector2(-45, 24)], headc, head_rot), Color(SHADE, 0.75))
+		ci.draw_colored_polygon(_xf([Vector2(-48, -20), Vector2(-40, -20), Vector2(-40, 20), Vector2(-46, 24)], headc, head_rot), Color(SHADE, 0.6))
+		ci.draw_line(headc + Vector2(-36, -30).rotated(head_rot), headc + Vector2(14, -32).rotated(head_rot), Color(1, 1, 1, 0.75), 3.0, true)
 		ci.draw_colored_polygon(_xf(PANEL_SIDE, headc, head_rot), TEAL)
+		ci.draw_line(headc + Vector2(-41, 13).rotated(head_rot), headc + Vector2(-21, 11).rotated(head_rot), TEAL.lightened(0.35), 2.5, true)
 		_poly4(ci, _xf(SCREEN_SIDE, headc, head_rot), VISOR, 3.0)
+		# glassy screen: a soft reflection band and a gloss streak
+		ci.draw_colored_polygon(_xf([Vector2(12, -28), Vector2(26, -29), Vector2(32, -23), Vector2(14, -20)], headc, head_rot), Color(1, 1, 1, 0.10))
+		ci.draw_line(headc + Vector2(34, -22).rotated(head_rot), headc + Vector2(40, -12).rotated(head_rot), Color(1, 1, 1, 0.3), 3.0, true)
 		_helmet_extras4(ci, headc, head_rot, false)
 		_antenna4(ci, headc + Vector2(2, -36).rotated(head_rot), head_rot)
 		# scarf wrap at the neck
@@ -649,11 +691,10 @@ func _limb_side(ci: Node2D, S: Dictionary, pel: Vector2, jointed: bool, dark: fl
 	var ankle: Vector2 = S.ankle
 	if jointed:
 		var knee := _knee(hip, ankle, THIGH, SHIN, 1.0)
-		_seg(ci, hip, knee, 9.0, SHELL.darkened(dark))
-		_seg(ci, knee, ankle, 8.0, SHELL.darkened(dark))
-		ci.draw_circle(knee, 6.5, INK4)
-		ci.draw_circle(knee, 4.5, TEAL.darkened(dark))
-		ci.draw_circle(hip, 6.0, INK4)
+		_seg(ci, hip, knee, 15.0, SHELL.darkened(dark))
+		_seg(ci, knee, ankle, 13.5, SHELL.darkened(dark))
+		_ball(ci, knee, 7.0, dark)
+		_ball(ci, hip, 6.5, dark)
 	_boot4(ci, S.boot, S.boot_rot, dark)
 	if not near_side:
 		_arm_side(ci, S, pel, jointed, dark)
@@ -663,11 +704,10 @@ func _arm_side(ci: Node2D, S: Dictionary, pel: Vector2, jointed: bool, dark: flo
 	var m: Vector2 = S.mitten
 	if jointed:
 		var el := _knee(sh, m, UPPER, FORE, -1.0)
-		_seg(ci, sh, el, 7.5, SHELL.darkened(dark))
-		_seg(ci, el, m, 7.0, SHELL.darkened(dark))
-		ci.draw_circle(el, 5.0, INK4)
-		ci.draw_circle(sh, 6.5, INK4)
-		ci.draw_circle(sh, 4.5, TEAL.darkened(dark))
+		_seg(ci, sh, el, 12.5, SHELL.darkened(dark))
+		_seg(ci, el, m, 11.5, SHELL.darkened(dark))
+		_ball(ci, el, 6.0, dark)
+		_ball(ci, sh, 7.5, dark)
 	_mitten4(ci, m, S.mitten_rot, dark)
 
 func _face_side(ci: Node2D, hc: Vector2, rot: float) -> void:
@@ -935,7 +975,9 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 	if not add:
 		for bx in [-16.0, 16.0]:
 			if jointed:
-				_seg(ci, Vector2(bx * 0.6, 0), Vector2(bx, 58), 9.0, SHELL)
+				_seg(ci, Vector2(bx * 0.6, 0), Vector2(bx, 30), 15.0, SHELL)
+				_seg(ci, Vector2(bx, 30), Vector2(bx, 58), 13.5, SHELL)
+				_ball(ci, Vector2(bx, 30), 7.0)
 			_poly4(ci, Art.rrect(Rect2(bx - 15, 56, 30, 18), 8.0), SHELL)
 			ci.draw_colored_polygon(Art.rrect(Rect2(bx - 14, 60, 28, 8), 4.0), TEAL)
 			ci.draw_rect(Rect2(bx - 15, 69, 30, 5), INK4)
@@ -950,8 +992,10 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 			var sh := Vector2(18.0 * side[0], -36)
 			if jointed:
 				var el := _knee(sh, side[1], UPPER, FORE, side[0])
-				_seg(ci, sh, el, 7.5, SHELL)
-				_seg(ci, el, side[1], 7.0, SHELL)
+				_seg(ci, sh, el, 12.5, SHELL)
+				_seg(ci, el, side[1], 11.5, SHELL)
+				_ball(ci, el, 6.0)
+				_ball(ci, sh, 7.5)
 			_mitten4(ci, side[1], (side[1] - sh).angle())
 		ci.draw_colored_polygon(Art.ellipse(Vector2(0, -46), Vector2(18, 6), 14), TEAL.darkened(0.1))
 		_poly4(ci, _xf(HEAD_FRONT, hc, 0.0), SHELL, 5.0)

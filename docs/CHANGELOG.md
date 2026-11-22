@@ -1,4 +1,9 @@
 # Changelog
+## 0.8.6 (2026-11-23): stronger, rounder Kavi E
+- Matched to the owner's illustrations: **chunky jointed body by default**. Thick cylinder arms and legs with dark ball joints, big mitten fists, heavier boots, a sturdier torso with a large teal chest plate, and a bigger satchel.
+- **3D look through cel shading:** every limb has a lit top and a shaded underside. The helmet has faceted planes (lit top, shaded lower band and back), and the screen is glassy with a reflection. The joints and fists have gloss spots, and the boots have a shaded heel and a highlighted toe.
+- Kavi is about 8% larger. The front view (reunion) uses the same chunky limbs.
+- Settings → Kavi's limbs still switches to Floating.
 ## 0.8.5 (2026-11-23): Kavi E is in the game
 - **New Kavi, the owner's pick:** design E ("keystone floating") from the Codex concept round, built to Codex's handoff (`studio/docs/brand/characters/codex-r1/`):
   - a big keystone helmet whose front is a dark screen face (one glowing eye and a mouth in side view, two eyes in front view), a teal side panel and a teal diamond antenna,

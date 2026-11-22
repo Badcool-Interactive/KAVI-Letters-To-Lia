@@ -1223,7 +1223,7 @@ func _update_kite_view(dt: float) -> void:
 		kite.speed = debug_speed
 	else:
 		kite.speed = 120.0
-	kite.limbs = str(save.data.settings.get("kavi_limbs", "floating"))
+	kite.limbs = str(save.data.settings.get("kavi_limbs2", "jointed"))
 	kite.vy = sim.vy
 	kite.grounded = sim.on_ground or state != "run"
 	kite.tier = tw.tier()
@@ -1923,7 +1923,7 @@ func _capture_tick(dt: float) -> void:
 			garage_open = true
 			ui.show_none()
 		"limbs":
-			save.data.settings.kavi_limbs = st.v
+			save.data.settings.kavi_limbs2 = st.v
 		"kpose":
 			debug_pose = st.pose
 			debug_speed = st.speed
