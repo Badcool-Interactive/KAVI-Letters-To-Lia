@@ -79,6 +79,7 @@ const BIOMES := [
 		"obstacle": Color(0.93, 0.88, 0.80),
 		"kinds": [["ring", "spire", "dome", "dome"], ["dome", "column", "spire", "house", "cypress"], ["olive", "column", "cypress", "bush", "rock", "olive"]],
 		"stars": 0.15, "aurora": 0.0, "water": 1.0,
+		"town": "city", "life": ["cafe", "kite_kid", "bench", "waver", "fisher"], "ships": ["sail", "ferry", "sail"], "air": ["plane", "balloon"],
 	},
 	{
 		"name": "Rhodope Lanterns", "surface": "moss", "country": "Bulgaria",
@@ -91,6 +92,7 @@ const BIOMES := [
 		"obstacle": Color(0.88, 0.93, 0.88),
 		"kinds": [["pine", "pine", "peak", "birch"], ["pine", "lantern", "pine", "house", "birch"], ["fern", "pine", "lantern", "bush", "rock"]],
 		"stars": 0.7, "aurora": 0.0, "water": 0.0,
+		"town": "village", "life": ["cart", "kite_kid", "waver", "dog"], "ships": [], "air": ["plane", "balloon"],
 	},
 	{
 		"name": "Danube Mirror", "surface": "boards", "country": "Bulgaria · Romania",
@@ -103,6 +105,7 @@ const BIOMES := [
 		"obstacle": Color(0.95, 0.88, 0.88),
 		"kinds": [["bridge", "turbine", "birch", "house"], ["turbine", "reed", "lily", "house", "bush"], ["reed", "lily", "reed", "bush", "rock"]],
 		"stars": 0.3, "aurora": 0.0, "water": 1.0,
+		"town": "city", "life": ["fisher", "bench", "kite_kid", "dog", "waver"], "ships": ["barge", "steamer", "sail"], "air": ["plane", "birds"],
 	},
 	{
 		"name": "Carpathian Aurora", "surface": "snow", "country": "Romania",
@@ -115,6 +118,7 @@ const BIOMES := [
 		"obstacle": Color(0.88, 0.88, 0.96),
 		"kinds": [["peak", "castle", "peak", "pine"], ["castle", "pine", "pine", "house", "birch"], ["pine", "fern", "pine", "rock", "bush"]],
 		"stars": 0.8, "aurora": 0.7, "water": 0.0,
+		"town": "village", "life": ["cart", "waver", "dog", "kite_kid"], "ships": [], "air": ["plane", "balloon"],
 	},
 ]
 
@@ -139,4 +143,6 @@ static func blend_biome(a: Dictionary, b: Dictionary, t: float) -> Dictionary:
 	o.water = lerpf(a.water, b.water, t)
 	o.kinds = a.kinds if t < 0.5 else b.kinds
 	o.surface = a.get("surface", "") if t < 0.5 else b.get("surface", "")
+	for k in ["town", "life", "ships", "air"]:
+		o[k] = a.get(k) if t < 0.5 else b.get(k)
 	return o

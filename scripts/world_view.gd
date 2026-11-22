@@ -12,6 +12,7 @@ var t = 0.0
 var quality = 2 # 0 low, 1 medium, 2 high
 var size = Vector2(1920, 1080)
 var calm = 0.0 # 0 running, 1 recovery (warmer, softer)
+var hero_x = -9999.0 # Vayu on screen: background people fade out behind him
 
 const PAR := [0.06, 0.16, 0.36]
 const BASE := [0.62, 0.71, 0.80]
@@ -74,6 +75,7 @@ func _draw_sky(ci: Node2D) -> void:
 			var a: float = pal.stars * tw * (1.0 - sy / (h * 0.6)) * 0.85
 			var sr = 1.0 + Art.hash01(i, 7) * 1.8
 			ci.draw_rect(Rect2(sx - sr * 0.5, sy - sr * 0.5, sr, sr), Color(0.9, 0.95, 1.0, a))
+	_draw_air(ci)
 
 func _draw_sky_light(ci: Node2D) -> void:
 	var w = size.x
@@ -171,6 +173,10 @@ func _draw_layer(ci: Node2D, i: int) -> void:
 			# per-instance depth tint: some props sit a little further back in the haze
 			var fc: Color = col.lerp(pal.fog, Art.hash01(seed, 43) * 0.12)
 			_feature(ci, i, kind, Vector2(mx - off, _ridge_y(i, mx) + 14.0), s, fc, seed)
+	if i == 0:
+		_draw_town(ci, off, col)
+	elif i == 2 and Art.Q >= 1:
+		_draw_life(ci, off, col)
 	# aerial perspective: lighter, hazier at the ridge, deeper towards the bottom
 	var top_c: Color = col.lerp(pal.fog, [0.20, 0.12, 0.06][i])
 	var bot_c: Color = col.darkened([0.12, 0.18, 0.22][i])
@@ -406,6 +412,7 @@ func _draw_water(ci: Node2D) -> void:
 		while x < w:
 			ci.draw_line(Vector2(x, yy), Vector2(x + 60.0 + k * 20.0, yy), Color(hor.lightened(0.2), 0.10), 1.5)
 			x += 260.0
+	_draw_ships(ci, y0)
 
 func _draw_haze(ci: Node2D, i: int) -> void:
 	if i == 0 and pal.water > 0.01:
@@ -484,3 +491,297 @@ func draw_foreground(ci: Node2D, gy: float) -> void:
 			ci.draw_polyline(pts, col, 7.0, Art.AA)
 			for k in range(2, 12, 2):
 				ci.draw_colored_polygon(Art.ellipse(pts[k] + Vector2(10, 0), Vector2(18, 8), 10, 0.5), col)
+
+# ------------------------------------------------------------------ living world
+## Distant towns, little people doing things, ships and things in the sky.
+## All are silhouettes in the layer colour with a few warm lights. They are
+## rare and slow, so they stay special, and they never reach the play line.
+const TOWN_CELL := 1700.0
+const LIFE_CELL := 950.0
+const SHIP_CELL := 1500.0
+const WARM := Color(1.0, 0.80, 0.50)
+
+func _warm(k := 1.15) -> Color:
+	return Art.hdr(WARM, k)
+
+## Far-layer skyline: city blocks (Greece, Danube) or villages (Bulgaria,
+## Carpathians), with windows that slowly switch on and off.
+func _draw_town(ci: Node2D, off: float, col: Color) -> void:
+	var village: bool = pal.get("town", "city") == "village"
+	var c0 = int(floor((off - 900.0) / TOWN_CELL))
+	var c1 = int(floor((off + size.x + 300.0) / TOWN_CELL))
+	var tc: Color = col.lerp(pal.fog, 0.10)
+	var win := _warm(1.1)
+	for c in range(c0, c1 + 1):
+		if Art.hash01(c, 601) > [0.25, 0.40, 0.55][Art.Q]:
+			continue
+		var x = c * TOWN_CELL + Art.hash01(c, 602) * TOWN_CELL * 0.4
+		var n := (4 if village else 6) + int(Art.hash01(c, 603) * (5.0 if village else 9.0))
+		for b in n:
+			var sd := c * 97 + b
+			var bw = (30.0 if village else 24.0) + Art.hash01(sd, 1) * 34.0
+			var bh: float
+			if village:
+				bh = 22.0 + Art.hash01(sd, 2) * 26.0
+			else:
+				# taller in the middle of the skyline
+				var mid = 1.0 - absf(float(b) / float(n - 1) - 0.5) * 1.4
+				bh = 40.0 + Art.hash01(sd, 2) * 90.0 * maxf(mid, 0.25)
+			var sx = x - off
+			var by = _ridge_y(0, x + bw * 0.5) + 18.0
+			ci.draw_rect(Rect2(sx, by - bh, bw, bh + 40.0), tc)
+			var r = Art.hash01(sd, 3)
+			if village:
+				ci.draw_colored_polygon(PackedVector2Array([Vector2(sx - 5, by - bh), Vector2(sx + bw * 0.5, by - bh - bw * 0.5), Vector2(sx + bw + 5, by - bh)]), tc)
+				if r < 0.15:
+					# little church tower
+					ci.draw_rect(Rect2(sx + bw * 0.35, by - bh - bw * 0.5 - 40.0, bw * 0.3, 40.0), tc)
+					ci.draw_colored_polygon(PackedVector2Array([Vector2(sx + bw * 0.3, by - bh - bw * 0.5 - 40.0), Vector2(sx + bw * 0.5, by - bh - bw * 0.5 - 62.0), Vector2(sx + bw * 0.7, by - bh - bw * 0.5 - 40.0)]), tc)
+			elif r < 0.18:
+				ci.draw_colored_polygon(Art.ellipse(Vector2(sx + bw * 0.5, by - bh), Vector2(bw * 0.45, bw * 0.4), 14), tc)
+			elif r < 0.32:
+				ci.draw_line(Vector2(sx + bw * 0.5, by - bh), Vector2(sx + bw * 0.5, by - bh - 34.0), tc, 2.0)
+				if fmod(t + sd, 2.0) < 1.0:
+					ci.draw_rect(Rect2(sx + bw * 0.5 - 1.5, by - bh - 36.0, 3, 3), Art.hdr(Color(1.0, 0.35, 0.3), 1.4))
+			if Art.Q == 0:
+				continue
+			# windows: a handful per building, a few slowly blink on/off
+			var nw := int(bw * bh / (260.0 if village else 420.0) / (1.0 if Art.Q >= 2 else 1.8))
+			for k in nw:
+				var on = sin(t * 0.25 + Art.hash01(sd, 40 + k) * 40.0) > -0.75
+				if not on:
+					continue
+				var wx = sx + 4.0 + floor(Art.hash01(sd, 60 + k) * (bw - 10.0) / 7.0) * 7.0
+				var wy = by - bh + 6.0 + floor(Art.hash01(sd, 80 + k) * maxf(bh - 22.0, 1.0) / 10.0) * 10.0
+				ci.draw_rect(Rect2(wx, wy, 3.0, 4.0), Color(win, 0.55 + 0.45 * Art.hash01(sd, 90 + k)))
+			x += bw + 2.0 + Art.hash01(sd, 4) * (14.0 if village else 6.0)
+
+## A stick-figure silhouette. p = feet. Returns the right hand position.
+func _person(ci: Node2D, p: Vector2, s: float, col: Color, arm_l: float, arm_r: float, sit := false, kid := false) -> Vector2:
+	var k = s * (0.72 if kid else 1.0)
+	var hip = p + Vector2(0, -(14.0 if sit else 24.0) * k)
+	var neck = hip + Vector2(0, -20.0 * k)
+	if sit:
+		ci.draw_line(hip, hip + Vector2(11 * k, 0), col, 4.0 * k)
+		ci.draw_line(hip + Vector2(11 * k, 0), p + Vector2(11 * k, 0), col, 4.0 * k)
+	else:
+		ci.draw_line(hip, p + Vector2(-5 * k, 0), col, 4.0 * k)
+		ci.draw_line(hip, p + Vector2(5 * k, 0), col, 4.0 * k)
+	ci.draw_line(hip, neck, col, 8.0 * k)
+	ci.draw_circle(neck + Vector2(0, -7.0 * k), 6.5 * k, col)
+	var hl = neck + Vector2(cos(arm_l), sin(arm_l)) * 15.0 * k
+	var hr = neck + Vector2(cos(arm_r), sin(arm_r)) * 15.0 * k
+	ci.draw_line(neck + Vector2(0, 2 * k), hl, col, 3.0 * k)
+	ci.draw_line(neck + Vector2(0, 2 * k), hr, col, 3.0 * k)
+	return hr
+
+func _draw_life(ci: Node2D, off: float, col: Color) -> void:
+	var life: Array = pal.get("life", [])
+	if life.is_empty():
+		return
+	var c0 = int(floor((off - 500.0) / LIFE_CELL))
+	var c1 = int(floor((off + size.x + 300.0) / LIFE_CELL))
+	var s: float = SCALE[2] * 1.75
+	var base_col: Color = col
+	for c in range(c0, c1 + 1):
+		if Art.hash01(c, 701) > [0.25, 0.40, 0.60][Art.Q]:
+			continue
+		var kind: String = life[int(Art.hash01(c, 702) * life.size()) % life.size()]
+		var lx = c * LIFE_CELL + 80.0 + Art.hash01(c, 703) * LIFE_CELL * 0.6
+		var p = Vector2(lx - off, _ridge_y(2, lx) + 3.0)
+		# fade out while passing behind Vayu, so nothing reads as part of him
+		var near = 1.0 - clampf((absf(p.x - hero_x) - 110.0) / 170.0, 0.0, 1.0)
+		col = Color(base_col, 1.0 - near * 0.95)
+		var lamps: bool = near < 0.5
+		var flip = 1.0 if Art.hash01(c, 704) < 0.5 else -1.0
+		var ph = Art.hash01(c, 705) * TAU
+		match kind:
+			"waver":
+				_person(ci, p, s, col, PI * 0.55, -PI * 0.5 + sin(t * 7.0 + ph) * 0.55)
+			"kite_kid":
+				var hand = _person(ci, p, s, col, PI * 0.6, -PI * 0.25 * (1.0 + 0.5 * flip) - 0.3, false, true)
+				var kp = hand + Vector2(70.0 * flip + sin(t * 1.3 + ph) * 14.0, -150.0 + cos(t * 1.1 + ph) * 10.0) * s
+				var mid = (hand + kp) * 0.5 + Vector2(0, 18.0 * s)
+				ci.draw_polyline(PackedVector2Array([hand, mid, kp]), Color(col.lightened(0.25), 0.8 * col.a), 1.2, Art.AA)
+				var rot = sin(t * 1.7 + ph) * 0.25
+				var d = Vector2(0, -16.0 * s).rotated(rot)
+				var e = Vector2(11.0 * s, 0).rotated(rot)
+				ci.draw_colored_polygon(PackedVector2Array([kp + d, kp + e, kp - d * 1.3, kp - e]), Color(pal.accent.lerp(Color(1, 0.5, 0.45), Art.hash01(c, 706)), col.a))
+				var tail := PackedVector2Array()
+				for q in 6:
+					tail.append(kp - d * 1.3 + Vector2(-q * 7.0 * flip * s, q * 7.0 * s + sin(t * 4.0 + q) * 4.0 * s))
+				ci.draw_polyline(tail, Color(pal.accent, 0.8 * col.a), 1.5, Art.AA)
+			"fisher":
+				ci.draw_rect(Rect2(p.x - 6 * s, p.y - 12 * s, 16 * s, 12 * s), col)
+				var hand = _person(ci, p + Vector2(0, -10 * s), s, col, PI * 0.45, -0.6 if flip > 0 else PI + 0.6, true)
+				var tip = hand + Vector2(80.0 * flip, -46.0) * s
+				ci.draw_line(hand, tip, col, 2.0)
+				var bob = sin(t * 2.0 + ph) * 3.0
+				ci.draw_line(tip, tip + Vector2(14.0 * flip * s, 70.0 * s + bob), Color(col.lightened(0.3), 0.6 * col.a), 1.0)
+			"bench":
+				ci.draw_rect(Rect2(p.x - 30 * s, p.y - 16 * s, 60 * s, 4 * s), col)
+				ci.draw_rect(Rect2(p.x - 30 * s, p.y - 30 * s, 60 * s, 3 * s), col)
+				ci.draw_line(p + Vector2(-26 * s, -14 * s), p + Vector2(-26 * s, 0), col, 3.0 * s)
+				ci.draw_line(p + Vector2(26 * s, -14 * s), p + Vector2(26 * s, 0), col, 3.0 * s)
+				_person(ci, p + Vector2(-14 * s, -2 * s), s, col, PI * 0.6, PI * 0.25, true)
+				_person(ci, p + Vector2(8 * s, -2 * s), s * 0.92, col, PI * 0.7, PI * 0.4, true)
+				var lamp = p + Vector2(52 * s * flip, 0)
+				ci.draw_line(lamp, lamp + Vector2(0, -92 * s), col, 3.0 * s)
+				if lamps:
+					_lights[2].append([lamp + Vector2(0, -96 * s), 5.0 * s, _warm(1.0)])
+			"cafe":
+				ci.draw_line(p + Vector2(0, -36 * s), p, col, 3.0 * s)
+				ci.draw_rect(Rect2(p.x - 18 * s, p.y - 36 * s, 36 * s, 4 * s), col)
+				ci.draw_line(p + Vector2(0, -36 * s), p + Vector2(0, -88 * s), col, 2.0 * s)
+				ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-46 * s, -78 * s), p + Vector2(0, -96 * s), p + Vector2(46 * s, -78 * s)]), Color(pal.accent.lerp(base_col, 0.55), col.a))
+				_person(ci, p + Vector2(-30 * s, 0), s, col, -0.2, PI * 0.3 + sin(t * 1.5 + ph) * 0.2, true)
+				_person(ci, p + Vector2(30 * s, 0), s, col, PI + 0.2, PI * 0.6, true)
+				if lamps:
+					_lights[2].append([p + Vector2(0, -42 * s), 3.5 * s, _warm(1.2)])
+			"cart":
+				# donkey grazing beside a cart, farmer resting on the wheel
+				var dp = p + Vector2(-50 * s * flip, 0)
+				ci.draw_colored_polygon(Art.ellipse(dp + Vector2(0, -26 * s), Vector2(24 * s, 11 * s), 14), col)
+				for lxo in [-16, -8, 10, 17]:
+					ci.draw_line(dp + Vector2(lxo * s, -20 * s), dp + Vector2(lxo * s, 0), col, 3.5 * s)
+				var nib = sin(t * 1.6 + ph) * 4.0 * s
+				var hd = dp + Vector2(-30 * s * flip, -8 * s + nib)
+				ci.draw_line(dp + Vector2(-18 * s * flip, -30 * s), hd, col, 7.0 * s)
+				ci.draw_line(hd, hd + Vector2(-4 * s * flip, -12 * s), col, 2.5 * s)
+				ci.draw_rect(Rect2(p.x - 10 * s, p.y - 40 * s, 52 * s, 16 * s), col)
+				var wc = p + Vector2(16 * s, -14 * s)
+				ci.draw_arc(wc, 14 * s, 0.0, TAU, 16, col, 3.0 * s, Art.AA)
+				for q in 3:
+					var a = q * PI / 3.0
+					ci.draw_line(wc - Vector2(cos(a), sin(a)) * 13 * s, wc + Vector2(cos(a), sin(a)) * 13 * s, col, 1.5 * s)
+				_person(ci, p + Vector2(48 * s, 0), s, col, PI * 0.9, PI * 0.5)
+			"dog":
+				_person(ci, p, s, col, PI * 0.5, PI * 0.25 * (1 if flip > 0 else 3))
+				var dg = p + Vector2(30 * s * flip, 0)
+				ci.draw_colored_polygon(Art.ellipse(dg + Vector2(0, -12 * s), Vector2(12 * s, 6 * s), 12), col)
+				for lxo in [-8, 8]:
+					ci.draw_line(dg + Vector2(lxo * s, -10 * s), dg + Vector2(lxo * s, 0), col, 2.5 * s)
+				ci.draw_circle(dg + Vector2(13 * s * flip, -18 * s), 5.5 * s, col)
+				var wag = sin(t * 12.0 + ph) * 0.6
+				ci.draw_line(dg + Vector2(-11 * s * flip, -14 * s), dg + Vector2(-11 * s * flip, -14 * s) + Vector2(-flip * 8 * s, -6 * s).rotated(wag), col, 2.5 * s)
+				ci.draw_line(p + Vector2(10 * s * flip, -34 * s), dg + Vector2(10 * s * flip, -16 * s), Color(col, 0.7 * col.a), 1.0)
+
+## Ships on the Greek sea and the Danube: they drift slowly on their own and
+## with the camera; lights reflect in the water.
+func _draw_ships(ci: Node2D, y0: float) -> void:
+	var ships: Array = pal.get("ships", [])
+	if ships.is_empty():
+		return
+	var off = cam_x * 0.11 + t * 9.0
+	var c0 = int(floor((off - 500.0) / SHIP_CELL))
+	var c1 = int(floor((off + size.x + 500.0) / SHIP_CELL))
+	var sc: Color = pal.layers[1].darkened(0.15)
+	sc.a = pal.water
+	for c in range(c0, c1 + 1):
+		if Art.hash01(c, 801) > 0.6:
+			continue
+		var kind: String = ships[int(Art.hash01(c, 802) * ships.size()) % ships.size()]
+		var s = 0.55 + Art.hash01(c, 803) * 0.35
+		var p = Vector2(c * SHIP_CELL + Art.hash01(c, 804) * 700.0 - off, y0 + 14.0 + Art.hash01(c, 805) * 22.0 * s)
+		p.y += sin(t * 1.2 + c) * 1.2
+		var lights: Array = []
+		match kind:
+			"sail":
+				ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-34 * s, -8 * s), p + Vector2(34 * s, -8 * s), p + Vector2(24 * s, 0), p + Vector2(-26 * s, 0)]), sc)
+				ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-2 * s, -12 * s), p + Vector2(-2 * s, -78 * s), p + Vector2(28 * s, -12 * s)]), sc)
+				ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-6 * s, -14 * s), p + Vector2(-6 * s, -62 * s), p + Vector2(-26 * s, -14 * s)]), sc)
+				lights.append(p + Vector2(-2 * s, -80 * s))
+			"ferry":
+				ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-90 * s, -18 * s), p + Vector2(96 * s, -18 * s), p + Vector2(80 * s, 0), p + Vector2(-84 * s, 0)]), sc)
+				ci.draw_rect(Rect2(p.x - 60 * s, p.y - 32 * s, 110 * s, 14 * s), sc)
+				ci.draw_rect(Rect2(p.x - 40 * s, p.y - 44 * s, 64 * s, 12 * s), sc)
+				ci.draw_rect(Rect2(p.x + 6 * s, p.y - 62 * s, 12 * s, 18 * s), sc)
+				for k in 9:
+					lights.append(p + Vector2((-54 + k * 12) * s, -26 * s))
+			"barge":
+				ci.draw_rect(Rect2(p.x - 110 * s, p.y - 9 * s, 220 * s, 9 * s), sc)
+				ci.draw_rect(Rect2(p.x - 100 * s, p.y - 16 * s, 150 * s, 7 * s), sc)
+				ci.draw_rect(Rect2(p.x + 70 * s, p.y - 34 * s, 28 * s, 25 * s), sc)
+				lights.append(p + Vector2(84 * s, -26 * s))
+				lights.append(p + Vector2(-108 * s, -12 * s))
+			"steamer":
+				ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-70 * s, -14 * s), p + Vector2(74 * s, -14 * s), p + Vector2(62 * s, 0), p + Vector2(-64 * s, 0)]), sc)
+				ci.draw_rect(Rect2(p.x - 50 * s, p.y - 28 * s, 90 * s, 14 * s), sc)
+				ci.draw_rect(Rect2(p.x - 8 * s, p.y - 58 * s, 10 * s, 30 * s), sc)
+				var wc = p + Vector2(-38 * s, -14 * s)
+				ci.draw_arc(wc, 15 * s, PI, TAU, 10, sc, 4.0 * s)
+				for q in 6:
+					var pf = fmod(t * 0.4 + q / 6.0, 1.0)
+					var sp = p + Vector2(-3 * s - pf * 60.0 * s, -62 * s - pf * 50.0 * s)
+					ci.draw_circle(sp, (5.0 + pf * 12.0) * s, Color(pal.fog, 0.22 * (1.0 - pf) * pal.water))
+				for k in 6:
+					lights.append(p + Vector2((-44 + k * 14) * s, -21 * s))
+		for lp in lights:
+			ci.draw_rect(Rect2(lp.x - 1.5, lp.y - 1.5, 3.0, 3.0), Color(_warm(1.3), pal.water))
+			# reflection streak
+			var ry = p.y + (p.y - lp.y) * 0.25 + 4.0
+			ci.draw_line(Vector2(lp.x, ry), Vector2(lp.x, ry + 6.0 + sin(t * 3.0 + lp.x) * 2.0), Color(WARM, 0.35 * pal.water), 1.5)
+
+## Sky traffic: one plane at a time with blinking lights, hot-air balloons
+## drifting with the wind, or a flock of birds.
+func _draw_air(ci: Node2D) -> void:
+	var air: Array = pal.get("air", [])
+	if air.is_empty():
+		return
+	var w = size.x
+	var h = size.y
+	var sil: Color = pal.sky[0].darkened(0.35)
+	# plane: crosses every 24 s, skips some cycles
+	var P := 24.0
+	var n := int(floor((t + 5.0) / P))
+	var ph := fmod(t + 5.0, P) / P
+	if air.has("plane") and Art.hash01(n, 901) < 0.7:
+		var dir = 1.0 if Art.hash01(n, 902) < 0.5 else -1.0
+		var x = lerpf(-120.0, w + 120.0, ph) if dir > 0 else lerpf(w + 120.0, -120.0, ph)
+		var y = h * (0.08 + Art.hash01(n, 903) * 0.16) - ph * 30.0
+		var p = Vector2(x, y)
+		ci.draw_line(p + Vector2(-16 * dir, 0), p + Vector2(16 * dir, 0), sil, 3.0)
+		ci.draw_line(p + Vector2(2 * dir, 0), p + Vector2(-6 * dir, 7), sil, 2.0)
+		ci.draw_line(p + Vector2(-14 * dir, 0), p + Vector2(-18 * dir, -6), sil, 2.0)
+		if pal.stars < 0.35:
+			ci.draw_line(p + Vector2(-18 * dir, 0), p + Vector2(-260 * dir, 6), Color(1, 1, 1, 0.10), 2.0)
+		var blink = fmod(t, 1.1) < 0.12
+		ci.draw_rect(Rect2(p.x - 7 * dir - 1.5, p.y + 6, 3, 3), Art.hdr(Color(1.0, 0.3, 0.3), 1.5))
+		if blink:
+			ci.draw_rect(Rect2(p.x + 15 * dir - 2, p.y - 2, 4, 4), Art.hdr(Color(1, 1, 1), 2.0))
+	if air.has("balloon") and Art.Q >= 1:
+		for b in 2:
+			if Art.hash01(b, 910 + int(n / 3.0)) > 0.55:
+				continue
+			var bx = fposmod(Art.hash01(b, 911) * w * 1.6 - cam_x * 0.025 - t * 7.0, w * 1.6) - w * 0.3
+			var by = h * (0.18 + Art.hash01(b, 912) * 0.14) + sin(t * 0.5 + b * 2.0) * 8.0
+			var hues := [Color(0.95, 0.42, 0.35), Color(1.0, 0.72, 0.30), Color(0.35, 0.75, 0.80)]
+			var bc: Color = hues[int(Art.hash01(b, 913) * 3.0) % 3].lerp(pal.sky[1], 0.35)
+			var bp = Vector2(bx, by)
+			var r = 24.0 + Art.hash01(b, 914) * 10.0
+			# teardrop envelope: round crown narrowing to the throat
+			var env := PackedVector2Array()
+			for k in 17:
+				var u = lerpf(-PI * 1.18, PI * 0.18, k / 16.0)
+				env.append(bp + Vector2(cos(u), sin(u)) * r)
+			env.append(bp + Vector2(r * 0.28, r * 1.35))
+			env.append(bp + Vector2(-r * 0.28, r * 1.35))
+			ci.draw_colored_polygon(env, bc)
+			# vertical gores in a lighter colour
+			ci.draw_colored_polygon(Art.ellipse(bp + Vector2(0, r * 0.1), Vector2(r * 0.32, r * 1.05), 14), bc.lightened(0.22))
+			ci.draw_arc(bp, r * 0.78, PI * 1.15, PI * 1.55, 8, Color(1, 1, 1, 0.22), 2.0)
+			var thr = bp + Vector2(0, r * 1.35)
+			var bk = thr + Vector2(0, 14)
+			ci.draw_line(thr + Vector2(-r * 0.26, 0), bk + Vector2(-5, 0), sil, 1.0)
+			ci.draw_line(thr + Vector2(r * 0.26, 0), bk + Vector2(5, 0), sil, 1.0)
+			ci.draw_rect(Rect2(bk.x - 6, bk.y, 12, 9), sil)
+			if fmod(t * 0.7 + b, 3.0) < 0.6:
+				ci.draw_circle(thr + Vector2(0, 3), 3.5, _warm(1.8))
+	if air.has("birds"):
+		var fx = fposmod(-t * 40.0 + 300.0, w + 600.0) - 300.0
+		var fy = h * 0.22 + sin(t * 0.3) * 20.0
+		for k in 7:
+			var row = absi(k - 3)
+			var bp = Vector2(w - fx + row * 22.0, fy + row * 12.0 + (k - 3) * 2.0)
+			var flap = sin(t * 8.0 + k) * 5.0
+			ci.draw_polyline(PackedVector2Array([bp + Vector2(-8, -flap), bp, bp + Vector2(8, -flap)]), sil, 2.0, Art.AA)

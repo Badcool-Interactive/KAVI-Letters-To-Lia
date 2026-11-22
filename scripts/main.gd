@@ -1215,6 +1215,7 @@ func _update_views(dt: float) -> void:
 	world_view.cam_x = cam.position.x
 	world_view.cam_y = cam.position.y + size.y * (0.80 - 0.5) / zoom
 	world_view.t = t
+	world_view.hero_x = _kite_screen().x
 	world_view.calm = move_toward(world_view.calm, 1.0 if state in ["recovery", "finale", "title", "scenic"] else 0.0, dt)
 	world_view.refresh()
 	track_view.pal = pal
@@ -1582,6 +1583,16 @@ func _setup_capture() -> void:
 	DirAccess.make_dir_recursive_absolute(capture_dir)
 	autopilot = true
 	save.data.seen_hints = []
+	if "--scenic" in OS.get_cmdline_user_args():
+		# Background review: two shots per country in Scenic View.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "scenic"}]
+		for b in 4:
+			if b > 0:
+				cap_steps.append({"do": "scenic_next"})
+			cap_steps.append_array([{"do": "wait", "s": 5.0}, {"shot": "scenic-%d-a" % b}, {"do": "wait", "s": 6.0}, {"shot": "scenic-%d-b" % b}])
+		cap_steps.append({"do": "quit"})
+		return
 	if "--keyart" in OS.get_cmdline_user_args():
 		# Key art for the loading screen / store banner: the reunion + logo.
 		save.data.tutorial_done = true

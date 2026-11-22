@@ -1,4 +1,22 @@
 # Changelog
+## 0.7.0 (2026-11-22): a living world
+- **Towns at night:** distant city skylines (Greece, Danube) and hillside villages with little church towers (Bulgaria, Carpathians). Their windows switch on and off slowly, and some rooftop antennas blink red.
+- **People doing things** in the background:
+  - kids flying colourful kites
+  - a café table under an umbrella
+  - a couple on a bench under a street lamp
+  - someone fishing
+  - dog walkers with wagging tails
+  - a donkey grazing beside a farm cart
+  - people waving
+
+  They fade out while they pass behind Vayu, so they never look attached to him.
+- **Ships:** sailboats and a lit ferry on the Greek sea; barges and a paddle steamer, with smoke puffs, on the Danube. Their lights reflect in the water.
+- **Sky:** a plane now and then, with blinking lights and a faint contrail. Striped hot-air balloons with a flickering burner. A flock of birds over the Danube.
+- **Quality levels:** Low keeps the skylines (without windows), ships, planes and birds, and skips the people and balloons. Medium shows fewer than High.
+- Performance (chapter 2 benchmark vs 0.6.0):
+  - Draw calls: Low 243 → about 267, Medium 353 → 398, High 524 → 584.
+  - Script time per frame: Low +0.15 ms, Medium about +0.0 ms, High +0.36 ms.
 ## 0.6.0 (2026-11-22)
 - **New names (owner's choice):** the hero is **Vayu** (Hindi/Sanskrit for "wind"), and the girl is **Cornelia, called Lia**. The game is shown as **VAYU: Letters to Lia** (window or tab title, title screen, loading screen, story text). The internal project name stays "VOLT/RUN" so desktop saves are kept. Store pages are not renamed yet.
 - **New menu:** a big logo with a subtitle ribbon and a paper plane, plus a frosted card with a warm "Play Story" button. Every screen fades in softly, and buttons lift on hover and squash when pressed. All panels have new rounded, shadowed styles.

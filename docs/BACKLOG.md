@@ -29,7 +29,7 @@ need the owner's OK first (gate G4) and a ledger entry.
 - ★ **Haptics** on phones (light tap on PERFECT); off switch in Settings.
 
 ## 3. World beauty
-- ★★★ **Living world (owner request 2026-11-22, next batch):**
+- ~~★★★ **Living world**~~ (done in 0.7.0; ideas left: hot chestnut seller, wedding procession, festival lanterns, trains on a viaduct). Original request (2026-11-22):
   - Tiny background people doing things: a fisher on the pier, kids flying kites, a farmer with a cart, a couple on a bench, a café table with a waiter.
   - Distant city skylines at night with twinkling windows on the far layer (Thessaloniki-style bay, Plovdiv hills, Ruse/Giurgiu riverside, a Carpathian village).
   - Ships now and then: sailboats and a lit ferry on the Greek sea; barges and a paddle steamer on the Danube.
