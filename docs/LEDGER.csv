@@ -3,3 +3,4 @@ all visuals (characters, world, obstacles, UI),procedural GDScript in scripts/,p
 all audio (music loops, sfx),procedural synthesis in scripts/synth.gd,project-original,Claude Opus 5.5 (code author),n/a,owner review pending
 UI font,device system font via SystemFont (not shipped),system,none,n/a,none
 assets/music/*.wav (8 loops),pre-rendered by tools/render_music.gd from scripts/synth.gd,project-original,Claude Opus 5.5 (code author),n/a,none
+assets/splash.png (loading screen) + itch banner,3x in-game render of the finale (capture director) + title text in Poppins Bold (SIL OFL system font),project-original; Poppins OFL,Claude Opus 5.5 (code author),n/a,owner review pending

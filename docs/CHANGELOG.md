@@ -1,4 +1,6 @@
 # Changelog
+## 0.4.2 (2026-11-22)
+- **New loading screen:** Kite and Lumi under the aurora with the VOLT/RUN title (sharp 3x render) and a rounded gold progress bar, instead of the Godot logo. Also used as the splash on Android and desktop.
 ## 0.4.1 (2026-11-22)
 - **Fixed:** Kite ran in place on the "Nice moves, courier!" screen after the tutorial, which looked like running backwards. He now stands and smiles; his legs also hold still during tutorial prompts and while paused.
 - Release builds for web portals (CrazyGames, itch.io) hide the in-game ad prompt.
