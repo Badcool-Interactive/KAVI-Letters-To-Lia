@@ -1491,6 +1491,18 @@ func _setup_capture() -> void:
 	DirAccess.make_dir_recursive_absolute(capture_dir)
 	autopilot = true
 	save.data.seen_hints = []
+	if "--trailer" in OS.get_cmdline_user_args():
+		# ~19 s gameplay montage for store/portal preview videos (recorded with --write-movie).
+		save.data.tutorial_done = true
+		cap_steps = [
+			{"do": "story", "ch": 0}, {"do": "wait", "s": 3.6},
+			{"do": "story", "ch": 1}, {"do": "wait", "s": 4.2},
+			{"do": "force_rescue"}, {"do": "wait", "s": 3.6},
+			{"do": "story", "ch": 2}, {"do": "wait", "s": 3.2},
+			{"do": "force_finale"}, {"do": "wait", "s": 4.6},
+			{"do": "quit"},
+		]
+		return
 	cap_steps = [
 		{"do": "wait", "s": 3.0}, {"shot": "01-title"},
 		{"do": "tutorial"}, {"until": "tut_prompt", "max": 12.0}, {"do": "wait", "s": 0.4}, {"shot": "01a-tutorial-hop"},
