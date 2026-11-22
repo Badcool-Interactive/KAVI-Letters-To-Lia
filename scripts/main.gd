@@ -787,10 +787,34 @@ func _update_finale(dt: float) -> void:
 	if k > 9.0 and not finale.has("end"):
 		finale.end = true
 		save.data.story_done = true
+		save.data.best_story = maxi(int(save.data.get("best_story", 0)), int(score))
 		save.save()
 		_bank_run(2)
 		save.save()
 		ui.show_finale_end()
+
+const SAFE_SECONDS := 4.0
+var fail_puffed := false
+
+func _respawn_clear() -> void:
+	var px: float = sim.x
+	var until: float = px + sim.cur_speed() * SAFE_SECONDS
+	# puff over Kavi, and a small puff wherever a visible obstacle disappears
+	fx.smoke(Vector2(px, sim.y - 50.0), 14, 90.0, 1.2)
+	fx.smoke(Vector2(px, -40.0), 8, 70.0, 1.0)
+	var keep: Array = []
+	for o in track.obs:
+		var ox: float = o.x
+		var ext: float = Track.obstacle_extent(o)
+		if ox + ext > px - 300.0 and ox < until and not (o.t == RESCUE and o.passed):
+			if ox < track_view.view_r + 200.0:
+				fx.smoke(Vector2(ox + ext * 0.5, -60.0), 7, 70.0, 0.9)
+		else:
+			keep.append(o)
+	track.obs = keep
+	sim.respawn(px)
+	sim.x = px
+	synth.play("ui")
 
 ## A break can start mid-stretch (after a rescue): drop what is left of
 ## that stretch so it never overlaps the next one.
@@ -845,21 +869,18 @@ func _update_fail(dt: float) -> void:
 		if state_t > 1.3:
 			_game_over()
 		return
-	if true:
-		if state_t > 0.75 and fade_target == 0.0:
-			fade_target = 1.0
-		if state_t > 1.05:
-			var back: float = sim.x - sim.cur_speed() * 1.4
-			var guard = 0
-			while track.hole_at(back) and guard < 50:
-				back -= 30.0
-				guard += 1
-			sim.respawn(back)
-			kite.reset_scarf()
-			kite.expr = "focus"
-			fade_target = 0.0
-			state = "run"
-			state_t = 0.0
+	# Owner design (0.8.2): a cartoon smoke puff hides Kavi and any obstacles
+	# in the next few seconds; he pops out running where he fell (the meters
+	# keep counting), with ~4 s of clear road before the next obstacle.
+	if state_t > 0.55 and not fail_puffed:
+		fail_puffed = true
+		_respawn_clear()
+	if state_t > 0.95:
+		kite.reset_scarf()
+		kite.expr = "focus"
+		state = "run"
+		state_t = 0.0
+		fail_puffed = false
 
 ## Three hearts per run. When they are gone the run is over: story players go
 ## back to the home screen (their reached chapter is kept); endless shows results.
@@ -876,8 +897,13 @@ func _bank_run(chapter_bonus := 0) -> Dictionary:
 	tw.best_tier = tw.tier()
 	return got
 
+## Highest score in any mode (shown on the title screen).
+func best_any() -> int:
+	return maxi(int(save.data.best_endless), maxi(int(save.data.best_daily), int(save.data.get("best_story", 0))))
+
 func _game_over() -> void:
 	if mode == "story":
+		save.data.best_story = maxi(int(save.data.get("best_story", 0)), int(score))
 		var got := _bank_run()
 		_toast("+%d Stamps   +%d Sparks" % [got.stamps, got.sparks], get_viewport_rect().size * Vector2(0.5, 0.3), Color(1.0, 0.85, 0.45), 44)
 		state = "results"
@@ -906,12 +932,14 @@ func _end_run() -> void:
 	var new_best: bool = sc > best
 	if new_best:
 		save.data[key] = sc
+	var run_perfects: int = perfects_run
+	var run_tier: int = tw.best_tier
 	var got := _bank_run()
 	var sparks: int = got.sparks
 	save.data.runs = int(save.data.runs) + 1
 	save.data.runs_since_rescue = int(save.data.runs_since_rescue) + 1
 	save.save()
-	last_result = {"score": sc, "dist": int(dist_m), "stamps": stamps_run, "perfects": perfects_run, "tier": tw.best_tier,
+	last_result = {"score": sc, "dist": int(dist_m), "stamps": got.stamps, "perfects": run_perfects, "tier": run_tier,
 		"best": maxi(best, sc), "new_best": new_best, "sparks": sparks, "banked": got.stamps}
 	ui.show_results(last_result)
 	synth.set_drive(0.0)
@@ -1195,6 +1223,8 @@ func _update_kite_view(dt: float) -> void:
 		kite.speed = debug_speed
 	else:
 		kite.speed = 120.0
+	kite.vy = sim.vy
+	kite.grounded = sim.on_ground or state != "run"
 	kite.tier = tw.tier()
 	if _look_key == "":
 		apply_look()
@@ -1227,7 +1257,7 @@ func _run_pose() -> void:
 func _recovery_pose() -> void:
 	if state == "finale":
 		var k = state_t
-		kite.pose = "walk" if sim.x < finale.lx - 112.0 else ("idle" if k < 5.0 else "wave")
+		kite.pose = "walk" if sim.x < finale.lx - 112.0 else ("front" if k < 5.0 else "front_wave")
 		kite.expr = "wow" if k < 3.5 else "heart"
 		return
 	if state == "junction":

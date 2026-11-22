@@ -25,6 +25,16 @@ func burst(p: Vector2, col: Color, n: int, spd := 300.0, life := 0.6, size := 4.
 		var v = Vector2(cos(a), sin(a)) * spd * randf_range(0.3, 1.0)
 		parts.append({"p": p, "v": v, "l": life * randf_range(0.6, 1.0), "m": life, "s": size * randf_range(0.6, 1.2), "c": col, "g": grav})
 
+## Soft cartoon smoke: puffs that grow and fade (respawn cover).
+var smokes: Array = []
+
+func smoke(p: Vector2, n := 10, r := 60.0, life := 1.1) -> void:
+	for i in int(n * maxf(density, 0.5)):
+		var a := randf() * TAU
+		smokes.append({"p": p + Vector2(cos(a), sin(a) * 0.6) * r * randf_range(0.1, 0.8),
+			"v": Vector2(cos(a) * randf_range(20, 90), -randf_range(20, 80)),
+			"l": life * randf_range(0.7, 1.0), "m": life, "s": r * randf_range(0.35, 0.6)})
+
 func ring(p: Vector2, col: Color, r1 := 120.0, life := 0.45, w := 5.0) -> void:
 	rings.append({"p": p, "c": col, "r": r1, "l": life, "m": life, "w": w})
 
@@ -39,6 +49,11 @@ func tick(dt: float) -> void:
 		q.v *= 1.0 - 1.8 * dt
 		q.p += q.v * dt
 	parts = parts.filter(func(q): return q.l > 0.0)
+	for m in smokes:
+		m.l -= dt
+		m.p += m.v * dt
+		m.v *= 1.0 - 2.0 * dt
+	smokes = smokes.filter(func(m): return m.l > 0.0)
 	for r in rings:
 		r.l -= dt
 	rings = rings.filter(func(r): return r.l > 0.0)
@@ -49,6 +64,12 @@ func tick(dt: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	for m in smokes:
+		var f: float = m.l / m.m
+		var r: float = m.s * (1.4 - 0.6 * f)
+		var a := clampf(f * 1.6, 0.0, 1.0)
+		draw_circle(m.p, r, Color(0.80, 0.82, 0.90, 0.85 * a))
+		draw_circle(m.p + Vector2(-r * 0.25, -r * 0.3), r * 0.7, Color(0.97, 0.97, 1.0, 0.9 * a))
 	for q in parts:
 		var f: float = q.l / q.m
 		var c: Color = q.c

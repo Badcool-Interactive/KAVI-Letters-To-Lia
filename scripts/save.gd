@@ -6,6 +6,7 @@ const PATH := "user://volt_run_save.json"
 var data := {
 	"best_endless": 0,
 	"best_daily": 0,
+	"best_story": 0,
 	"daily_date": "",
 	"stamps": 0,
 	"sparks": 0,

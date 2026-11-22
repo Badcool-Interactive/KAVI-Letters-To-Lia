@@ -253,7 +253,8 @@ func _small(v: Container, text: String, size := 24, col := Color(1, 1, 1, 0.55))
 	l.text = text
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col)
-	l.add_theme_constant_override("outline_size", 0)
+	l.add_theme_constant_override("outline_size", 8)
+	l.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.05, 0.75))
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size.x = 200
 	if font_body != null:
@@ -290,7 +291,18 @@ func show_title() -> void:
 	if main.ads.can_show() and not OS.has_feature("portal"):
 		_item(v, "Free gift: a short ad for +1 Spark (%d left)" % main.ads.remaining_today(), main.watch_ad_for_spark, 24)
 	_gap(v, 18)
-	_small(v, "%d Sparks   ·   %d Stamps   ·   Best %d" % [main.save.data.sparks, main.save.data.stamps, main.save.data.best_endless], 24, Color(1.0, 0.88, 0.6, 0.7))
+	# wallet + best score: bigger, outlined, so it reads over the bright ground
+	var stats := HBoxContainer.new()
+	stats.add_theme_constant_override("separation", 34)
+	v.add_child(stats)
+	for it in [["%d Stamps" % int(main.save.data.stamps), Color(1.0, 0.86, 0.55)], ["%d Sparks" % int(main.save.data.sparks), Color(0.65, 0.95, 1.0)], ["Best score %d" % main.best_any(), Color(1, 0.97, 0.9)]]:
+		var l := Label.new()
+		l.text = it[0]
+		l.add_theme_font_size_override("font_size", 30)
+		l.add_theme_color_override("font_color", it[1])
+		l.add_theme_constant_override("outline_size", 10)
+		l.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.05, 0.85))
+		stats.add_child(l)
 	first.grab_focus.call_deferred()
 
 ## Garage: Kavi in close-up on the left; categories and items on the right.
@@ -312,6 +324,8 @@ func show_garage(cat := "scarf", animate := true) -> void:
 		l.text = w[0]
 		l.add_theme_font_size_override("font_size", 34)
 		l.add_theme_color_override("font_color", w[1])
+		l.add_theme_constant_override("outline_size", 10)
+		l.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.05, 0.85))
 		wallet.add_child(l)
 	var ex := HBoxContainer.new()
 	ex.add_theme_constant_override("separation", 0)

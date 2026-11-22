@@ -1,4 +1,18 @@
 # Changelog
+## 0.8.2 (2026-11-22): fair respawns, funny jetpack, Kavi faces Lia
+- **Fixed** (bug from 0.8.1): the results screen showed 0 perfect moves and Tailwind x1. The game banked Stamps and Sparks before reading the run's stats.
+- **New respawn** (owner design):
+  - A cartoon smoke puff covers Kavi where he fell, and small puffs hide every obstacle that disappears.
+  - He pops out running with about 4 s of clear road, and the meters keep counting.
+  - Before, he was sent back 1.4 s and often hit the same obstacle again straight away.
+- **Funny hover:** holding jump fires the bag jets plus little jets under both hands and both boots. He wobbles, kicks and flaps.
+- **Rough landings:** after a long hover or a big drop he sometimes lands rough, stumbles forward and springs back up. This is visual only (gentler with Reduced motion).
+- **Reunion:** when Kavi reaches Lia he turns to face the camera, a front view with both arms, then waves with heart eyes.
+- **Fixed:** the glowing envelope badge showed through Kavi's arm (it was drawn on the glow layer). It now sits under the arm.
+- **Title screen:**
+  - Stamps, Sparks and the best score are bigger and outlined, so they read over the bright ground.
+  - "Best" now counts every mode. Story scores were never saved before.
+- Small text has a dark outline everywhere.
 ## 0.8.1 (2026-11-22): new Kavi and Lia, fixes from the owner's playtest
 - **Kavi redesigned** after research on memorable cartoon robots: recognisable from his silhouette alone, big simple shapes, a round face on a sturdy body, one accent colour.
   - A wide rounded TV head whose whole front is a screen face (eyes and mouth).

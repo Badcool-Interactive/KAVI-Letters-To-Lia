@@ -22,6 +22,13 @@ var tip := "kite"
 var helmet := "round"
 ## Face: where the eyes look (-1..1 each axis), eased towards look_target.
 var look := Vector2(1, 0)
+## Air state from the sim (main sets these), for wobbly hovers and rough landings.
+var grounded := true
+var _air_t := 0.0
+var _hover_t := 0.0
+var _fall_vy := 0.0
+var stumble_t := 0.0
+const STUMBLE := 0.5
 var look_target := Vector2(1, 0)
 var _look_next := 0.0
 
@@ -98,6 +105,8 @@ func tick(dt: float) -> void:
 		# sometimes a quick double blink
 		blink_t = 0.25 if randf() < 0.18 else randf_range(2.5, 4.5)
 	_update_look(dt)
+	_update_air(dt)
+	_turn = move_toward(_turn, 1.0 if pose in FRONT_POSES else 0.0, dt / 0.3)
 	_update_scarf(dt)
 	_update_trail()
 	_base.queue_redraw()
@@ -110,6 +119,24 @@ func reset_scarf() -> void:
 func _neck_world() -> Vector2:
 	var p = _pose_params()
 	return global_position + (Vector2(-4, -63) * s).rotated(p.rot) + p.off * s
+
+func _update_air(dt: float) -> void:
+	stumble_t = maxf(stumble_t - dt, 0.0)
+	if not grounded:
+		_air_t += dt
+		if pose == "hover":
+			_hover_t += dt
+		_fall_vy = maxf(_fall_vy, vy)
+		return
+	if _air_t > 0.0:
+		# just landed: after a long wobbly hover or a big drop, sometimes land
+		# rough, stumble forward and pop back up (visual only)
+		if (_hover_t > 0.7 or _fall_vy > 1100.0) and randf() < 0.6 and not reduced_motion:
+			stumble_t = STUMBLE
+			expr = "wow"
+	_air_t = 0.0
+	_hover_t = 0.0
+	_fall_vy = 0.0
 
 ## 0 at a gentle jog .. 1 at top speed.
 func _speed_k() -> float:
@@ -174,7 +201,7 @@ func _update_trail() -> void:
 # ------------------------------------------------------------------ pose
 func _pose_params() -> Dictionary:
 	var p = {"rot": 0.0, "off": Vector2.ZERO, "sq": Vector2.ONE, "ff": Vector2(8, 0), "fb": Vector2(-8, 0),
-		"hf": Vector2(10, 18), "hb": Vector2(-8, 18), "thrust": 0.0, "wheels": false, "head": 0.0}
+		"hf": Vector2(10, 18), "hb": Vector2(-8, 18), "thrust": 0.0, "wheels": false, "head": 0.0, "jets": false}
 	var ph = phase
 	match pose:
 		"run", "walk":
@@ -194,6 +221,15 @@ func _pose_params() -> Dictionary:
 			p.sq = Vector2(1.0 + 0.015 * land * amp, 1.0 - 0.015 * land * amp)
 			# the head stays nearly level (counter the lean) so the screen face reads
 			p.head = -p.rot * 0.65 - 0.012 * cos(bob_ph - 0.7)
+			if stumble_t > 0.0:
+				# rough landing: lurch forward, hands out to catch, spring back up
+				var e := sin((1.0 - stumble_t / STUMBLE) * PI)
+				p.rot += 0.42 * e
+				p.off.y += 7.0 * e
+				p.sq = Vector2(1.0 + 0.06 * e, 1.0 - 0.06 * e)
+				p.hf = p.hf.lerp(Vector2(22, 26), e)
+				p.hb = p.hb.lerp(Vector2(12, 28), e)
+				p.head -= 0.15 * e
 			# keep the feet on the ground through the bob, lean and squash
 			var sr = sin(p.rot)
 			var cr = cos(p.rot)
@@ -219,13 +255,18 @@ func _pose_params() -> Dictionary:
 			p.hf = Vector2(16, 2)
 			p.hb = Vector2(-16, 0)
 		"hover":
-			var sw = sin(t * 9.0) * 2.0
-			p.ff = Vector2(4 + sw, 2)
-			p.fb = Vector2(-6 - sw, 4)
-			p.hf = Vector2(18, -4)
-			p.hb = Vector2(-18, -2)
+			# all thrusters on: bag, hands and feet; he wobbles and kicks
+			var w1 := sin(t * 7.0)
+			var w2 := sin(t * 11.0 + 1.3)
+			var wob := 1.0 if not reduced_motion else 0.3
+			p.rot = 0.04 + (w1 * 0.10 + w2 * 0.04) * wob
+			p.off = Vector2(w2 * 2.0, w1 * 3.0) * wob
+			p.ff = Vector2(6 + sin(t * 13.0) * 7.0, 2 + cos(t * 13.0) * 3.0)
+			p.fb = Vector2(-8 - sin(t * 13.0) * 7.0, 4)
+			p.hf = Vector2(24 + sin(t * 9.0) * 5.0, 4 + cos(t * 9.0) * 9.0)
+			p.hb = Vector2(-22 - sin(t * 9.0) * 5.0, 6 - cos(t * 9.0) * 9.0)
 			p.thrust = 1.0
-			p.rot = 0.04
+			p.jets = true
 		"slide":
 			p.rot = -0.95
 			p.off = Vector2(-6, 18)
@@ -372,6 +413,12 @@ func _paint(ci: Node2D, add: bool) -> void:
 	# ground contact shadow
 	if not add and pose in ["run", "walk", "idle", "slide", "gust", "throw", "wave", "eat", "drink", "map", "photo", "read", "stretch"]:
 		ci.draw_colored_polygon(Art.ellipse(Vector2(0, 2), Vector2(28 * s, 5 * s), 16), Color(0, 0, 0, 0.35))
+	if _turn > 0.0:
+		if _turn >= 0.5:
+			_paint_front(ci, add, (_turn - 0.5) * 2.0)
+			return
+		# first half of the turn: the side view squashes towards the camera
+		p.sq.x *= 1.0 - _turn * 2.0
 	ci.draw_set_transform(p.off * s, p.rot, p.sq * s)
 	var hf: Vector2 = SHOULDER + p.hf
 	var hb: Vector2 = SHOULDER + p.hb
@@ -406,8 +453,12 @@ func _paint(ci: Node2D, add: bool) -> void:
 			ci.draw_arc(Vector2(8, -53), 9.0, PI * 1.2, PI * 1.62, 8, Color(1, 1, 1, 0.75), 2.2, Art.AA)
 		# belt in the accent colour
 		ci.draw_colored_polygon(Art.rrect(Rect2(-14, -37, 29, 6), 3), TEAL)
-		# envelope badge on the chest (lit in the add pass)
+		# envelope badge on the chest: drawn here (not in the glow pass) so the
+		# front arm covers it when it swings across the chest
 		_poly(ci, Art.rrect(Rect2(3, -54, 13, 9), 2), VISOR)
+		var er := Rect2(4.5, -52.5, 10, 6)
+		ci.draw_rect(er, Art.hdr(GLOW, 1.4), false, 1.2)
+		ci.draw_polyline(PackedVector2Array([er.position, er.position + Vector2(5, 3.5), er.position + Vector2(10, 0)]), Art.hdr(GLOW, 1.4), 1.2)
 		# strap across the chest to the bag
 		ci.draw_line(Vector2(-12, -63), Vector2(15, -38), INK, 6.0, Art.AA)
 		ci.draw_line(Vector2(-12, -63), Vector2(15, -38), STRAP, 3.6, Art.AA)
@@ -419,10 +470,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 		ci.draw_circle(kf, 3.6, TEAL)
 		_boot(ci, ff, BOOT)
 	else:
-		# emissive: envelope badge, bag clasp, thruster cores and flames, wheels
-		var r := Rect2(4.5, -52.5, 10, 6)
-		ci.draw_rect(r, Art.hdr(Color(GLOW, 0.9), 1.8), false, 1.2)
-		ci.draw_polyline(PackedVector2Array([r.position, r.position + Vector2(5, 3.5), r.position + Vector2(10, 0)]), Art.hdr(GLOW, 1.8), 1.2)
+		# emissive: thruster cores and flames, wheels
 		var th: float = p.thrust
 		for tx in [-25.0, -17.0]:
 			ci.draw_circle(Vector2(tx, -34), 2.4, Art.hdr(tc, 0.5 + th * 1.5))
@@ -433,6 +481,13 @@ func _paint(ci: Node2D, add: bool) -> void:
 				Art.glow(ci, Vector2(tx, -26), 16.0 * th, Color(tc, 0.5), 3)
 		if tier >= 2:
 			Art.glow(ci, Vector2(-21, -38), 14.0 + tier * 4.0, Color(tc, 0.35), 3)
+		if p.jets:
+			# little jets under both hands and both boots (flicker)
+			for j in [[hf, 0.7], [hb, 0.6], [ff, 1.0], [fb, 0.9]]:
+				var q: Vector2 = j[0] + Vector2(0, 4)
+				var fl: float = (10.0 + sin(t * 37.0 + q.x) * 4.0) * j[1]
+				ci.draw_colored_polygon(PackedVector2Array([q + Vector2(-3, 0), q + Vector2(3, 0), q + Vector2(0, fl)]), Art.hdr(Color(tc, 0.9), 1.5))
+				ci.draw_colored_polygon(PackedVector2Array([q + Vector2(-1.4, 0), q + Vector2(1.4, 0), q + Vector2(0, fl * 0.5)]), Art.hdr(Color(1, 1, 1), 2.2))
 		if p.wheels:
 			for w in [ff, fb]:
 				ci.draw_circle(w + Vector2(-6, -1), 3.5, Art.hdr(Color(1.0, 0.75, 0.35), 2.0))
@@ -754,3 +809,76 @@ static func _heart(ci: Node2D, c: Vector2, r: float, col: Color) -> void:
 	ci.draw_circle(c + Vector2(-r * 0.5, -r * 0.2), r * 0.55, col)
 	ci.draw_circle(c + Vector2(r * 0.5, -r * 0.2), r * 0.55, col)
 	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-r, 0), c + Vector2(r, 0), c + Vector2(0, r)]), col)
+
+## Front view (owner: when Kavi meets Lia he turns to face us, both arms
+## showing). The turn is a quick squash through the side view.
+const FRONT_POSES := ["front", "front_wave"]
+var _turn := 0.0
+
+func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
+	var br := sin(t * 1.8)
+	ci.draw_set_transform(Vector2(0, -5.0 * s + br * 0.5), 0.0, Vector2(sx * s, s))
+	var hc := Vector2(0, -86)
+	var hr := Rect2(-26, -107, 52, 42)
+	var scr := Rect2(-18, -100, 36, 28)
+	var waving: bool = pose == "front_wave"
+	var hand_r: Vector2 = Vector2(38 + sin(t * 9.0) * 5.0, -92) if waving else Vector2(27, -32)
+	var hand_l := Vector2(-27, -32)
+	if not add:
+		# legs + boots
+		for lx in [-8.0, 8.0]:
+			_limb2(ci, Vector2(lx, -31), Vector2(lx * 1.1, -8), 15.0, 12.0, SHELL if lx > 0 else SHELL.lerp(SHADE, 0.35))
+			_poly(ci, Art.rrect(Rect2(lx * 1.1 - 10, -12, 20, 13), 6), BOOT)
+			ci.draw_rect(Rect2(lx * 1.1 - 10, -3.5, 20, 4), BOOT.lightened(0.6))
+		# scarf tails hanging down on one side, fluttering
+		var tl := PackedVector2Array()
+		for k in 8:
+			tl.append(Vector2(-12 - k * 1.2 + sin(t * 3.0 + k * 0.8) * 2.0 * k / 7.0, -62 + k * 6.0))
+		_strip(ci, tl, 6.6, 4.4, INK)
+		_strip(ci, tl, 5.0, 3.0, scarf_col, _scarf_colors(tl.size()))
+		# bag peeking out behind
+		_poly(ci, Art.rrect(Rect2(-29, -62, 9, 24), 4), BAG)
+		# torso
+		var torso := PackedVector2Array([Vector2(-15, -30), Vector2(-21, -50), Vector2(-20, -61), Vector2(-10, -67),
+			Vector2(10, -67), Vector2(20, -61), Vector2(21, -50), Vector2(15, -30)])
+		_poly(ci, _smooth_closed(torso), SHELL)
+		if Art.Q >= 1:
+			ci.draw_colored_polygon(Art.rrect(Rect2(-14, -45, 28, 10), 5), Color(SHADE, 0.45))
+			ci.draw_arc(Vector2(-6, -55), 9.0, PI * 1.1, PI * 1.5, 8, Color(1, 1, 1, 0.75), 2.2, Art.AA)
+		ci.draw_colored_polygon(Art.rrect(Rect2(-15, -37, 30, 6), 3), TEAL)
+		_poly(ci, Art.rrect(Rect2(-6.5, -55, 13, 9), 2), VISOR)
+		var er := Rect2(-5, -53.5, 10, 6)
+		ci.draw_rect(er, Art.hdr(GLOW, 1.4), false, 1.2)
+		ci.draw_polyline(PackedVector2Array([er.position, er.position + Vector2(5, 3.5), er.position + Vector2(10, 0)]), Art.hdr(GLOW, 1.4), 1.2)
+		ci.draw_line(Vector2(-15, -62), Vector2(15, -36), INK, 6.0, Art.AA)
+		ci.draw_line(Vector2(-15, -62), Vector2(15, -36), STRAP, 3.6, Art.AA)
+		# arms (both visible)
+		for side in [[-1.0, hand_l], [1.0, hand_r]]:
+			var sh := Vector2(21.0 * side[0], -58)
+			var el = _ik(sh, side[1], 13, 13, -side[0])
+			_limb2(ci, sh, el, 12.0, 10.5, SHELL)
+			_limb2(ci, el, side[1], 10.5, 9.5, SHELL)
+			_hand(ci, side[1], SHELL, side[1] - el)
+			_poly(ci, Art.ellipse(sh + Vector2(0, -1), Vector2(8.5, 7.5), 16), TEAL)
+		# head
+		ci.draw_colored_polygon(Art.rrect(Rect2(-6, -68, 12, 6), 3), JOINT.darkened(0.2))
+		for ex in [-27.0, 27.0]:
+			_poly(ci, Art.ellipse(Vector2(ex, -84), Vector2(5, 8), 14), SHELL)
+			ci.draw_arc(Vector2(ex, -84), 3.4, 0, TAU, 12, TEAL, 2.2, Art.AA)
+		_poly(ci, Art.rrect(hr, 15, 6), SHELL)
+		if Art.Q >= 1:
+			ci.draw_colored_polygon(Art.rrect(Rect2(hr.position.x + 2, hr.end.y - 11, hr.size.x - 4, 9), 6), Color(SHADE, 0.5))
+			ci.draw_arc(hc + Vector2(-12, -6), 14.0, PI * 1.05, PI * 1.45, 8, Color(1, 1, 1, 0.8), 2.5, Art.AA)
+		ci.draw_line(Vector2(hr.position.x + 12, hr.position.y + 1.5), Vector2(hr.end.x - 12, hr.position.y + 1.5), TEAL, 4.0, Art.AA)
+		_helmet_extras(ci, hc, hr)
+		_poly(ci, Art.rrect(scr.grow(3), 11), TEAL)
+		ci.draw_colored_polygon(Art.rrect(scr, 9), VISOR)
+		ci.draw_colored_polygon(Art.rrect(Rect2(scr.position.x + 3, scr.position.y + 2, scr.size.x - 6, 6), 3), Color(1, 1, 1, 0.08))
+		_antenna(ci, Vector2(0, hr.position.y))
+		_poly(ci, Art.rrect(Rect2(-15, -68, 30, 9), 4.5), scarf_col)
+	else:
+		ci.draw_colored_polygon(Art.rrect(scr, 9), Color(GLOW, 0.06))
+		_eyes(ci, scr.get_center() + Vector2(-0.5 + look.x * 1.5, -1 + look.y * 2.0))
+		if helmet == "explorer":
+			ci.draw_circle(hc + Vector2(14, -22), 3.0, Art.hdr(Color(1.0, 0.92, 0.7), 2.2))
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
