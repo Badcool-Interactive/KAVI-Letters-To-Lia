@@ -353,6 +353,11 @@ const HIP := Vector2(0, -31)
 const SHOULDER := Vector2(2, -58)
 const HEAD_C := Vector2(5, -86)
 const BAG := Color(0.66, 0.38, 0.24)
+# smoothed outlines computed once (not every frame)
+static var _TORSO := _smooth_closed(PackedVector2Array([Vector2(-14, -30), Vector2(-19, -50), Vector2(-18, -61), Vector2(-8, -67),
+	Vector2(12, -67), Vector2(22, -61), Vector2(23, -50), Vector2(15, -30)]))
+static var _TORSO_SHADE := _smooth_closed(PackedVector2Array([Vector2(-12, -33), Vector2(-15.5, -50), Vector2(-13.5, -60), Vector2(-6, -64), Vector2(-2, -63), Vector2(-4, -33)]))
+static var _BOOT := _smooth_closed(PackedVector2Array([Vector2(-10, -12), Vector2(4, -12), Vector2(9, -7), Vector2(15, -4), Vector2(15, 1), Vector2(-11, 1)]))
 const STRAP := Color(0.36, 0.20, 0.14)
 
 func _paint(ci: Node2D, add: bool) -> void:
@@ -394,12 +399,10 @@ func _paint(ci: Node2D, add: bool) -> void:
 		_poly(ci, Art.ellipse(Vector2(-25, -35), Vector2(4.5, 3.5), 10), JOINT)
 		_poly(ci, Art.ellipse(Vector2(-17, -35), Vector2(4.5, 3.5), 10), JOINT)
 		# --- torso: broad chest tapering to the hips (strong but round)
-		var torso := PackedVector2Array([Vector2(-14, -30), Vector2(-19, -50), Vector2(-18, -61), Vector2(-8, -67),
-			Vector2(12, -67), Vector2(22, -61), Vector2(23, -50), Vector2(15, -30)])
-		_poly(ci, _smooth_closed(torso), SHELL)
+		_poly(ci, _TORSO, SHELL)
 		if Art.Q >= 1:
 			# soft shading on the back half and a highlight on the chest
-			ci.draw_colored_polygon(_smooth_closed(PackedVector2Array([Vector2(-12, -33), Vector2(-15.5, -50), Vector2(-13.5, -60), Vector2(-6, -64), Vector2(-2, -63), Vector2(-4, -33)])), Color(SHADE, 0.55))
+			ci.draw_colored_polygon(_TORSO_SHADE, Color(SHADE, 0.55))
 			ci.draw_arc(Vector2(8, -53), 9.0, PI * 1.2, PI * 1.62, 8, Color(1, 1, 1, 0.75), 2.2, Art.AA)
 		# belt in the accent colour
 		ci.draw_colored_polygon(Art.rrect(Rect2(-14, -37, 29, 6), 3), TEAL)
@@ -641,7 +644,10 @@ static func _strip(ci: Node2D, pts: PackedVector2Array, w0: float, w1: float, co
 
 func _boot(ci: Node2D, f: Vector2, col: Color) -> void:
 	# chunky boot: tall cuff, rounded toe, thick light sole
-	_poly(ci, _smooth_closed(PackedVector2Array([f + Vector2(-10, -12), f + Vector2(4, -12), f + Vector2(9, -7), f + Vector2(15, -4), f + Vector2(15, 1), f + Vector2(-11, 1)])), col)
+	var bp := PackedVector2Array()
+	for q in _BOOT:
+		bp.append(f + q)
+	_poly(ci, bp, col)
 	if Art.Q >= 1:
 		ci.draw_rect(Rect2(f.x - 10, f.y - 3.5, 25, 4), col.lightened(0.6))
 		ci.draw_line(f + Vector2(-6, -9), f + Vector2(2, -9), Color(1, 1, 1, 0.45), 1.6)
