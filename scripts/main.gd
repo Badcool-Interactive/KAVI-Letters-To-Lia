@@ -1419,7 +1419,10 @@ func _draw_hud(ci: Node2D) -> void:
 		ci.draw_rect(Rect2(0, sz.y - h, sz.x, h), Color(0, 0, 0, 0.92))
 	if state == "title":
 		_draw_title(ci, sz)
-	if state in ["run", "fail", "paused", "recovery", "junction", "tut_done"]:
+	if state == "paused":
+		# paused: no HUD, captions, cards or toasts; only the pause menu (UI layer)
+		return
+	if state in ["run", "fail", "recovery", "junction", "tut_done"]:
 		_draw_run_hud(ci, sz)
 	# toasts
 	for ts in toasts:

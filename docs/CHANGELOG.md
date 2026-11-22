@@ -1,4 +1,9 @@
 # Changelog
+## 0.8.3 (2026-11-22): prettier Greece, softer people, clean pause
+- **Greece:** the domes (they read as the wrong culture) and the sci-fi ring and spires are replaced by Greek temples (stepped base, columns, pediment), white windmills with turning sails, and a rare lighthouse whose beam slowly sweeps the sky.
+- **Ferns** are now arching fronds with paired leaflets, not sticks.
+- **Background people** have rounded bodies, tapered limbs, and round hands and feet instead of boxy stick figures.
+- **Pause** hides every game text (HUD, chapter cards, captions, toasts) and uses a much darker overlay.
 ## 0.8.2 (2026-11-22): fair respawns, funny jetpack, Kavi faces Lia
 - **Fixed** (bug from 0.8.1): the results screen showed 0 perfect moves and Tailwind x1. The game banked Stamps and Sparks before reading the run's stats.
 - **New respawn** (owner design):

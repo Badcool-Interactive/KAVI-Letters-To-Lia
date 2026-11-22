@@ -77,7 +77,7 @@ const BIOMES := [
 		"ground": Color(0.05, 0.07, 0.10), "rim": Color(1.0, 0.86, 0.66),
 		"accent": Color(0.55, 0.92, 0.90), "mote": Color(1.0, 0.88, 0.68),
 		"obstacle": Color(0.93, 0.88, 0.80),
-		"kinds": [["ring", "spire", "dome", "dome"], ["dome", "column", "spire", "house", "cypress"], ["olive", "column", "cypress", "bush", "rock", "olive"]],
+		"kinds": [["temple", "lighthouse", "windmill", "temple"], ["temple", "column", "windmill", "house", "cypress"], ["olive", "column", "cypress", "bush", "rock", "olive"]],
 		"stars": 0.15, "aurora": 0.0, "water": 1.0,
 		"town": "city", "life": ["cafe", "kite_kid", "bench", "waver", "fisher"], "ships": ["sail", "ferry", "sail"], "air": ["plane", "balloon"],
 	},

@@ -512,7 +512,7 @@ func _center(width := 640.0, dim := 0.55) -> VBoxContainer:
 	return v
 
 func show_pause() -> void:
-	var v := _center(560)
+	var v := _center(560, 0.8)
 	_heading(v, "Paused", 80)
 	_gap(v, 10)
 	var r := _item(v, "Resume", main.resume, 46)

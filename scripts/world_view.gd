@@ -20,10 +20,11 @@ const CELL := [560.0, 400.0, 300.0]
 const DENS := [0.55, 0.65, 0.7]
 const SCALE := [0.75, 0.9, 1.05]
 
-const LANDMARKS := ["bridge", "castle", "ring", "spire"]
-const CLUSTER := ["pine", "cypress", "olive", "reed", "lily", "bush", "fern", "column", "rock", "birch"]
+const LANDMARKS := ["bridge", "castle", "ring", "spire", "lighthouse"]
+const CLUSTER := ["pine", "cypress", "olive", "reed", "lily", "bush", "fern", "column", "rock", "birch", "windmill"]
 
 var _lights: Array = [[], [], []]
+var _beams: Array = [[], [], []]  # lighthouse lamps: slow sweeping beams
 var _painters: Array = []
 
 func _ready() -> void:
@@ -236,6 +237,7 @@ func _ridge_y(i: int, lx: float) -> float:
 
 func _draw_layer(ci: Node2D, i: int) -> void:
 	_lights[i] = []
+	_beams[i] = []
 	if i == 0:
 		_peaks = []
 	var col: Color = pal.layers[i]
@@ -356,6 +358,54 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			ci.draw_polyline(ring, col.lightened(0.15), 4.0 * s, Art.AA)
 			L.append([p + Vector2(0, -hgt), 7.0 * s, acc])
 			L.append([p + Vector2(0, -hgt * 0.55), 4.0 * s, acc])
+		"temple":
+			# Greek temple: stepped base, columns, beam and pediment
+			var tw = (150.0 + Art.hash01(seed, 2) * 70.0) * s
+			var th = (80.0 + Art.hash01(seed, 3) * 30.0) * s
+			var nc := 5 + int(Art.hash01(seed, 4) * 3.0)
+			var x0 = p.x - tw * 0.5
+			ci.draw_rect(Rect2(x0 - 10 * s, p.y - 8 * s, tw + 20 * s, 30 * s), col)
+			ci.draw_rect(Rect2(x0 - 4 * s, p.y - 15 * s, tw + 8 * s, 8 * s), col)
+			var cw2 = tw / (nc * 1.9)
+			for k in nc:
+				var cx = x0 + cw2 * 0.5 + k * (tw - cw2) / float(nc - 1)
+				ci.draw_rect(Rect2(cx - cw2 * 0.5, p.y - 15 * s - th, cw2, th), col)
+				ci.draw_rect(Rect2(cx - cw2 * 0.75, p.y - 15 * s - th - 5 * s, cw2 * 1.5, 6 * s), col)
+			var top = p.y - 20 * s - th
+			ci.draw_rect(Rect2(x0 - 4 * s, top - 14 * s, tw + 8 * s, 15 * s), col)
+			ci.draw_colored_polygon(PackedVector2Array([Vector2(x0 - 8 * s, top - 13 * s), Vector2(p.x, top - 13 * s - tw * 0.2), Vector2(x0 + tw + 8 * s, top - 13 * s)]), col)
+			ci.draw_line(Vector2(x0 - 8 * s, top - 13 * s), Vector2(p.x, top - 13 * s - tw * 0.2), Color(pal.rim, 0.35), 2.0, Art.AA)
+			if Art.hash01(seed, 9) < 0.5:
+				L.append([Vector2(p.x, top - 22 * s), 4.0 * s, Art.hdr(pal.mote, 1.0)])
+		"lighthouse":
+			var lh = (300.0 + Art.hash01(seed, 2) * 80.0) * s
+			var b0 = 34.0 * s
+			var b1 = 20.0 * s
+			ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-b0, 20), p + Vector2(-b1, -lh), p + Vector2(b1, -lh), p + Vector2(b0, 20)]), col)
+			for k in 3:
+				var yy = -lh * (0.25 + k * 0.25)
+				var ww = lerpf(b0, b1, (0.25 + k * 0.25)) + 1.0
+				ci.draw_rect(Rect2(p.x - ww, p.y + yy, ww * 2.0, 14 * s), col.lightened(0.10))
+			ci.draw_rect(Rect2(p.x - b1 - 8 * s, p.y - lh - 6 * s, (b1 + 8 * s) * 2.0, 7 * s), col)
+			ci.draw_rect(Rect2(p.x - 12 * s, p.y - lh - 30 * s, 24 * s, 24 * s), col.lightened(0.05))
+			ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-16 * s, -lh - 30 * s), p + Vector2(0, -lh - 50 * s), p + Vector2(16 * s, -lh - 30 * s)]), col)
+			var lamp = p + Vector2(0, -lh - 18 * s)
+			L.append([lamp, 9.0 * s, Art.hdr(Color(1.0, 0.92, 0.7), 1.6)])
+			_beams[layer].append([lamp, s])
+		"windmill":
+			var mh = (110.0 + Art.hash01(seed, 2) * 40.0) * s
+			ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-26 * s, 20), p + Vector2(-20 * s, -mh), p + Vector2(20 * s, -mh), p + Vector2(26 * s, 20)]), col)
+			ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-24 * s, -mh), p + Vector2(0, -mh - 30 * s), p + Vector2(24 * s, -mh)]), col)
+			var hub = p + Vector2(0, -mh - 6 * s)
+			var rot = t * (0.35 + Art.hash01(seed, 5) * 0.3) + seed
+			for k in 6:
+				var a = rot + TAU * k / 6.0
+				var tip = hub + Vector2(cos(a), sin(a)) * 70.0 * s
+				var side = Vector2(cos(a + PI * 0.5), sin(a + PI * 0.5)) * 9.0 * s
+				ci.draw_line(hub, tip, col, 2.5 * s)
+				ci.draw_colored_polygon(PackedVector2Array([hub.lerp(tip, 0.3), tip, tip + side, hub.lerp(tip, 0.3) + side]), Color(col.lightened(0.18), col.a * 0.9))
+			if Art.hash01(seed, 7) < 0.6:
+				L.append([p + Vector2(0, -mh * 0.45), 4.0 * s, Art.hdr(pal.mote, 1.0)])
 		"dome":
 			var bw = (110.0 + Art.hash01(seed, 4) * 70.0) * s
 			var bh = (80.0 + Art.hash01(seed, 5) * 80.0) * s
@@ -456,11 +506,26 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			ci.draw_circle(lp, 7.0 * s, col.lightened(0.2))
 			L.append([lp, 10.0 * s, Art.hdr(acc, 1.3)])
 		"fern":
-			for k in 5:
-				var a = -PI * 0.5 + (k - 2) * 0.35
-				var tip = p + Vector2(cos(a), sin(a)) * 90.0 * s
-				ci.draw_line(p, tip, col, 5.0 * s)
-				ci.draw_line(tip, tip + Vector2(18 * s * (k - 2), 10 * s), col, 4.0 * s)
+			# arching fronds with paired leaflets that shrink towards the tip
+			var nf := 5 + int(Art.hash01(seed, 3) * 3.0)
+			for k in nf:
+				var f = (float(k) / float(nf - 1)) - 0.5
+				var a = -PI * 0.5 + f * 1.9
+				var dir = Vector2(cos(a), sin(a))
+				var L0 = (70.0 + Art.hash01(seed, 10 + k) * 40.0) * s * (1.0 - absf(f) * 0.35)
+				var bend = Vector2(f * 46.0 * s, 0) + Vector2(0, 28.0 * s * absf(f))
+				var sway = Vector2(sin(t * 0.9 + seed + k) * 3.0 * s, 0)
+				var prev = p
+				for j in range(1, 9):
+					var u = j / 8.0
+					var q = p + dir * L0 * u + bend * u * u + sway * u
+					var d = (q - prev).normalized()
+					var nrm = d.orthogonal()
+					var lw = (1.0 - u) * 10.0 * s + 2.0 * s
+					ci.draw_line(prev, q, col, maxf(3.0 * s * (1.0 - u), 1.2))
+					ci.draw_colored_polygon(Art.ellipse(q + nrm * lw * 0.7, Vector2(lw, lw * 0.38), 8, nrm.angle() - 0.4), col)
+					ci.draw_colored_polygon(Art.ellipse(q - nrm * lw * 0.7, Vector2(lw, lw * 0.38), 8, nrm.angle() + PI + 0.4), col)
+					prev = q
 		"bridge":
 			# Tied-arch bridge: the arch springs from the deck, hangers hold the
 			# deck, and piers/towers go down into the hill (bases hidden by the
@@ -527,6 +592,19 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 
 func _draw_lights(ci: Node2D, i: int) -> void:
 	var fade = [0.55, 0.8, 1.0][i]
+	for b in _beams[i]:
+		# a lighthouse beam slowly sweeping round (two opposite beams)
+		var lp: Vector2 = b[0]
+		var bs: float = b[1]
+		var a0: float = t * 0.6
+		for side in [0.0, PI]:
+			var a: float = a0 + side
+			var dir := Vector2(cos(a), sin(a) * 0.35)
+			var w := 0.5 + 0.5 * absf(cos(a))  # longer when pointing sideways
+			var e := lp + dir * 900.0 * bs * w
+			var n := Vector2(-dir.y, dir.x)
+			ci.draw_polygon(PackedVector2Array([lp + n * 4.0, lp - n * 4.0, e - n * 70.0 * bs, e + n * 70.0 * bs]),
+				PackedColorArray([Color(1.0, 0.92, 0.7, 0.22 * fade), Color(1.0, 0.92, 0.7, 0.22 * fade), Color(1.0, 0.92, 0.7, 0.0), Color(1.0, 0.92, 0.7, 0.0)]))
 	for L in _lights[i]:
 		var c: Color = L[2]
 		Art.glow(ci, L[0], L[1] * 4.0, Color(c, 0.6 * fade), 5)
@@ -718,23 +796,45 @@ func _draw_town(ci: Node2D, off: float, col: Color) -> void:
 			x += bw + 2.0 + Art.hash01(sd, 4) * (14.0 if village else 6.0)
 
 ## A stick-figure silhouette. p = feet. Returns the right hand position.
+## A soft silhouette person (rounded body, tapered limbs, round hands and
+## feet). p = feet. Returns the right hand position.
 func _person(ci: Node2D, p: Vector2, s: float, col: Color, arm_l: float, arm_r: float, sit := false, kid := false) -> Vector2:
-	var k = s * (0.72 if kid else 1.0)
-	var hip = p + Vector2(0, -(14.0 if sit else 24.0) * k)
-	var neck = hip + Vector2(0, -20.0 * k)
+	var k = s * (0.74 if kid else 1.0)
+	var hip = p + Vector2(0, -(15.0 if sit else 25.0) * k)
+	var chest = hip + Vector2(0, -16.0 * k)
+	var neck = hip + Vector2(0, -21.0 * k)
 	if sit:
-		ci.draw_line(hip, hip + Vector2(11 * k, 0), col, 4.0 * k)
-		ci.draw_line(hip + Vector2(11 * k, 0), p + Vector2(11 * k, 0), col, 4.0 * k)
+		_limb_s(ci, hip, hip + Vector2(12 * k, 0), 5.0 * k, 4.2 * k, col)
+		_limb_s(ci, hip + Vector2(12 * k, 0), p + Vector2(12 * k, -2 * k), 4.2 * k, 3.4 * k, col)
+		ci.draw_colored_polygon(Art.ellipse(p + Vector2(15 * k, -1.5 * k), Vector2(4.5 * k, 2.2 * k), 10), col)
 	else:
-		ci.draw_line(hip, p + Vector2(-5 * k, 0), col, 4.0 * k)
-		ci.draw_line(hip, p + Vector2(5 * k, 0), col, 4.0 * k)
-	ci.draw_line(hip, neck, col, 8.0 * k)
-	ci.draw_circle(neck + Vector2(0, -7.0 * k), 6.5 * k, col)
-	var hl = neck + Vector2(cos(arm_l), sin(arm_l)) * 15.0 * k
-	var hr = neck + Vector2(cos(arm_r), sin(arm_r)) * 15.0 * k
-	ci.draw_line(neck + Vector2(0, 2 * k), hl, col, 3.0 * k)
-	ci.draw_line(neck + Vector2(0, 2 * k), hr, col, 3.0 * k)
+		for fx in [-4.5, 4.5]:
+			_limb_s(ci, hip + Vector2(fx * 0.4 * k, 0), p + Vector2(fx * k, -2 * k), 4.6 * k, 3.4 * k, col)
+			ci.draw_colored_polygon(Art.ellipse(p + Vector2(fx * k + 2 * k, -1.5 * k), Vector2(4.2 * k, 2.2 * k), 10), col)
+	# torso: a soft rounded body, wider at the shoulders
+	ci.draw_colored_polygon(Art.ellipse((hip + neck) * 0.5 + Vector2(0, 1.5 * k), Vector2(6.2 * k, 12.5 * k), 14), col)
+	ci.draw_colored_polygon(Art.ellipse(chest, Vector2(7.2 * k, 5.5 * k), 12), col)
+	# head + neck
+	ci.draw_line(neck, neck + Vector2(0, -4 * k), col, 3.5 * k)
+	ci.draw_circle(neck + Vector2(0.5 * k, -9.0 * k), 6.8 * k, col)
+	var sh = neck + Vector2(0, 3.5 * k)
+	var hl = sh + Vector2(cos(arm_l), sin(arm_l)) * 15.0 * k
+	var hr = sh + Vector2(cos(arm_r), sin(arm_r)) * 15.0 * k
+	_limb_s(ci, sh, hl, 3.4 * k, 2.6 * k, col)
+	_limb_s(ci, sh, hr, 3.4 * k, 2.6 * k, col)
+	ci.draw_circle(hl, 2.6 * k, col)
+	ci.draw_circle(hr, 2.6 * k, col)
 	return hr
+
+## Tapered limb with rounded ends.
+func _limb_s(ci: Node2D, a: Vector2, b: Vector2, w0: float, w1: float, col: Color) -> void:
+	var d := b - a
+	if d.length() < 0.01:
+		return
+	var n := d.normalized().orthogonal()
+	ci.draw_colored_polygon(PackedVector2Array([a + n * w0 * 0.5, b + n * w1 * 0.5, b - n * w1 * 0.5, a - n * w0 * 0.5]), col)
+	ci.draw_circle(a, w0 * 0.5, col)
+	ci.draw_circle(b, w1 * 0.5, col)
 
 func _draw_life(ci: Node2D, off: float, col: Color) -> void:
 	var c0 = int(floor((off - 500.0) / LIFE_CELL))
@@ -775,7 +875,7 @@ func _draw_life(ci: Node2D, off: float, col: Color) -> void:
 					tail.append(kp - d * 1.3 + Vector2(-q * 7.0 * flip * s, q * 7.0 * s + sin(t * 4.0 + q) * 4.0 * s))
 				ci.draw_polyline(tail, Color(pal.accent, 0.8 * col.a), 1.5, Art.AA)
 			"fisher":
-				ci.draw_rect(Rect2(p.x - 6 * s, p.y - 12 * s, 16 * s, 12 * s), col)
+				ci.draw_colored_polygon(Art.rrect(Rect2(p.x - 7 * s, p.y - 12 * s, 18 * s, 12 * s), 3.0 * s), col)
 				var hand = _person(ci, p + Vector2(0, -10 * s), s, col, PI * 0.45, -0.6 if flip > 0 else PI + 0.6, true)
 				var tip = hand + Vector2(80.0 * flip, -46.0) * s
 				ci.draw_line(hand, tip, col, 2.0)
