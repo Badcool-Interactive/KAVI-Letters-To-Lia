@@ -559,9 +559,10 @@ func _seg(ci: Node2D, a: Vector2, b: Vector2, w: float, col: Color) -> void:
 	ci.draw_line(a + n * w * 0.30, b + n * w * 0.30, col.lightened(0.35), w * 0.18, true)
 
 ## Head in its own space (centre at origin, facing right).
-const HEAD_SIDE := [Vector2(-44, -34), Vector2(26, -36), Vector2(46, -20), Vector2(48, 22), Vector2(38, 36), Vector2(-30, 38), Vector2(-46, 24), Vector2(-48, -20)]
-const SCREEN_SIDE := [Vector2(10, -30), Vector2(26, -31), Vector2(42, -17), Vector2(44, 20), Vector2(35, 31), Vector2(8, 31), Vector2(4, 0)]
-const PANEL_SIDE := [Vector2(-42, 12), Vector2(-20, 10), Vector2(-16, 30), Vector2(-30, 34), Vector2(-42, 26)]
+# measured from codex-r1/kavi-e-keystone-floating.png (side view, 96 wide)
+const HEAD_SIDE := [Vector2(-24, -35), Vector2(35, -31), Vector2(44, -25), Vector2(47, -16), Vector2(47, 29), Vector2(39, 35), Vector2(-27, 35), Vector2(-44, 6), Vector2(-48, -10)]
+const SCREEN_SIDE := [Vector2(-2, -24), Vector2(37, -27), Vector2(44, -21), Vector2(45, 28), Vector2(39, 33), Vector2(11, 33)]
+const PANEL_SIDE := [Vector2(-39, 3), Vector2(-14, 0), Vector2(-7, 20), Vector2(-31, 27)]
 
 func _paint(ci: Node2D, add: bool) -> void:
 	var p = _pose_params()
@@ -638,19 +639,14 @@ func _paint(ci: Node2D, add: bool) -> void:
 		# head: collar, helmet, screen face, side panel, antenna
 		ci.draw_colored_polygon(Art.ellipse(chest + Vector2(2, -2), Vector2(15, 6), 14), TEAL.darkened(0.1))
 		_poly4(ci, _xf(HEAD_SIDE, headc, head_rot), SHELL, 5.0)
-		# faceted shading: lit top plane, shaded lower band and back facet
-		ci.draw_colored_polygon(_xf([Vector2(-42, -32), Vector2(24, -34), Vector2(40, -22), Vector2(-44, -20)], headc, head_rot), SHELL.lightened(0.12))
-		ci.draw_colored_polygon(_xf([Vector2(-46, 14), Vector2(38, 14), Vector2(37, 34), Vector2(-28, 36), Vector2(-45, 24)], headc, head_rot), Color(SHADE, 0.75))
-		ci.draw_colored_polygon(_xf([Vector2(-48, -20), Vector2(-40, -20), Vector2(-40, 20), Vector2(-46, 24)], headc, head_rot), Color(SHADE, 0.6))
-		ci.draw_line(headc + Vector2(-36, -30).rotated(head_rot), headc + Vector2(14, -32).rotated(head_rot), Color(1, 1, 1, 0.75), 3.0, true)
+		# flat cream like the reference, with one small highlight on the top edge
+		ci.draw_line(headc + Vector2(-20, -31).rotated(head_rot), headc + Vector2(16, -29).rotated(head_rot), Color(1, 1, 1, 0.6), 3.0, true)
 		ci.draw_colored_polygon(_xf(PANEL_SIDE, headc, head_rot), TEAL)
-		ci.draw_line(headc + Vector2(-41, 13).rotated(head_rot), headc + Vector2(-21, 11).rotated(head_rot), TEAL.lightened(0.35), 2.5, true)
 		_poly4(ci, _xf(SCREEN_SIDE, headc, head_rot), VISOR, 3.0)
 		# glassy screen: a soft reflection band and a gloss streak
-		ci.draw_colored_polygon(_xf([Vector2(12, -28), Vector2(26, -29), Vector2(32, -23), Vector2(14, -20)], headc, head_rot), Color(1, 1, 1, 0.10))
-		ci.draw_line(headc + Vector2(34, -22).rotated(head_rot), headc + Vector2(40, -12).rotated(head_rot), Color(1, 1, 1, 0.3), 3.0, true)
+		ci.draw_line(headc + Vector2(40, -20).rotated(head_rot), headc + Vector2(42, -12).rotated(head_rot), Color(1, 1, 1, 0.25), 2.5, true)
 		_helmet_extras4(ci, headc, head_rot, false)
-		_antenna4(ci, headc + Vector2(2, -36).rotated(head_rot), head_rot)
+		_antenna4(ci, headc + Vector2(6, -34).rotated(head_rot), head_rot)
 		# scarf wrap at the neck
 		var nk := chest + Vector2(2, -4)
 		_poly4(ci, _xf([Vector2(-16, -6), Vector2(16, -7), Vector2(17, 5), Vector2(-15, 6)], nk, tilt * 0.4), scarf_col, 3.5)
@@ -715,8 +711,8 @@ func _face_side(ci: Node2D, hc: Vector2, rot: float) -> void:
 	var e: String = expr
 	if e == "normal" and blink_t < 0.0:
 		e = "blink"
-	var c := hc + Vector2(30 + look.x * 2.5, -6 + look.y * 3.0).rotated(rot)
-	ci.draw_colored_polygon(_xf([Vector2(8, -30), Vector2(24, -31), Vector2(40, -17), Vector2(42, 20), Vector2(33, 30), Vector2(8, 30)], hc, rot), Color(GLOW, 0.05))
+	var c := hc + Vector2(34 + look.x * 2.0, -2 + look.y * 3.0).rotated(rot)
+	ci.draw_colored_polygon(_xf(SCREEN_SIDE, hc, rot), Color(GLOW, 0.05))
 	match e:
 		"blink":
 			ci.draw_line(c + Vector2(-6, 2), c + Vector2(6, 2), col, 4.0)
@@ -732,8 +728,8 @@ func _face_side(ci: Node2D, hc: Vector2, rot: float) -> void:
 		"focus":
 			ci.draw_colored_polygon(_xf([Vector2(-5, -6), Vector2(6, -10), Vector2(6, 11), Vector2(-5, 11)], c, rot), col)
 		_:
-			ci.draw_colored_polygon(Art.rrect(Rect2(c.x - 5.5, c.y - 12, 11, 24), 5.5), col)
-	var mc := hc + Vector2(32, 16).rotated(rot)
+			ci.draw_colored_polygon(Art.rrect(Rect2(c.x - 4.5, c.y - 10, 9, 20), 4.5), col)
+	var mc := hc + Vector2(31, 17).rotated(rot)
 	match e:
 		"wow", "scared":
 			ci.draw_arc(mc, 3.5, 0, TAU, 10, col, 3.0, Art.AA)
@@ -958,8 +954,9 @@ static func _heart(ci: Node2D, c: Vector2, r: float, col: Color) -> void:
 
 ## Front view of Kavi E (reunion): keystone helmet with the whole screen
 ## facing us, both mittens and boots, satchel at his side.
-const HEAD_FRONT := [Vector2(-56, -38), Vector2(56, -38), Vector2(64, -22), Vector2(50, 32), Vector2(40, 40), Vector2(-40, 40), Vector2(-50, 32), Vector2(-64, -22)]
-const SCREEN_FRONT := [Vector2(-44, -28), Vector2(44, -28), Vector2(50, -16), Vector2(38, 26), Vector2(30, 32), Vector2(-30, 32), Vector2(-38, 26), Vector2(-50, -16)]
+# measured from codex-r1/kavi-e-keystone-floating.png (front view, 128 wide)
+const HEAD_FRONT := [Vector2(-46, -36), Vector2(46, -36), Vector2(64, -12), Vector2(48, 30), Vector2(40, 36), Vector2(-40, 36), Vector2(-48, 30), Vector2(-64, -12)]
+const SCREEN_FRONT := [Vector2(-39, -26), Vector2(40, -26), Vector2(51, -13), Vector2(39, 31), Vector2(-38, 31), Vector2(-51, -13)]
 const FRONT_POSES := ["front", "front_wave"]
 var _turn := 0.0
 
@@ -984,8 +981,8 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 		# satchel at his side, strap across
 		_poly4(ci, Art.rrect(Rect2(-44, -26, 24, 28), 6.0), BAG)
 		ci.draw_rect(Rect2(-38, -16, 12, 8), Color(0.97, 0.93, 0.84))
-		_poly4(ci, _smooth_closed(PackedVector2Array([Vector2(-17, 4), Vector2(-20, -22), Vector2(-12, -42), Vector2(12, -42), Vector2(20, -22), Vector2(17, 4)])), SHELL)
-		ci.draw_colored_polygon(Art.rrect(Rect2(-9, -36, 18, 14), 4.0), TEAL)
+		_poly4(ci, _smooth_closed(PackedVector2Array([Vector2(-26, 8), Vector2(-34, -20), Vector2(-26, -46), Vector2(26, -46), Vector2(34, -20), Vector2(26, 8)])), SHELL)
+		ci.draw_colored_polygon(Art.rrect(Rect2(-12, -44, 24, 22), 5.0), TEAL)
 		ci.draw_line(Vector2(-16, -40), Vector2(16, -2), INK4, 8.0, true)
 		ci.draw_line(Vector2(-16, -40), Vector2(16, -2), STRAP, 5.0, true)
 		for side in [[-1.0, ml], [1.0, mr]]:
@@ -999,8 +996,8 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 			_mitten4(ci, side[1], (side[1] - sh).angle())
 		ci.draw_colored_polygon(Art.ellipse(Vector2(0, -46), Vector2(18, 6), 14), TEAL.darkened(0.1))
 		_poly4(ci, _xf(HEAD_FRONT, hc, 0.0), SHELL, 5.0)
-		ci.draw_colored_polygon(_xf([Vector2(-58, 4), Vector2(-46, 4), Vector2(-40, 34), Vector2(-50, 30)], hc, 0.0), TEAL)
-		ci.draw_colored_polygon(_xf([Vector2(58, 4), Vector2(46, 4), Vector2(40, 34), Vector2(50, 30)], hc, 0.0), TEAL)
+		ci.draw_colored_polygon(_xf([Vector2(-61, 7), Vector2(-53, 7), Vector2(-45, 29), Vector2(-50, 29)], hc, 0.0), TEAL)
+		ci.draw_colored_polygon(_xf([Vector2(61, 7), Vector2(53, 7), Vector2(45, 29), Vector2(50, 29)], hc, 0.0), TEAL)
 		_poly4(ci, _xf(SCREEN_FRONT, hc, 0.0), VISOR, 3.5)
 		_helmet_extras4(ci, hc, 0.0, true)
 		_antenna4(ci, hc + Vector2(0, -38), 0.0)
@@ -1016,8 +1013,8 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 		var e: String = expr
 		if e == "normal" and blink_t < 0.0:
 			e = "blink"
-		for ex in [-18.0, 18.0]:
-			var c := hc + Vector2(ex + look.x * 2.0, -4 + look.y * 2.0)
+		for ex in [-19.0, 21.0]:
+			var c := hc + Vector2(ex + look.x * 2.0, 1 + look.y * 2.0)
 			match e:
 				"heart":
 					_heart(ci, c, 11.0, Art.hdr(Color(1.0, 0.45, 0.7), 2.0))
@@ -1026,6 +1023,6 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 				"blink":
 					ci.draw_line(c + Vector2(-7, 2), c + Vector2(7, 2), col, 4.0)
 				_:
-					ci.draw_colored_polygon(Art.rrect(Rect2(c.x - 6, c.y - 13, 12, 26), 6.0), col)
-		ci.draw_arc(hc + Vector2(0, 14), 8.0, 0.3, PI - 0.3, 10, col, 4.0, Art.AA)
+					ci.draw_colored_polygon(Art.rrect(Rect2(c.x - 5.5, c.y - 11, 11, 22), 5.5), col)
+		ci.draw_colored_polygon(Art.ellipse(hc + Vector2(1, 18), Vector2(6.5, 4), 12, 0.0), col) if e in ["happy", "heart", "normal", "blink", "calm"] else ci.draw_line(hc + Vector2(-5, 19), hc + Vector2(7, 19), col, 3.0)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

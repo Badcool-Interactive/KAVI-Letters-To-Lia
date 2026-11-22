@@ -1,4 +1,9 @@
 # Changelog
+## 0.8.7 (2026-11-23): Kavi's helmet matches the concept sheet
+- Kavi's helmet shapes are measured from `codex-r1/kavi-e-keystone-floating.png`:
+  - **Side view:** a flat top with a large diagonal back-top corner, a back edge that slants in towards the bottom, a dark screen wrapping the front with a slanted edge, a low teal side panel, one tall eye pill and a small smile near the front.
+  - **Front view:** a true keystone (wide top with cut corners, sides tapering in), a keystone screen, teal strips low on both sides, two tall eye pills and a filled smile.
+- The helmet is flat cream like the sheet (the heavy shading bands are gone), and the front-view body is wider.
 ## 0.8.6 (2026-11-23): stronger, rounder Kavi E
 - Matched to the owner's illustrations: **chunky jointed body by default**. Thick cylinder arms and legs with dark ball joints, big mitten fists, heavier boots, a sturdier torso with a large teal chest plate, and a bigger satchel.
 - **3D look through cel shading:** every limb has a lit top and a shaded underside. The helmet has faceted planes (lit top, shaded lower band and back), and the screen is glassy with a reflection. The joints and fists have gloss spots, and the boots have a shaded heel and a highlighted toe.
