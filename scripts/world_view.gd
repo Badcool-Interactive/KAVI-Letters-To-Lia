@@ -127,6 +127,37 @@ func refresh() -> void:
 	for p in _painters:
 		p.queue_redraw()
 
+# ------------------------------------------------------------------ batching
+## Many tiny leaves as ONE draw call: collect triangles, then flush.
+var _bv := PackedVector2Array()
+var _bi := PackedInt32Array()
+
+func _b_quad(a: Vector2, b: Vector2, w0: float, w1: float) -> void:
+	var d := b - a
+	if d.length() < 0.01:
+		return
+	var n := d.normalized().orthogonal()
+	var i := _bv.size()
+	_bv.append_array([a + n * w0, a - n * w0, b - n * w1, b + n * w1])
+	_bi.append_array([i, i + 1, i + 2, i, i + 2, i + 3])
+
+func _b_leaf(c: Vector2, rx: float, ry: float, rot: float) -> void:
+	# a 6-point leaf (diamond-ish ellipse) as 4 triangles
+	var i := _bv.size()
+	var ax := Vector2(cos(rot), sin(rot))
+	var ay := ax.orthogonal()
+	_bv.append_array([c + ax * rx, c + ax * rx * 0.4 + ay * ry, c - ax * rx * 0.4 + ay * ry, c - ax * rx, c - ax * rx * 0.4 - ay * ry, c + ax * rx * 0.4 - ay * ry])
+	_bi.append_array([i, i + 1, i + 2, i, i + 2, i + 3, i, i + 3, i + 4, i, i + 4, i + 5])
+
+func _b_flush(ci: Node2D, col: Color) -> void:
+	if _bi.size() > 0:
+		var cols := PackedColorArray()
+		cols.resize(_bv.size())
+		cols.fill(col)
+		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), _bi, _bv, cols)
+	_bv.clear()
+	_bi.clear()
+
 func _ground_y() -> float:
 	return size.y * BASE[2] - cam_y * 0.05
 
@@ -516,16 +547,18 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 				var bend = Vector2(f * 46.0 * s, 0) + Vector2(0, 28.0 * s * absf(f))
 				var sway = Vector2(sin(t * 0.9 + seed + k) * 3.0 * s, 0)
 				var prev = p
-				for j in range(1, 9):
-					var u = j / 8.0
+				var steps := 8 if Art.Q >= 2 else 5
+				for j in range(1, steps + 1):
+					var u = float(j) / steps
 					var q = p + dir * L0 * u + bend * u * u + sway * u
 					var d = (q - prev).normalized()
 					var nrm = d.orthogonal()
 					var lw = (1.0 - u) * 10.0 * s + 2.0 * s
-					ci.draw_line(prev, q, col, maxf(3.0 * s * (1.0 - u), 1.2))
-					ci.draw_colored_polygon(Art.ellipse(q + nrm * lw * 0.7, Vector2(lw, lw * 0.38), 8, nrm.angle() - 0.4), col)
-					ci.draw_colored_polygon(Art.ellipse(q - nrm * lw * 0.7, Vector2(lw, lw * 0.38), 8, nrm.angle() + PI + 0.4), col)
+					_b_quad(prev, q, maxf(1.5 * s * (1.0 - u), 0.6), maxf(1.5 * s * (1.0 - u), 0.6))
+					_b_leaf(q + nrm * lw * 0.7, lw, lw * 0.38, nrm.angle() - 0.4)
+					_b_leaf(q - nrm * lw * 0.7, lw, lw * 0.38, nrm.angle() + PI + 0.4)
 					prev = q
+			_b_flush(ci, col)
 		"bridge":
 			# Tied-arch bridge: the arch springs from the deck, hangers hold the
 			# deck, and piers/towers go down into the hill (bases hidden by the
@@ -720,6 +753,7 @@ func draw_foreground(ci: Node2D, gy: float) -> void:
 					var f = k / 5.0 - 0.5
 					var tip = base + Vector2(f * 300.0, -230.0 * tall * (1.0 - absf(f) * 0.5)).rotated(sway)
 					_frond(ci, base, tip, Vector2(f * 120.0, 60.0), 14.0, col, rim)
+				_b_flush(ci, col)
 			"boards":
 				# reeds and cattails by the water
 				for k in 7:
@@ -733,13 +767,17 @@ func draw_foreground(ci: Node2D, gy: float) -> void:
 				# a snowy pine bough sweeping in from below
 				var tip = base + Vector2(320.0, -200.0 * tall).rotated(sway)
 				_leaf(ci, base, tip, Vector2(80, 40), 10.0, col, rim)
+				var snowy := PackedVector2Array()
 				for k in range(1, 9):
 					var u = k / 9.0
 					var q = base.lerp(tip, u) + Vector2(80, 40) * (u - u * u) * 4.0
 					for sd in [-1.0, 1.0]:
 						var nt = q + Vector2(30.0 * (1.0 - u) + 10.0, sd * (40.0 * (1.0 - u) + 12.0)).rotated(-0.5)
-						_leaf(ci, q, nt, Vector2(0, 6 * sd), 6.0 * (1.0 - u * 0.5), col, rim)
-						ci.draw_line(q.lerp(nt, 0.3), nt, Color(0.92, 0.95, 1.0, 0.55), 2.0)
+						_b_quad(q, nt, 6.0 * (1.0 - u * 0.5), 1.0)
+						snowy.append(q.lerp(nt, 0.3))
+						snowy.append(nt)
+				_b_flush(ci, col)
+				ci.draw_multiline(snowy, Color(0.92, 0.95, 1.0, 0.55), 2.0)
 			_:
 				# Greece: an agave / wild lily clump with broad curved leaves
 				var nl := 5 + int(Art.hash01(c, 502) * 3.0)
@@ -768,16 +806,17 @@ func _leaf(ci: Node2D, base: Vector2, tip: Vector2, bend: Vector2, w: float, col
 
 ## A fern frond: a curved stem with paired leaflets shrinking to the tip.
 func _frond(ci: Node2D, base: Vector2, tip: Vector2, bend: Vector2, w: float, col: Color, rim: Color) -> void:
+	# batched: the caller flushes once per plant
 	var prev := base
 	for k in range(1, 11):
 		var u := k / 10.0
 		var q := base.lerp(tip, u) + bend * (u - u * u) * 4.0
-		ci.draw_line(prev, q, col, maxf(5.0 * (1.0 - u), 1.5))
+		_b_quad(prev, q, maxf(2.5 * (1.0 - u), 0.8), maxf(2.5 * (1.0 - u), 0.8))
 		var d := (q - prev).normalized()
 		var lw := w * (1.1 - u)
 		for sd in [-1.0, 1.0]:
-			var lt: Vector2 = q + (d.orthogonal() * sd * 1.6 + d * 0.6).normalized() * lw * 2.2
-			_leaf(ci, q, lt, Vector2.ZERO, lw * 0.45, col, rim)
+			var dir2: Vector2 = (d.orthogonal() * sd * 1.6 + d * 0.6).normalized()
+			_b_leaf(q + dir2 * lw * 1.1, lw * 1.15, lw * 0.42, dir2.angle())
 		prev = q
 
 # ------------------------------------------------------------------ living world

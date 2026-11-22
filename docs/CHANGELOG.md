@@ -9,6 +9,9 @@
 - **Garage colours** go through a palette-swap shader that keeps the art's own shading: paints, scarf colours, stripes and an animated rainbow.
 - **Fixed:** under HDR 2D the sprite came out darker and more saturated. The shader re-encodes it so the colours match the sheet (measured: body 252/238/214 against 254/240/216).
 - Settings → "Kavi's limbs" is removed (the art is the floating design).
+- **Performance fix** (regression from 0.8.3/0.8.4, missed because those builds were not benchmarked): the leafy ferns and foreground fronds drew every leaflet as its own shape, about 1,500 draw calls on Medium in the forest. Each plant is now one batched draw.
+  - Draw calls (chapter 2): Low 220, Medium 365, High 569, back below 0.8.1.
+  - Script time per frame: Medium 5.3 ms and High 7.1 ms, still about 1–2 ms above 0.8.1 because of the extra scenery. An optimisation pass is on the backlog.
 ## 0.8.7 (2026-11-23): Kavi's helmet matches the concept sheet
 - Kavi's helmet shapes are measured from `codex-r1/kavi-e-keystone-floating.png`:
   - **Side view:** a flat top with a large diagonal back-top corner, a back edge that slants in towards the bottom, a dark screen wrapping the front with a slanted edge, a low teal side panel, one tall eye pill and a small smile near the front.

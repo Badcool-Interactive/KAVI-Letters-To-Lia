@@ -112,6 +112,7 @@ func tick(dt: float) -> void:
 	_turn = move_toward(_turn, 1.0 if pose in FRONT_POSES else 0.0, dt / 0.3)
 	_update_scarf(dt)
 	_update_trail()
+	_F = {}
 	_base.queue_redraw()
 	_add.queue_redraw()
 	if _art:
@@ -672,7 +673,15 @@ func _push_swap() -> void:
 
 ## Where everything goes this frame (node-local coordinates), shared by the
 ## sprite, line and glow passes.
+var _F: Dictionary = {}
+
 func _frame() -> Dictionary:
+	if not _F.is_empty():
+		return _F
+	_F = _frame_calc()
+	return _F
+
+func _frame_calc() -> Dictionary:
 	var p = _pose_params()
 	var front := _turn >= 0.5
 	var sqx: float = ((_turn - 0.5) * 2.0) if front else (1.0 - _turn * 2.0)

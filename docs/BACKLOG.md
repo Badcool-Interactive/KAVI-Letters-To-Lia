@@ -54,6 +54,10 @@ need the owner's OK first (gate G4) and a ledger entry.
 - Rename store pages when ready: itch (title + maybe slug), CrazyGames (after review), YouTube titles; new banner/cover art with the VAYU logo (needs a sharp 3x key-art render).
 - Optional: icons on menu buttons (play, gear, scarf) and an animated title (Vayu blinks, waves).
 
+## 5c. Performance (2026-11-23)
+- Script time per frame is up about 1–2 ms since 0.8.1 (scenery from 0.8.3/0.8.4: ground detail, temples, people, fern geometry). Cache static scenery geometry per cell instead of rebuilding it every frame. **Benchmark every build** (`tools/bench.sh`).
+- Lia in the same art style as the new Kavi (concept art, cut into parts).
+
 ## 6. Business / platform (do when the trigger happens)
 - CrazyGames SDK (ads, loading events) as soon as CrazyGames asks.
 - GameDistribution SDK if they accept us.
