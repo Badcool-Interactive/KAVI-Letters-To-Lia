@@ -55,6 +55,10 @@ const SCENIC_SPEED := 430.0
 const SCENIC_STAY := 38.0  # seconds per country in Scenic View
 var scenic_next := 0.0
 var garage_open := false
+var debug_pose := ""     # capture director: show Kavi in a given pose on the title
+var debug_speed := 0.0
+var debug_expr := ""
+var menu_dim := false  # stronger shade behind the menu column (Garage, Settings)
 var _look_key := ""
 
 ## Garage purchase: sparkle around Kavi, a chime, a happy face.
@@ -335,6 +339,8 @@ func _load_font(path: String, weight: int) -> Font:
 	var v := FontVariation.new()
 	v.base_font = base
 	v.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): weight}
+	# a touch of extra space between letters reads better on PC screens
+	v.spacing_glyph = 1
 	v.fallbacks = [sys]
 	return v
 
@@ -349,6 +355,7 @@ func go_title() -> void:
 	lb_target = 0.0
 	zoom_target = 1.3
 	garage_open = false
+	menu_dim = false
 	touch.visible_controls = false
 	touch.highlight = ""
 	mode = "story"
@@ -592,6 +599,8 @@ func _enter_recovery(then_junction: bool) -> void:
 	if mode != "story":
 		set_biome((biome + 1) % 4)
 	elif activity.next_chapter:
+		var got := _bank_run(2)
+		_toast("Chapter done!  +%d Stamps   +%d Sparks" % [got.stamps, got.sparks], get_viewport_rect().size * Vector2(0.5, 0.22), Color(1.0, 0.85, 0.45), 44)
 		chapter += 1
 		stage = "intro"
 		save.data.story_chapter = maxi(int(save.data.story_chapter), chapter)
@@ -779,6 +788,8 @@ func _update_finale(dt: float) -> void:
 		finale.end = true
 		save.data.story_done = true
 		save.save()
+		_bank_run(2)
+		save.save()
 		ui.show_finale_end()
 
 ## A break can start mid-stretch (after a rescue): drop what is left of
@@ -852,8 +863,23 @@ func _update_fail(dt: float) -> void:
 
 ## Three hearts per run. When they are gone the run is over: story players go
 ## back to the home screen (their reached chapter is kept); endless shows results.
+## Two currencies (owner design, 0.8.1): Stamps are collected while running;
+## Sparks are rare: +1 for reaching Tailwind x4, +1 per 10 perfect moves and
+## +2 for every story chapter finished. The Garage can exchange them.
+func _bank_run(chapter_bonus := 0) -> Dictionary:
+	var sparks: int = (1 if tw.best_tier >= 4 else 0) + perfects_run / 10 + chapter_bonus
+	var got := {"stamps": stamps_run, "sparks": sparks}
+	save.data.stamps = int(save.data.stamps) + stamps_run
+	save.data.sparks = int(save.data.sparks) + sparks
+	stamps_run = 0
+	perfects_run = 0
+	tw.best_tier = tw.tier()
+	return got
+
 func _game_over() -> void:
 	if mode == "story":
+		var got := _bank_run()
+		_toast("+%d Stamps   +%d Sparks" % [got.stamps, got.sparks], get_viewport_rect().size * Vector2(0.5, 0.3), Color(1.0, 0.85, 0.45), 44)
 		state = "results"
 		state_t = 0.0
 		sim.frozen = true
@@ -880,14 +906,13 @@ func _end_run() -> void:
 	var new_best: bool = sc > best
 	if new_best:
 		save.data[key] = sc
-	save.data.stamps = int(save.data.stamps) + stamps_run
-	var sparks: int = stamps_run / 25 + (1 if tw.best_tier >= 4 else 0)
-	save.data.sparks = int(save.data.sparks) + sparks
+	var got := _bank_run()
+	var sparks: int = got.sparks
 	save.data.runs = int(save.data.runs) + 1
 	save.data.runs_since_rescue = int(save.data.runs_since_rescue) + 1
 	save.save()
 	last_result = {"score": sc, "dist": int(dist_m), "stamps": stamps_run, "perfects": perfects_run, "tier": tw.best_tier,
-		"best": maxi(best, sc), "new_best": new_best, "sparks": sparks}
+		"best": maxi(best, sc), "new_best": new_best, "sparks": sparks, "banked": got.stamps}
 	ui.show_results(last_result)
 	synth.set_drive(0.0)
 
@@ -1105,8 +1130,8 @@ func _process(delta: float) -> void:
 		"title":
 			zoom_target = 2.2 if garage_open else 1.3
 			sim.x = title_x
-			kite.pose = "idle"
-			kite.expr = "normal" if fmod(t, 6.0) < 5.0 else "happy"
+			kite.pose = debug_pose if debug_pose != "" else "idle"
+			kite.expr = debug_expr if debug_expr != "" else ("normal" if fmod(t, 6.0) < 5.0 else "happy")
 		"recovery":
 			_update_recovery(real_dt)
 		"junction":
@@ -1166,6 +1191,8 @@ func _update_kite_view(dt: float) -> void:
 		kite.speed = 0.0 if (sim.frozen or state == "paused") else sim.cur_speed()
 	elif state == "scenic":
 		kite.speed = SCENIC_SPEED
+	elif debug_pose != "":
+		kite.speed = debug_speed
 	else:
 		kite.speed = 120.0
 	kite.tier = tw.tier()
@@ -1422,8 +1449,8 @@ func _draw_title(ci: Node2D, sz: Vector2) -> void:
 	# soft darkening behind the menu column for readability (no box)
 	var shade := Color(0.01, 0.02, 0.05)
 	ci.draw_polygon(PackedVector2Array([Vector2(sz.x * 0.52, 0), Vector2(sz.x, 0), Vector2(sz.x, sz.y), Vector2(sz.x * 0.52, sz.y)]),
-		PackedColorArray([Color(shade, 0.0), Color(shade, 0.55), Color(shade, 0.55), Color(shade, 0.0)]))
-	if garage_open:
+		PackedColorArray([Color(shade, 0.0), Color(shade, 0.78 if menu_dim else 0.55), Color(shade, 0.78 if menu_dim else 0.55), Color(shade, 0.0)]))
+	if garage_open or menu_dim:
 		return
 	_draw_logo(ci, Vector2(sz.x * 0.29, sz.y * 0.25), state_t, 1.0)
 
@@ -1591,6 +1618,13 @@ func _input(event: InputEvent) -> void:
 	if state in ["run", "recovery", "junction"] and event is InputEventScreenTouch and event.pressed and pause_hit(event.position):
 		toggle_pause()
 		get_viewport().set_input_as_handled()
+	# Mouse click on the pause button (desktop/web). Touch screens send an
+	# emulated mouse click too; that one is skipped so a tap pauses only once.
+	if state in ["run", "recovery", "junction"] and event is InputEventMouseButton and event.pressed \
+			and event.button_index == MOUSE_BUTTON_LEFT and event.device != InputEvent.DEVICE_ID_EMULATION \
+			and pause_hit(event.position):
+		toggle_pause()
+		get_viewport().set_input_as_handled()
 
 # ------------------------------------------------------------------ menus glue (called by ui.gd)
 ## Scenic View: no obstacles, no HUD. Kavi just runs while the four countries
@@ -1675,6 +1709,17 @@ func _setup_capture() -> void:
 			cap_steps.append_array([{"do": "wait", "s": 5.0}, {"shot": "scenic-%d-a" % b}, {"do": "wait", "s": 6.0}, {"shot": "scenic-%d-b" % b}])
 		cap_steps.append({"do": "quit"})
 		return
+	if "--kavi" in OS.get_cmdline_user_args():
+		# Character sheet: Kavi in close-up in each pose / expression.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "kavi_zoom"}, {"do": "wait", "s": 2.0}]
+		for ps in [["idle", 0.0, "normal", "k0-idle"], ["idle", 0.0, "happy", "k1-happy"], ["run", 450.0, "", "k2-jog"],
+				["run", 450.0, "", "k3-jog-b"], ["run", 900.0, "focus", "k4-sprint"], ["run", 900.0, "", "k5-sprint-b"],
+				["jump", 0.0, "wow", "k6-jump"], ["hover", 0.0, "", "k7-hover"], ["slide", 0.0, "", "k8-scoot"],
+				["wave", 0.0, "heart", "k9-wave"], ["fall", 0.0, "scared", "k10-fall"], ["gust", 0.0, "focus", "k11-gust"]]:
+			cap_steps.append_array([{"do": "kpose", "pose": ps[0], "speed": ps[1], "expr": ps[2]}, {"do": "wait", "s": 0.55 if ps[0] == "run" else 1.0}, {"shot": ps[3]}])
+		cap_steps.append({"do": "quit"})
+		return
 	if "--menus" in OS.get_cmdline_user_args():
 		# Title + Garage review: the logo reveal, then try-ons of several items.
 		save.data.tutorial_done = true
@@ -1683,6 +1728,10 @@ func _setup_capture() -> void:
 			{"do": "garage", "cat": "scarf"}, {"do": "wait", "s": 1.5}, {"shot": "m2-garage"}]
 		for tr in [["suit", 1, "m3-kitty"], ["suit", 2, "m4-explorer"], ["paint", 1, "m5-midnight"], ["scarf", 7, "m6-rainbow"], ["antenna", 1, "m7-star"], ["visor", 2, "m8-pink"]]:
 			cap_steps.append_array([{"do": "garage", "cat": tr[0]}, {"do": "try", "cat": tr[0], "i": tr[1]}, {"do": "wait", "s": 1.2}, {"shot": tr[2]}])
+		cap_steps.append_array([{"do": "settings"}, {"do": "wait", "s": 1.0}, {"shot": "m9-settings"},
+			{"do": "confirm"}, {"do": "wait", "s": 1.0}, {"shot": "m10-confirm-tutorial"},
+			{"do": "endless"}, {"do": "wait", "s": 4.0}, {"do": "pause"}, {"do": "wait", "s": 0.8}, {"shot": "m11-pause"},
+			{"do": "resume"}, {"do": "end_run"}, {"do": "wait", "s": 1.0}, {"shot": "m12-results"}])
 		cap_steps.append({"do": "quit"})
 		return
 	if "--transition" in OS.get_cmdline_user_args():
@@ -1829,6 +1878,21 @@ func _capture_tick(dt: float) -> void:
 			return
 		"garage":
 			ui.show_garage(st.cat)
+		"kavi_zoom":
+			garage_open = true
+			ui.show_none()
+		"kpose":
+			debug_pose = st.pose
+			debug_speed = st.speed
+			debug_expr = st.expr
+		"settings":
+			ui.show_settings()
+		"confirm":
+			ui.confirm_tutorial()
+		"pause":
+			toggle_pause()
+		"resume":
+			resume()
 		"try":
 			apply_look(st.cat, st.i)
 		"scenic":

@@ -10,6 +10,7 @@ var font_body: Font
 var _box: Control
 var _theme: Theme
 var _primary: Dictionary = {}
+var _focus_text := ""
 const Looks = preload("res://scripts/looks.gd")
 const CREAM := Color(1, 0.97, 0.92)
 const INK := Color(0.13, 0.07, 0.12)
@@ -228,7 +229,7 @@ func _item(v: Container, text: String, cb: Callable, size := 40) -> MenuItem:
 	return b
 
 ## Right-hand column used by the title and Garage screens.
-func _column(top := 0.24) -> VBoxContainer:
+func _column(top := 0.24, animate := true) -> VBoxContainer:
 	_clear()
 	var c := Control.new()
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -243,7 +244,8 @@ func _column(top := 0.24) -> VBoxContainer:
 	v.clip_contents = false
 	c.add_child(v)
 	_box = c
-	_appear(c)
+	if animate:
+		_appear(c)
 	return v
 
 func _small(v: Container, text: String, size := 24, col := Color(1, 1, 1, 0.55)) -> Label:
@@ -266,6 +268,7 @@ func _gap(v: Container, h: float) -> void:
 
 func show_title() -> void:
 	main.garage_open = false
+	main.menu_dim = false
 	var v := _column(0.30)
 	var ch := int(main.save.data.story_chapter)
 	var cont: bool = ch > 0 and not main.save.data.story_done
@@ -280,7 +283,7 @@ func show_title() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 0)
 	v.add_child(row)
-	for it in [["Garage", show_garage.bind("scarf")], ["Settings", show_settings], ["Tutorial", main.menu_tutorial]]:
+	for it in [["Garage", show_garage.bind("scarf")], ["Settings", show_settings], ["Tutorial", confirm_tutorial]]:
 		var b := _item(row, it[0], it[1], 30)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# Portal builds (CrazyGames etc.) must not show their own ad prompts.
@@ -292,39 +295,47 @@ func show_title() -> void:
 
 ## Garage: Kavi in close-up on the left; categories and items on the right.
 ## Hovering an item tries it on; pressing buys (if affordable) or wears it.
-func show_garage(cat := "scarf") -> void:
+## Switching tabs or buying rebuilds the list in place (no fade = no lag).
+func show_garage(cat := "scarf", animate := true) -> void:
 	main.garage_open = true
+	main.menu_dim = true
 	main.apply_look()
-	var v := _column(0.12)
-	var head := HBoxContainer.new()
-	v.add_child(head)
-	var tl := Label.new()
-	tl.text = "Garage"
-	tl.add_theme_font_size_override("font_size", 64)
-	tl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(tl)
-	var sp := Label.new()
-	sp.text = "%d Sparks" % int(main.save.data.sparks)
-	sp.add_theme_font_size_override("font_size", 34)
-	sp.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
-	sp.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(sp)
-	_small(v, "Kavi is a little memory chip: he can move into any suit. Earn Sparks on every run (1 per 25 stamps, +1 at Tailwind x4).", 22)
-	_gap(v, 8)
+	var v := _column(0.08, animate)
+	var data: Dictionary = main.save.data
+	_heading(v, "Garage", 64)
+	# wallet + exchange
+	var wallet := HBoxContainer.new()
+	wallet.add_theme_constant_override("separation", 28)
+	v.add_child(wallet)
+	for w in [["%d Stamps" % int(data.stamps), Color(1.0, 0.86, 0.55)], ["%d Sparks" % int(data.sparks), Color(0.65, 0.95, 1.0)]]:
+		var l := Label.new()
+		l.text = w[0]
+		l.add_theme_font_size_override("font_size", 34)
+		l.add_theme_color_override("font_color", w[1])
+		wallet.add_child(l)
+	var ex := HBoxContainer.new()
+	ex.add_theme_constant_override("separation", 0)
+	v.add_child(ex)
+	var e1 := _item(ex, "Swap %d Stamps for 1 Spark" % Looks.STAMPS_PER_SPARK, _exchange.bind(cat, true), 24)
+	e1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var e2 := _item(ex, "1 Spark for %d Stamps" % Looks.STAMPS_FOR_SPARK, _exchange.bind(cat, false), 24)
+	e2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if Looks.DEV_FREE:
+		_small(v, "Preview build: everything is free to try while the game is in development.", 24, Color(0.6, 1.0, 0.85, 0.85))
+	_gap(v, 4)
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 0)
 	v.add_child(tabs)
 	var focus_btn: Control = null
 	for c in Looks.CATS:
-		var tb := _item(tabs, Looks.CAT_NAMES[c], show_garage.bind(c), 25)
+		var tb := _item(tabs, Looks.CAT_NAMES[c], show_garage.bind(c, false), 27)
 		tb.selected = c == cat
 		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tb.get_theme_stylebox("normal").content_margin_left = 34
 		tb.get_theme_stylebox("normal").content_margin_right = 2
 		if c == cat:
 			focus_btn = tb
-	_gap(v, 6)
-	var data: Dictionary = main.save.data
+	_gap(v, 4)
 	var list: Array = Looks.ITEMS[cat]
 	for i in list.size():
 		var it: Dictionary = list[i]
@@ -332,42 +343,69 @@ func show_garage(cat := "scarf") -> void:
 		var wearing := int(data.wear[cat]) == i
 		if wearing:
 			b.status = "Wearing"
-			b.status_col = Color(0.55, 1.0, 0.85, 0.9)
+			b.status_col = Color(0.55, 1.0, 0.85, 0.95)
 			b.selected = true
 		elif Looks.owns(data, cat, i):
-			b.status = "Owned"
-			b.status_col = Color(1, 1, 1, 0.6)
+			b.status = "Free" if Looks.DEV_FREE and int(it.cost) > 0 else "Owned"
+			b.status_col = Color(1, 1, 1, 0.65)
 		else:
-			b.status = "%d Sparks" % int(it.cost)
-			b.status_col = Color(1.0, 0.85, 0.4, 0.95) if int(data.sparks) >= int(it.cost) else Color(1, 1, 1, 0.35)
+			b.status = Looks.price_text(it)
+			var have := int(data[Looks.wallet_key(it)])
+			b.status_col = (Color(1.0, 0.86, 0.5) if Looks.wallet_key(it) == "stamps" else Color(0.65, 0.95, 1.0)) if have >= int(it.cost) else Color(1, 1, 1, 0.4)
 		b.on_focus = main.apply_look.bind(cat, i)
-	_gap(v, 10)
+		if _focus_text == it.name:
+			focus_btn = b
+	_gap(v, 8)
 	var back := _item(v, "Back", main.go_title, 34)
 	back.on_focus = main.apply_look
+	_focus_text = ""
 	if focus_btn:
 		focus_btn.grab_focus.call_deferred()
+
+func _exchange(cat: String, buy_spark: bool) -> void:
+	var data: Dictionary = main.save.data
+	if buy_spark and int(data.stamps) >= Looks.STAMPS_PER_SPARK:
+		data.stamps = int(data.stamps) - Looks.STAMPS_PER_SPARK
+		data.sparks = int(data.sparks) + 1
+	elif not buy_spark and int(data.sparks) >= 1:
+		data.sparks = int(data.sparks) - 1
+		data.stamps = int(data.stamps) + Looks.STAMPS_FOR_SPARK
+	else:
+		main._toast("Not enough yet", get_viewport_rect().size * Vector2(0.76, 0.92), Color(1.0, 0.85, 0.4), 34)
+		return
+	main.save.save()
+	var f := get_viewport().gui_get_focus_owner()
+	_focus_text = f.text if f is Button else ""
+	show_garage(cat, false)
+	for n in _box.find_children("*", "Button", true, false):
+		if n.text == _focus_text:
+			n.grab_focus.call_deferred()
 
 func _garage_pick(cat: String, i: int) -> void:
 	var data: Dictionary = main.save.data
 	var it := Looks.item(cat, i)
+	var key := Looks.wallet_key(it)
 	if Looks.owns(data, cat, i):
 		data.wear[cat] = i
-	elif int(data.sparks) >= int(it.cost):
-		data.sparks = int(data.sparks) - int(it.cost)
+	elif int(data[key]) >= int(it.cost):
+		data[key] = int(data[key]) - int(it.cost)
 		data.owned[cat].append(i)
 		data.wear[cat] = i
 		main.fx_unlock()
 	else:
-		main._toast("Need %d more Sparks" % (int(it.cost) - int(data.sparks)), get_viewport_rect().size * Vector2(0.76, 0.9), Color(1.0, 0.85, 0.4), 34)
+		main._toast("Need %d more %s" % [int(it.cost) - int(data[key]), "Sparks" if key == "sparks" else "Stamps"], get_viewport_rect().size * Vector2(0.76, 0.92), Color(1.0, 0.85, 0.4), 34)
 		return
 	main.save.save()
 	main.apply_look()
-	show_garage(cat)
+	_focus_text = it.name
+	show_garage(cat, false)
 
-func show_settings() -> void:
-	main.synth.play("ui")
-	var v = _panel(0.5, 820)
-	_label(v, "Settings", 56)
+## Settings live in the right-hand column like the Garage (Kavi stays in view).
+func show_settings(animate := true) -> void:
+	main.garage_open = false
+	main.menu_dim = true
+	var v := _column(0.12, animate)
+	_heading(v, "Settings")
 	var st: Dictionary = main.save.data.settings
 	_toggle(v, "Kind Mode (no fails, just bonks)", "kind_mode")
 	_toggle(v, "Hover assist over gaps", "assist_hover")
@@ -379,71 +417,138 @@ func show_settings() -> void:
 	_cycle(v, "Sound effects", "sfx", [0.0, 0.5, 0.9, 1.0])
 	_cycle(v, "Button size", "controls_scale", [0.8, 1.0, 1.2, 1.4])
 	var gq: String = st.get("graphics", "auto")
-	_btn(v, "Graphics:  %s" % gq.capitalize(), func():
+	var g := _item(v, "Graphics", func():
 		var opts := ["auto", "low", "medium", "high"]
 		st["graphics"] = opts[(opts.find(gq) + 1) % opts.size()]
-		main.save.save()
-		main._apply_settings()
-		show_settings(), 28)
-	_btn(v, "Back", main.go_title)
+		_settings_changed(), 32)
+	g.status = gq.capitalize()
+	_gap(v, 10)
+	var back := _item(v, "Back", main.go_title, 34)
+	if animate:
+		v.get_child(1).grab_focus.call_deferred()
+	else:
+		_refocus(v)
+
+func _settings_changed() -> void:
+	var f := get_viewport().gui_get_focus_owner()
+	_focus_text = f.text if f is Button else ""
+	main.save.save()
+	main._apply_settings()
+	show_settings(false)
+
+## After an in-place rebuild, put focus back on the item that was pressed.
+func _refocus(v: Container) -> void:
+	for c in v.get_children():
+		if c is Button and c.text == _focus_text:
+			c.grab_focus.call_deferred()
+			return
 
 func _toggle(v: Container, text: String, key: String) -> void:
 	var st: Dictionary = main.save.data.settings
-	_btn(v, "%s:  %s" % [text, "ON" if st[key] else "off"], func():
+	var b := _item(v, text, func():
 		st[key] = not st[key]
-		main.save.save()
-		main._apply_settings()
-		show_settings(), 28)
+		_settings_changed(), 32)
+	b.status = "On" if st[key] else "Off"
+	b.status_col = Color(0.55, 1.0, 0.85, 0.95) if st[key] else Color(1, 1, 1, 0.5)
 
 func _cycle(v: Container, text: String, key: String, vals: Array) -> void:
 	var st: Dictionary = main.save.data.settings
-	_btn(v, "%s:  %d%%" % [text, int(st[key] * 100.0)], func():
+	var b := _item(v, text, func():
 		var i = 0
 		for k in vals.size():
 			if absf(vals[k] - st[key]) < 0.01:
 				i = k
 		st[key] = vals[(i + 1) % vals.size()]
-		main.save.save()
-		main._apply_settings()
-		show_settings(), 28)
+		_settings_changed(), 32)
+	b.status = "%d%%" % int(st[key] * 100.0)
+
+func _heading(v: Container, text: String, size := 64, col := Color(1, 0.96, 0.9)) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", col)
+	v.add_child(l)
+	return l
+
+## Centred in-world column over a soft dim (pause, results, story screens).
+func _center(width := 640.0, dim := 0.55) -> VBoxContainer:
+	_clear()
+	var c := Control.new()
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(c)
+	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var bg := ColorRect.new()
+	bg.color = Color(0.01, 0.02, 0.05, dim)
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	c.add_child(bg)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 8)
+	v.alignment = BoxContainer.ALIGNMENT_CENTER
+	v.anchor_left = 0.5
+	v.anchor_right = 0.5
+	v.anchor_top = 0.5
+	v.anchor_bottom = 0.5
+	v.offset_left = -width * 0.5
+	v.offset_right = width * 0.5
+	v.grow_vertical = Control.GROW_DIRECTION_BOTH
+	c.add_child(v)
+	_box = c
+	_appear(c)
+	return v
 
 func show_pause() -> void:
-	var v = _panel(0.5, 560)
-	_label(v, "Paused", 64)
-	var r = _btn(v, "Resume", main.resume)
-	_btn(v, "Restart", main.menu_retry)
-	_btn(v, "Main menu", main.go_title)
+	var v := _center(560)
+	_heading(v, "Paused", 80)
+	_gap(v, 10)
+	var r := _item(v, "Resume", main.resume, 46)
+	_item(v, "Restart", main.menu_retry, 40)
+	_item(v, "Main menu", main.go_title, 40)
 	r.grab_focus.call_deferred()
 
 func show_results(r: Dictionary) -> void:
-	var v = _panel(0.5, 720)
-	_label(v, "NEW BEST!" if r.new_best else "Run complete", 72, Color(1.0, 0.85, 0.45) if r.new_best else Color(1, 0.98, 0.94))
-	_label(v, "Score  %d" % r.score, 54)
-	_label(v, "%d m   ·   %d stamps   ·   %d perfects   ·   best Tailwind x%d" % [r.dist, r.stamps, r.perfects, r.tier], 30, Color(1, 1, 1, 0.8))
-	if r.sparks > 0:
-		_label(v, "+%d Spark%s for the Garage" % [r.sparks, "s" if r.sparks > 1 else ""], 30, Color(1, 0.85, 0.4))
-	_label(v, "Best %d" % r.best, 28, Color(1, 1, 1, 0.6))
-	var b = _btn(v, "Run again", main.menu_retry, 44)
-	_btn(v, "Main menu", main.go_title)
+	var v := _center(720)
+	_heading(v, "NEW BEST!" if r.new_best else "Run complete", 80, Color(1.0, 0.85, 0.45) if r.new_best else Color(1, 0.96, 0.9))
+	_heading(v, "Score  %d" % r.score, 54)
+	_small(v, "%d m   ·   %d perfect moves   ·   best Tailwind x%d   ·   best score %d" % [r.dist, r.perfects, r.tier, r.best], 26, Color(1, 1, 1, 0.8))
+	_gap(v, 6)
+	_small(v, "Collected:  +%d Stamps    +%d Sparks" % [r.get("banked", r.stamps), r.sparks], 30, Color(1.0, 0.86, 0.5))
+	_small(v, "Spend them in the Garage. Sparks come from Tailwind x4 and every 10 perfect moves.", 22, Color(1, 1, 1, 0.55))
+	_gap(v, 14)
+	var b := _item(v, "Run again", main.menu_retry, 48)
+	_item(v, "Main menu", main.go_title, 40)
 	b.grab_focus.call_deferred()
 
 func show_story_over(ch: int) -> void:
-	var v := _panel(0.5, 720)
-	_label(v, "Out of hearts", 68, Color(1.0, 0.6, 0.7))
-	_label(v, "Kavi needs a rest. Your progress is saved: next time you start at chapter %d." % (ch + 1), 32, Color(1, 1, 1, 0.85))
-	var b := _btn(v, "Back to home", main.go_title, 44)
+	var v := _center(720)
+	_heading(v, "Out of hearts", 76, Color(1.0, 0.65, 0.75))
+	_small(v, "Kavi needs a rest. Your progress is saved: next time you start at chapter %d." % (ch + 1), 30, Color(1, 1, 1, 0.85))
+	_gap(v, 14)
+	var b := _item(v, "Back to home", main.go_title, 46)
 	b.grab_focus.call_deferred()
+
+func show_tutorial_done() -> void:
+	var v := _center(720, 0.45)
+	_heading(v, "Nice moves, courier!", 70, Color(0.75, 1.0, 0.95))
+	_small(v, "Perfect timing builds TAILWIND (x2, x3, x4): more points and a brighter trail. A mistake only drops one tier.", 28, Color(1, 1, 1, 0.85))
+	_gap(v, 14)
+	var b := _item(v, "Start the story", main.menu_story, 48)
+	_item(v, "Main menu", main.go_title, 40)
+	b.grab_focus.call_deferred()
+
+## The tutorial from the menu asks first instead of jumping straight in.
+func confirm_tutorial() -> void:
+	main.menu_dim = true
+	var v := _column(0.34)
+	_heading(v, "Replay the tutorial?", 56)
+	_small(v, "A short practice run (about a minute) that shows every move again. Your story progress and Garage stay as they are.", 26, Color(1, 1, 1, 0.75))
+	_gap(v, 16)
+	var yes := _item(v, "Yes, start the tutorial", main.menu_tutorial, 40)
+	var no := _item(v, "No, back to the menu", show_title, 40)
+	no.grab_focus.call_deferred()
 
 func show_tutorial_skip() -> void:
 	_corner_button("Skip tutorial  >", main.skip_tutorial, 28)
-
-func show_tutorial_done() -> void:
-	var v := _panel(0.55, 700)
-	_label(v, "Nice moves, courier!", 60, Color(0.75, 1.0, 0.95))
-	_label(v, "Perfect timing builds TAILWIND (x2, x3, x4): more points, a brighter trail. A mistake only drops one tier.", 30, Color(1, 1, 1, 0.85))
-	var b := _btn(v, "Start the story", main.menu_story, 44)
-	_btn(v, "Main menu", main.go_title)
-	b.grab_focus.call_deferred()
 
 func _corner_button(text: String, cb: Callable, size: int) -> void:
 	_clear()
@@ -510,13 +615,16 @@ func show_junction(story: bool) -> void:
 	_box = c
 
 func show_finale_end() -> void:
-	var v = _panel(0.74, 700, false)
-	_label(v, "Kavi found Lia.  The Endless Road is waiting.", 34, Color(1, 0.9, 0.95))
-	var b = _btn(v, "Endless Road", main.menu_endless, 40)
-	_btn(v, "Main menu", main.go_title)
+	var v := _center(760, 0.25)
+	_gap(v, 300)
+	_heading(v, "Kavi found Lia.", 56, Color(1, 0.9, 0.95))
+	_small(v, "The Endless Road is waiting.", 28, Color(1, 1, 1, 0.8))
+	_gap(v, 10)
+	var b := _item(v, "Endless Road", main.menu_endless, 44)
+	_item(v, "Main menu", main.go_title, 38)
 	b.grab_focus.call_deferred()
 
 func show_ad_placeholder() -> void:
-	var v = _panel(0.5, 800)
-	_label(v, "Ad placeholder", 56)
-	_label(v, "No ad network is connected yet (pending the legal and Families Policy review). The reward is granted for testing.", 28, Color(1, 1, 1, 0.75))
+	var v := _center(800)
+	_heading(v, "Ad placeholder", 56)
+	_small(v, "No ad network is connected yet (pending the legal and Families Policy review). The reward is granted for testing.", 26, Color(1, 1, 1, 0.75))

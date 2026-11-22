@@ -1,4 +1,27 @@
 # Changelog
+## 0.8.1 (2026-11-22): new Kavi and Lia, fixes from the owner's playtest
+- **Kavi redesigned** after research on memorable cartoon robots: recognisable from his silhouette alone, big simple shapes, a round face on a sturdy body, one accent colour.
+  - A wide rounded TV head whose whole front is a screen face (eyes and mouth).
+  - A kite antenna.
+  - A broad chest with shoulder pads and a glowing envelope badge.
+  - A courier's messenger bag with a strap (hover nozzles underneath).
+  - Thick tapered arms and legs with joint rings, mitten hands with thumbs, chunky boots.
+- **Calmer run:** the upper body barely bobs and the head stays level, while the legs do the work. Strides get longer and the lean grows with speed, and the feet still match the ground.
+- **Standing pose:** Kavi stands tall with straight legs and relaxed arms, breathing slowly.
+- **Lia redesigned** to match, with round, soft shapes against Kavi's boxy ones: an oval screen face (eyes, blush, smile, blinks), a flower crown, side buns, an A-line body with an embroidered shawl, real arms holding her sketchbook, and little boots.
+- **Fixed:** clicking the pause button with the mouse did nothing (only touch worked).
+- **Menus:** Pause, Settings, Results, "Out of hearts", "Nice moves" and the ending now use the new in-world style. Settings opens in the right-hand column with On/Off and percent values. The tutorial from the menu asks for confirmation first.
+- **Garage:**
+  - Switching tabs and buying no longer replays the fade, so it feels instant.
+  - A stronger shade behind the list.
+  - A little extra letter spacing everywhere.
+  - Everything is free while the game is in development.
+- **Two currencies** (owner design):
+  - Stamps are collected while running and buy everyday items.
+  - Sparks are rare (+1 at Tailwind x4, +1 per 10 perfect moves, +2 per story chapter) and buy suits and patterned scarves.
+  - The Garage exchanges 50 Stamps for 1 Spark, or 1 Spark for 25 Stamps.
+  - Story runs now bank what you collect too; before, Story stamps were never saved.
+- **Poetic place names:** The Amber Shore (Greece), Lanternwood (Bulgaria), Mirrorwater (the Danube), Starfall Heights (Romania).
 ## 0.8.0 (2026-11-22): smooth journeys, Kavi, new Garage
 - **New name (owner's choice):** the hero is now **Kavi** (KAH-vee). He's easy to say anywhere and means "poet", which suits a robot who carries letters. The game is **KAVI: Letters to Lia**.
 - **Smooth country changes:**

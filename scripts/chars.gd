@@ -16,70 +16,94 @@ static func _heart(ci: Node2D, c: Vector2, r: float, col: Color) -> void:
 	ci.draw_circle(c + Vector2(r * 0.5, -r * 0.2), r * 0.55, col)
 	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-r, 0), c + Vector2(r, 0), c + Vector2(0, r)]), col)
 
-# ------------------------------------------------------------------ Lumi
-## Lilac robot, deep plum screen, white-lilac oval eyes, fluffy cap with
-## lilac flowers, purple embroidered shawl, sketchbook.
+# ------------------------------------------------------------------ Lia
+## Lia v3 (matches Kavi v3): round, soft shapes against Kavi's boxy ones. A
+## round head with an oval screen face (eyes, blush, mouth), a lilac flower
+## crown, an A-line body with a Romanian-embroidered shawl, real arms holding
+## her sketchbook, chunky little boots.
 static func lumi(ci: Node2D, at: Vector2, add: bool, t: float, mood := "normal", facing := -1.0, sc := 1.1) -> void:
 	ci.draw_set_transform(at, 0.0, Vector2(facing * sc, sc))
-	var lil = Color(0.93, 0.90, 1.0)
-	var lj = Color(0.72, 0.58, 0.92)
-	var shawl = Color(0.36, 0.14, 0.50)
-	var screen = Color(0.16, 0.06, 0.25)
-	var bob = sin(t * 2.0) * 1.5
+	var lil = Color(0.95, 0.92, 1.0)
+	var shade = Color(0.76, 0.68, 0.92)
+	var lj = Color(0.66, 0.50, 0.90)
+	var shawl = Color(0.40, 0.16, 0.54)
+	var screen = Color(0.15, 0.06, 0.24)
+	var breath = sin(t * 1.8)
+	var bob = breath * 0.8
+	var hc = Vector2(2, -84 + bob)
 	if not add:
-		ci.draw_colored_polygon(Art.ellipse(Vector2(0, 2), Vector2(26, 5), 16), Color(0, 0, 0, 0.35))
-		for fx in [-7.0, 7.0]:
-			ci.draw_line(Vector2(fx, -30), Vector2(fx, -6), INK, 12.0)
-			ci.draw_line(Vector2(fx, -30), Vector2(fx, -6), lil, 8.0)
-			_poly(ci, Art.rrect(Rect2(fx - 7, -9, 15, 9), 4), lj)
-		# body + shawl
-		_poly(ci, Art.rrect(Rect2(-15, -60 + bob, 30, 32), 12), lil)
-		_poly(ci, PackedVector2Array([Vector2(-19, -60 + bob), Vector2(19, -60 + bob), Vector2(14, -34 + bob), Vector2(0, -28 + bob), Vector2(-14, -34 + bob)]), shawl)
-		for k in 4:
-			var dx = -10.0 + k * 7.0
-			ci.draw_colored_polygon(PackedVector2Array([Vector2(dx, -50 + bob), Vector2(dx + 3, -46 + bob), Vector2(dx, -42 + bob), Vector2(dx - 3, -46 + bob)]), Color(0.95, 0.35, 0.3))
-		ci.draw_line(Vector2(-16, -40 + bob), Vector2(16, -40 + bob), Color(1.0, 0.75, 0.45), 1.5)
-		# sketchbook in arms
-		_poly(ci, Art.rrect(Rect2(6, -48 + bob, 16, 20), 2), Color(0.15, 0.14, 0.22))
-		ci.draw_rect(Rect2(8, -46 + bob, 12, 16), Color(0.97, 0.96, 0.92))
-		# head
-		var hc = Vector2(1, -80 + bob)
-		_poly(ci, Art.ellipse(hc, Vector2(25, 22), 28), lil)
-		_poly(ci, Art.ellipse(hc + Vector2(5, 3), Vector2(17, 13), 24), screen)
-		# fluffy cap puffs
+		ci.draw_colored_polygon(Art.ellipse(Vector2(0, 2), Vector2(24, 5), 16), Color(0, 0, 0, 0.35))
+		# legs + boots
+		for fx in [-6.0, 7.0]:
+			ci.draw_colored_polygon(Art.rrect(Rect2(fx - 6, -30, 12, 24), 5), INK)
+			ci.draw_colored_polygon(Art.rrect(Rect2(fx - 4, -30, 8, 22), 4), shade if fx < 0 else lil)
+			_poly(ci, Art.rrect(Rect2(fx - 8, -10, 18, 10), 5), lj)
+			ci.draw_rect(Rect2(fx - 8, -3, 18, 3), lj.lightened(0.45))
+		# back arm
+		ci.draw_line(Vector2(-12, -56 + bob), Vector2(-15, -38 + bob), INK, 11.0)
+		ci.draw_line(Vector2(-12, -56 + bob), Vector2(-15, -38 + bob), shade, 7.5)
+		# A-line body
+		var body := PackedVector2Array([Vector2(-11, -62 + bob), Vector2(12, -62 + bob), Vector2(19, -28), Vector2(-18, -28)])
+		_poly(ci, Art.rrect(Rect2(-13, -64 + bob, 27, 8), 4), lil)
+		_poly(ci, body, lil)
+		ci.draw_colored_polygon(PackedVector2Array([Vector2(-11, -60 + bob), Vector2(-3, -60 + bob), Vector2(-6, -28), Vector2(-18, -28)]), Color(shade, 0.6))
+		# embroidered shawl band across the shoulders
+		_poly(ci, PackedVector2Array([Vector2(-17, -64 + bob), Vector2(18, -64 + bob), Vector2(15, -50 + bob), Vector2(1, -45 + bob), Vector2(-14, -50 + bob)]), shawl)
 		for k in 5:
-			var a = PI * (1.08 + 0.21 * k)
-			_poly(ci, Art.ellipse(hc + Vector2(cos(a) * 20, sin(a) * 17 - 4), Vector2(10, 8), 14), Color(0.99, 0.99, 1.0))
-		for k in 4:
-			var fp = hc + Vector2(-14 + k * 10, -22 - (2 if k % 2 == 0 else 0))
+			var dx = -11.0 + k * 6.0
+			ci.draw_colored_polygon(PackedVector2Array([Vector2(dx, -58 + bob), Vector2(dx + 2.5, -55 + bob), Vector2(dx, -52 + bob), Vector2(dx - 2.5, -55 + bob)]), Color(0.96, 0.36, 0.32))
+		ci.draw_line(Vector2(-16, -48 + bob), Vector2(17, -48 + bob), Color(1.0, 0.78, 0.45), 1.5)
+		# hem stripe
+		ci.draw_line(Vector2(-17, -32), Vector2(18, -32), lj, 3.0)
+		# sketchbook held in front, front arm over it
+		_poly(ci, Art.rrect(Rect2(6, -52 + bob, 17, 21), 2), Color(0.17, 0.15, 0.25))
+		ci.draw_rect(Rect2(8, -50 + bob, 13, 17), Color(0.97, 0.96, 0.92))
+		ci.draw_line(Vector2(10, -45 + bob), Vector2(18, -42 + bob), Color(0.85, 0.5, 0.6), 1.2)
+		ci.draw_line(Vector2(7, -58 + bob), Vector2(14, -42 + bob), INK, 11.0)
+		ci.draw_line(Vector2(7, -58 + bob), Vector2(14, -42 + bob), lil, 7.5)
+		_poly(ci, Art.ellipse(Vector2(15, -41 + bob), Vector2(5.5, 5), 12), lil)
+		# head: round shell with side buns, oval screen face
+		for bx in [-23.0, 25.0]:
+			_poly(ci, Art.ellipse(hc + Vector2(bx, 2), Vector2(7, 9), 14), lj)
+		_poly(ci, Art.ellipse(hc, Vector2(26, 24), 30), lil)
+		ci.draw_arc(hc, 22.0, PI * 0.15, PI * 0.85, 10, Color(shade, 0.6), 4.0, Art.AA)
+		ci.draw_arc(hc + Vector2(-6, -4), 15.0, PI * 1.1, PI * 1.45, 8, Color(1, 1, 1, 0.85), 2.4, Art.AA)
+		_poly(ci, Art.ellipse(hc + Vector2(3, 3), Vector2(18, 14), 26), lj)
+		ci.draw_colored_polygon(Art.ellipse(hc + Vector2(3, 3), Vector2(15.5, 11.5), 26), screen)
+		ci.draw_line(hc + Vector2(12, -5), hc + Vector2(16, -1), Color(1, 1, 1, 0.22), 2.0)
+		# flower crown
+		for k in 5:
+			var a = PI * (1.12 + 0.19 * k)
+			var fp = hc + Vector2(cos(a) * 23, sin(a) * 21)
 			for pi in 5:
-				var a2 = TAU * pi / 5.0 + t * 0.2
-				ci.draw_circle(fp + Vector2(cos(a2), sin(a2)) * 4.0, 3.2, Color(0.78, 0.62, 1.0))
-			ci.draw_circle(fp, 2.0, Color(1.0, 0.82, 0.3))
-		# stem antenna with a flower
-		var st = hc + Vector2(14, -20)
-		ci.draw_polyline(PackedVector2Array([st, st + Vector2(6, -8), st + Vector2(3, -16)]), Color(0.5, 0.8, 0.5), 2.0, Art.AA)
-		for pi in 5:
-			var a3 = TAU * pi / 5.0
-			ci.draw_circle(st + Vector2(3, -18) + Vector2(cos(a3), sin(a3)) * 3.5, 2.8, Color(0.85, 0.7, 1.0))
+				var a2 = TAU * pi / 5.0 + t * 0.2 + k
+				ci.draw_circle(fp + Vector2(cos(a2), sin(a2)) * 4.2, 3.4, Color(0.80, 0.64, 1.0) if k % 2 == 0 else Color(1.0, 0.72, 0.82))
+			ci.draw_circle(fp, 2.2, Color(1.0, 0.84, 0.32))
+		# little stem antenna with a bud
+		var st = hc + Vector2(12, -23)
+		ci.draw_polyline(PackedVector2Array([st, st + Vector2(5, -7), st + Vector2(2, -13)]), Color(0.45, 0.78, 0.48), 2.2, Art.AA)
+		ci.draw_circle(st + Vector2(2, -15), 3.2, Color(0.86, 0.72, 1.0))
 	else:
-		var hc = Vector2(1, -80 + bob)
-		var ec = Art.hdr(Color(1.0, 0.91, 1.0), 2.2)
-		var l = hc + Vector2(0, 2)
-		var r = hc + Vector2(11, 2)
+		var ec = Art.hdr(Color(1.0, 0.91, 1.0), 1.9)
+		var l = hc + Vector2(-3, 1)
+		var r = hc + Vector2(10, 1)
 		match mood:
 			"heart":
-				_heart(ci, l, 4.5, Art.hdr(Color(1.0, 0.5, 0.75), 2.4))
-				_heart(ci, r, 4.5, Art.hdr(Color(1.0, 0.5, 0.75), 2.4))
+				_heart(ci, l, 4.5, Art.hdr(Color(1.0, 0.5, 0.75), 2.2))
+				_heart(ci, r, 4.5, Art.hdr(Color(1.0, 0.5, 0.75), 2.2))
 			"happy":
 				for c in [l, r]:
 					ci.draw_polyline(PackedVector2Array([c + Vector2(-4, 2), c + Vector2(0, -3), c + Vector2(4, 2)]), ec, 2.5, Art.AA)
 			_:
+				var blink = fmod(t, 4.0) < 0.12
 				for c in [l, r]:
-					ci.draw_colored_polygon(Art.ellipse(c, Vector2(3.2, 4.8), 12), ec)
-		if mood != "normal":
-			ci.draw_circle(hc + Vector2(-6, 9), 3.0, Art.hdr(Color(1.0, 0.56, 0.75, 0.8), 1.3))
-			ci.draw_circle(hc + Vector2(17, 9), 3.0, Art.hdr(Color(1.0, 0.56, 0.75, 0.8), 1.3))
+					if blink:
+						ci.draw_line(c + Vector2(-3, 1), c + Vector2(3, 1), ec, 2.0)
+					else:
+						ci.draw_colored_polygon(Art.ellipse(c, Vector2(3.4, 5.0), 12), ec)
+		ci.draw_arc(hc + Vector2(3.5, 8), 3.0, 0.4, PI - 0.4, 8, Color(ec, 0.85), 1.6, Art.AA)
+		ci.draw_circle(hc + Vector2(-9, 7), 2.8, Art.hdr(Color(1.0, 0.56, 0.75, 0.7), 1.2))
+		ci.draw_circle(hc + Vector2(16, 7), 2.8, Art.hdr(Color(1.0, 0.56, 0.75, 0.7), 1.2))
 		Art.glow(ci, hc + Vector2(0, -22), 30.0, Color(0.8, 0.6, 1.0, 0.3), 3)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 

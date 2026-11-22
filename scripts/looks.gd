@@ -3,8 +3,14 @@ extends RefCounted
 ## chip, so he can move into new suits the way people change clothes. His face
 ## screen and scarf stay recognisable whatever he wears.
 ##
-## Pace (owner): the first two buys (a scarf and a visor) take about 3 runs;
-## everything takes roughly 30-35 runs at ~12 Sparks per run.
+## Two currencies (owner, 0.8.1): everyday items cost Stamps (collected while
+## running, ~300 per run); special items (suits, patterned scarves) cost Sparks
+## (rare). The Garage exchange converts between them, not 1:1.
+## Pace: the first scarf + visor take about 3 runs; everything ~35 runs.
+## DEV_FREE: while the game is in development every item is free (owner).
+const DEV_FREE := true
+const STAMPS_PER_SPARK := 50   # buy 1 Spark for 50 Stamps
+const STAMPS_FOR_SPARK := 25   # sell 1 Spark for 25 Stamps
 
 const CATS := ["suit", "paint", "visor", "scarf", "antenna"]
 const CAT_NAMES := {"suit": "Suits", "paint": "Paint", "visor": "Visor", "scarf": "Scarves", "antenna": "Antenna"}
@@ -13,38 +19,38 @@ const CAT_NAMES := {"suit": "Suits", "paint": "Paint", "visor": "Visor", "scarf"
 const ITEMS := {
 	"scarf": [
 		{"name": "Sunset Orange", "cost": 0, "col": Color(1.0, 0.35, 0.14)},
-		{"name": "Sky Blue", "cost": 15, "col": Color(0.30, 0.65, 1.0)},
-		{"name": "Rose", "cost": 20, "col": Color(1.0, 0.45, 0.65)},
-		{"name": "Honey Gold", "cost": 25, "col": Color(1.0, 0.80, 0.25)},
-		{"name": "Mint", "cost": 25, "col": Color(0.35, 0.95, 0.65)},
-		{"name": "Violet", "cost": 30, "col": Color(0.70, 0.45, 1.0)},
-		{"name": "Candy Stripes", "cost": 40, "col": Color(1.0, 0.40, 0.45), "col2": Color(1.0, 0.95, 0.90), "pattern": "stripes"},
-		{"name": "Rainbow", "cost": 55, "col": Color(1.0, 0.4, 0.4), "pattern": "rainbow"},
+		{"name": "Sky Blue", "cost": 400, "cur": "stamps", "col": Color(0.30, 0.65, 1.0)},
+		{"name": "Rose", "cost": 500, "cur": "stamps", "col": Color(1.0, 0.45, 0.65)},
+		{"name": "Honey Gold", "cost": 600, "cur": "stamps", "col": Color(1.0, 0.80, 0.25)},
+		{"name": "Mint", "cost": 600, "cur": "stamps", "col": Color(0.35, 0.95, 0.65)},
+		{"name": "Violet", "cost": 700, "cur": "stamps", "col": Color(0.70, 0.45, 1.0)},
+		{"name": "Candy Stripes", "cost": 6, "cur": "sparks", "col": Color(1.0, 0.40, 0.45), "col2": Color(1.0, 0.95, 0.90), "pattern": "stripes"},
+		{"name": "Rainbow", "cost": 10, "cur": "sparks", "col": Color(1.0, 0.4, 0.4), "pattern": "rainbow"},
 	],
 	"visor": [
 		{"name": "Cyan Glow", "cost": 0, "eye": Color(0.30, 1.0, 1.0)},
-		{"name": "Sunny", "cost": 20, "eye": Color(1.0, 0.85, 0.35)},
-		{"name": "Bubblegum", "cost": 25, "eye": Color(1.0, 0.50, 0.80)},
-		{"name": "Lime", "cost": 30, "eye": Color(0.60, 1.0, 0.40)},
-		{"name": "Lavender", "cost": 30, "eye": Color(0.75, 0.62, 1.0)},
+		{"name": "Sunny", "cost": 500, "cur": "stamps", "eye": Color(1.0, 0.85, 0.35)},
+		{"name": "Bubblegum", "cost": 600, "cur": "stamps", "eye": Color(1.0, 0.50, 0.80)},
+		{"name": "Lime", "cost": 700, "cur": "stamps", "eye": Color(0.60, 1.0, 0.40)},
+		{"name": "Lavender", "cost": 700, "cur": "stamps", "eye": Color(0.75, 0.62, 1.0)},
 	],
 	"paint": [
 		{"name": "Classic", "cost": 0, "shell": Color(0.965, 0.973, 0.988), "shade": Color(0.62, 0.74, 0.88), "accent": Color(0.15, 0.79, 0.80)},
-		{"name": "Midnight", "cost": 35, "shell": Color(0.30, 0.34, 0.52), "shade": Color(0.18, 0.20, 0.34), "accent": Color(1.0, 0.78, 0.30)},
-		{"name": "Coral Reef", "cost": 35, "shell": Color(1.0, 0.92, 0.86), "shade": Color(0.90, 0.66, 0.62), "accent": Color(1.0, 0.45, 0.42)},
-		{"name": "Forest", "cost": 40, "shell": Color(0.86, 0.95, 0.86), "shade": Color(0.52, 0.70, 0.56), "accent": Color(0.25, 0.62, 0.38)},
-		{"name": "Bubble Pink", "cost": 40, "shell": Color(1.0, 0.90, 0.96), "shade": Color(0.88, 0.66, 0.84), "accent": Color(0.85, 0.40, 0.95)},
+		{"name": "Midnight", "cost": 900, "cur": "stamps", "shell": Color(0.30, 0.34, 0.52), "shade": Color(0.18, 0.20, 0.34), "accent": Color(1.0, 0.78, 0.30)},
+		{"name": "Coral Reef", "cost": 900, "cur": "stamps", "shell": Color(1.0, 0.92, 0.86), "shade": Color(0.90, 0.66, 0.62), "accent": Color(1.0, 0.45, 0.42)},
+		{"name": "Forest", "cost": 1000, "cur": "stamps", "shell": Color(0.86, 0.95, 0.86), "shade": Color(0.52, 0.70, 0.56), "accent": Color(0.25, 0.62, 0.38)},
+		{"name": "Bubble Pink", "cost": 1000, "cur": "stamps", "shell": Color(1.0, 0.90, 0.96), "shade": Color(0.88, 0.66, 0.84), "accent": Color(0.85, 0.40, 0.95)},
 	],
 	"antenna": [
 		{"name": "Kite", "cost": 0, "tip": "kite"},
-		{"name": "Star", "cost": 20, "tip": "star"},
-		{"name": "Heart", "cost": 20, "tip": "heart"},
-		{"name": "Leaf", "cost": 25, "tip": "leaf"},
+		{"name": "Star", "cost": 500, "cur": "stamps", "tip": "star"},
+		{"name": "Heart", "cost": 500, "cur": "stamps", "tip": "heart"},
+		{"name": "Leaf", "cost": 600, "cur": "stamps", "tip": "leaf"},
 	],
 	"suit": [
 		{"name": "Courier", "cost": 0, "helmet": "round"},
-		{"name": "Kitty", "cost": 50, "helmet": "cat"},
-		{"name": "Explorer", "cost": 60, "helmet": "explorer"},
+		{"name": "Kitty", "cost": 8, "cur": "sparks", "helmet": "cat"},
+		{"name": "Explorer", "cost": 12, "cur": "sparks", "helmet": "explorer"},
 	],
 }
 
@@ -74,6 +80,8 @@ static func ensure(data: Dictionary) -> void:
 		data.erase("scarf")
 
 static func owns(data: Dictionary, cat: String, i: int) -> bool:
+	if DEV_FREE:
+		return true
 	var o: Array = data.owned[cat]
 	return o.has(i) or o.has(float(i))
 
@@ -92,3 +100,9 @@ static func compose(wear: Dictionary, preview_cat := "", preview_i := -1) -> Dic
 		"tip": item("antenna", int(w.get("antenna", 0))).tip,
 		"helmet": item("suit", int(w.get("suit", 0))).helmet,
 	}
+
+static func wallet_key(it: Dictionary) -> String:
+	return it.get("cur", "stamps")
+
+static func price_text(it: Dictionary) -> String:
+	return "%d %s" % [int(it.cost), "Sparks" if wallet_key(it) == "sparks" else "Stamps"]
