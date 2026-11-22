@@ -107,24 +107,35 @@ func _draw_base(ci: Node2D) -> void:
 			_plane(ci, Vector2(p.x, p.y), Vector2(p.vx, p.vy))
 
 func _strata(ci: Node2D, a: float, b: float, gcol: Color) -> void:
-	# embedded stones and roots give the ground body depth
-	var c0 := int(maxf(a, view_l - 80.0) / 150.0)
-	var c1 := int(minf(b, view_r + 80.0) / 150.0)
-	var dark: Color = gcol.darkened(0.35)
-	var lit: Color = pal.layers[2].lerp(pal.fog, 0.1)
+	# soft stones, pebbles and roots in the ground body: tinted from the body
+	# colour (never near-black, which read as holes) and varied per cell
+	var c0 := int(maxf(a, view_l - 80.0) / 130.0)
+	var c1 := int(minf(b, view_r + 80.0) / 130.0)
+	var body: Color = gcol.lerp(pal.layers[2], 0.75)
+	var stone: Color = body.lerp(pal.layers[1], 0.30)
+	var root: Color = body.darkened(0.16)
+	var lit: Color = pal.layers[2].lerp(pal.fog, 0.25)
 	for c in range(c0, c1 + 1):
-		var x: float = c * 150.0 + Art.hash01(c, 31) * 90.0
+		var x: float = c * 130.0 + Art.hash01(c, 31) * 100.0
 		if x < a + 30.0 or x > b - 30.0:
 			continue
-		var y: float = 50.0 + Art.hash01(c, 32) * 120.0
-		var r := Vector2(26.0 + Art.hash01(c, 33) * 40.0, 12.0 + Art.hash01(c, 34) * 14.0)
-		ci.draw_colored_polygon(Art.ellipse(Vector2(x, y), r, 16, Art.hash01(c, 35) * 0.4 - 0.2), dark)
-		ci.draw_arc(Vector2(x, y), r.x * 0.9, PI * 1.15, PI * 1.85, 8, Color(lit, 0.5), 2.0, Art.AA)
-		if Art.hash01(c, 36) < 0.45:
+		var y: float = 60.0 + Art.hash01(c, 32) * 140.0
+		var kind := Art.hash01(c, 37)
+		if kind < 0.40:
+			var r := Vector2(16.0 + Art.hash01(c, 33) * 34.0, 9.0 + Art.hash01(c, 34) * 12.0)
+			ci.draw_colored_polygon(Art.ellipse(Vector2(x, y), r, 14, Art.hash01(c, 35) * 0.5 - 0.25), Color(stone, 0.75))
+			ci.draw_arc(Vector2(x, y), r.x * 0.8, PI * 1.2, PI * 1.8, 8, Color(lit, 0.35), 2.0, Art.AA)
+		elif kind < 0.70:
+			for k in 3 + int(Art.hash01(c, 38) * 3.0):
+				var pp := Vector2(x + (Art.hash01(c, 50 + k) - 0.5) * 70.0, y + (Art.hash01(c, 60 + k) - 0.5) * 30.0)
+				ci.draw_circle(pp, 3.0 + Art.hash01(c, 70 + k) * 6.0, Color(stone, 0.6))
+		elif kind < 0.88:
 			var pts := PackedVector2Array()
-			for k in 7:
-				pts.append(Vector2(x + k * 18.0, 16.0 + k * 14.0 + sin(k + c) * 6.0))
-			ci.draw_polyline(pts, dark, 5.0, Art.AA)
+			var dir := 1.0 if Art.hash01(c, 39) < 0.5 else -1.0
+			for k in 6:
+				pts.append(Vector2(x + dir * k * (12.0 + Art.hash01(c, 80 + k) * 8.0), 10.0 + k * 13.0 + sin(k * 1.3 + c) * 5.0))
+			ci.draw_polyline(pts, Color(root, 0.7), 4.0 - Art.hash01(c, 40) * 1.5, Art.AA)
+			ci.draw_line(pts[3], pts[3] + Vector2(-dir * 16.0, 14.0), Color(root, 0.6), 2.5, Art.AA)
 
 ## Each country has its own walking surface along the top of the ground:
 ## Greek stone paving, Bulgarian moss, a Danube boardwalk, Carpathian snow.

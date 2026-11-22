@@ -6,7 +6,7 @@ Priority: ★★★ biggest visible gain → ★ nice to have. Download/licence 
 need the owner's OK first (gate G4) and a ledger entry.
 
 ## 1. Look & feel
-- ★★★ **Fonts:** Fredoka (titles, buttons, callouts like PERFECT) + Nunito (body,
+- ~~★★★ **Fonts:** Fredoka (titles, buttons, callouts like PERFECT) + Nunito (body,
   tips, settings). OFL, ~1 MB. Needs OK to download from Google Fonts; record in LEDGER.csv.
 - ★★★ **UI panels and buttons:** rounded cards with soft shadow, button press
   squash + hover lift, icons on buttons (play, gear, shirt for Garage).
@@ -44,6 +44,10 @@ need the owner's OK first (gate G4) and a ledger entry.
 - ★★ **Colour-blind safe obstacle palette** option, Reduce motion, larger text.
 - ★ Proper app icon and splash screen; branded web loading screen with a tip.
 
+## 5b. Rename follow-ups (owner)
+- Rename store pages when ready: itch (title + maybe slug), CrazyGames (after review), YouTube titles; new banner/cover art with the VAYU logo (needs a sharp 3x key-art render).
+- Optional: icons on menu buttons (play, gear, scarf) and an animated title (Vayu blinks, waves).
+
 ## 6. Business / platform (do when the trigger happens)
 - CrazyGames SDK (ads, loading events) as soon as CrazyGames asks.
 - GameDistribution SDK if they accept us.
@@ -51,4 +55,5 @@ need the owner's OK first (gate G4) and a ledger entry.
 - Windows exe tested on a real Windows PC; code-signing later.
 
 ## Done
+- v0.6.0: Fredoka + Nunito fonts; menu redesign (logo, card, primary button, hover/press, fade-in screens); Scenic View; light rays from the sun/moon; varied scenery; rename to Vayu / Lia (Cornelia).
 - v0.4.1: Kite no longer runs in place (moonwalk) after the tutorial / in prompts / when paused.

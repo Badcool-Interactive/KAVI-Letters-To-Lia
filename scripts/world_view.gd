@@ -19,6 +19,9 @@ const CELL := [560.0, 400.0, 300.0]
 const DENS := [0.55, 0.65, 0.7]
 const SCALE := [0.75, 0.9, 1.05]
 
+const LANDMARKS := ["bridge", "castle", "ring", "spire"]
+const CLUSTER := ["pine", "cypress", "olive", "reed", "lily", "bush", "fern", "column", "rock", "birch"]
+
 var _lights: Array = [[], [], []]
 var _painters: Array = []
 
@@ -150,10 +153,24 @@ func _draw_layer(ci: Node2D, i: int) -> void:
 		if r > DENS[i] * [0.55, 0.8, 1.0][Art.Q]:
 			continue
 		var kind: String = kinds[int(Art.hash01(c, 7 + i) * kinds.size()) % kinds.size()]
+		# landmarks (bridge, castle, ring, spire) are rare so they never look tiled
+		if LANDMARKS.has(kind) and Art.hash01(c, 211 + i) > 0.38:
+			var alt: Array = kinds.filter(func(k): return not LANDMARKS.has(k))
+			if alt.is_empty():
+				continue
+			kind = alt[int(Art.hash01(c, 223 + i) * alt.size()) % alt.size()]
 		var lx = c * cw + Art.hash01(c, 13 + i) * cw * 0.7
-		var sx = lx - off
-		var s: float = SCALE[i] * (0.7 + Art.hash01(c, 19 + i) * 0.5)
-		_feature(ci, i, kind, Vector2(sx, _ridge_y(i, lx) + 14.0), s, col, c)
+		# small groves: trees and props often come in twos and threes
+		var n := 1
+		if CLUSTER.has(kind) and Art.Q >= 1:
+			n += int(Art.hash01(c, 29 + i) < 0.45) + int(Art.hash01(c, 31 + i) < 0.18)
+		for m in n:
+			var seed: int = c * 7 + m * 131
+			var mx = lx + (m * (46.0 + Art.hash01(seed, 37) * 60.0) * (1.0 if Art.hash01(c, 41) < 0.5 else -1.0)) * SCALE[i]
+			var s: float = SCALE[i] * (0.62 + Art.hash01(seed, 19 + i) * 0.6) * (1.0 - m * 0.16)
+			# per-instance depth tint: some props sit a little further back in the haze
+			var fc: Color = col.lerp(pal.fog, Art.hash01(seed, 43) * 0.12)
+			_feature(ci, i, kind, Vector2(mx - off, _ridge_y(i, mx) + 14.0), s, fc, seed)
 	# aerial perspective: lighter, hazier at the ridge, deeper towards the bottom
 	var top_c: Color = col.lerp(pal.fog, [0.20, 0.12, 0.06][i])
 	var bot_c: Color = col.darkened([0.12, 0.18, 0.22][i])
@@ -201,8 +218,13 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			L.append([c, 3.0 * s, Color(acc, 0.5)])
 		"column":
 			var hh = (150.0 + Art.hash01(seed, 6) * 110.0) * s
-			ci.draw_rect(Rect2(p.x - 15 * s, p.y - hh, 30 * s, hh), col)
-			ci.draw_rect(Rect2(p.x - 26 * s, p.y - hh - 14 * s, 52 * s, 14 * s), col)
+			if Art.hash01(seed, 7) < 0.35:
+				# broken column: shorter, slanted top, no capital
+				hh *= 0.55
+				ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-15 * s, 0), p + Vector2(-15 * s, -hh), p + Vector2(15 * s, -hh * 0.82), p + Vector2(15 * s, 0)]), col)
+			else:
+				ci.draw_rect(Rect2(p.x - 15 * s, p.y - hh, 30 * s, hh), col)
+				ci.draw_rect(Rect2(p.x - 26 * s, p.y - hh - 14 * s, 52 * s, 14 * s), col)
 			if Art.hash01(seed, 66) < 0.5:
 				L.append([p + Vector2(0, -hh - 30 * s), 5.0 * s, acc])
 		"olive":
@@ -213,14 +235,55 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 				ci.draw_circle(p + Vector2(cos(a) * 52 * s, -110 * s + sin(a) * 28 * s), (30.0 + Art.hash01(seed, k) * 16.0) * s, col)
 			ci.draw_circle(p + Vector2(0, -112 * s), 46 * s, col)
 		"cypress":
-			ci.draw_colored_polygon(Art.ellipse(p + Vector2(0, -130 * s), Vector2(26 * s, 135 * s), 20), col)
+			var cyh = (100.0 + Art.hash01(seed, 2) * 80.0) * s
+			var cyw = (20.0 + Art.hash01(seed, 3) * 12.0) * s
+			ci.draw_colored_polygon(Art.ellipse(p + Vector2(0, -cyh), Vector2(cyw, cyh), 20), col)
 		"pine":
-			var ph = (240.0 + Art.hash01(seed, 2) * 200.0) * s
-			ci.draw_line(p, p + Vector2(0, -ph), col, 8.0 * s)
+			var ph = (220.0 + Art.hash01(seed, 2) * 230.0) * s
+			var tiers := 4 + int(Art.hash01(seed, 8) * 3.0)
+			var wf = 0.75 + Art.hash01(seed, 9) * 0.55
+			var lean = (Art.hash01(seed, 10) - 0.5) * 0.12
+			ci.draw_line(p, p + Vector2(lean * ph, -ph), col, 8.0 * s)
+			for k in tiers:
+				var f = float(k) / float(tiers)
+				var yy = p.y - ph * (0.18 + 0.8 * f)
+				var cx = p.x + lean * ph * (0.18 + 0.8 * f)
+				var ww = (84.0 - 62.0 * f) * s * wf * (0.9 + Art.hash01(seed, 50 + k) * 0.25)
+				var dip = (10.0 + Art.hash01(seed, 60 + k) * 18.0) * s
+				ci.draw_colored_polygon(PackedVector2Array([Vector2(cx - ww, yy + 26 * s + dip), Vector2(cx - ww * 0.45, yy + 22 * s), Vector2(cx, yy - ph * 0.24), Vector2(cx + ww * 0.45, yy + 22 * s), Vector2(cx + ww, yy + 26 * s + dip * 0.6)]), col)
+		"birch":
+			var bh = (200.0 + Art.hash01(seed, 2) * 140.0) * s
+			ci.draw_line(p, p + Vector2(6 * s, -bh), col, 6.0 * s)
 			for k in 5:
-				var yy = p.y - ph * (0.2 + 0.18 * k)
-				var ww = (78.0 - k * 13.0) * s
-				ci.draw_colored_polygon(PackedVector2Array([Vector2(p.x - ww, yy + 30 * s), Vector2(p.x, yy - ph * 0.26), Vector2(p.x + ww, yy + 30 * s)]), col)
+				var a = float(k) / 5.0 * TAU + Art.hash01(seed, 3)
+				ci.draw_circle(p + Vector2(6 * s + cos(a) * 34 * s, -bh + sin(a) * 30 * s), (24.0 + Art.hash01(seed, 20 + k) * 14.0) * s, col)
+		"bush":
+			var bw = (50.0 + Art.hash01(seed, 2) * 50.0) * s
+			var nb := 3 + int(Art.hash01(seed, 3) * 3.0)
+			for k in nb:
+				var f = (float(k) / float(nb - 1)) - 0.5
+				var rr = bw * (0.42 + Art.hash01(seed, 10 + k) * 0.3) * (1.0 - absf(f) * 0.6)
+				ci.draw_circle(p + Vector2(f * bw * 1.6, -rr * 0.7), rr, col)
+			if Art.hash01(seed, 9) < 0.35:
+				L.append([p + Vector2((Art.hash01(seed, 11) - 0.5) * bw, -bw * 0.5), 3.0 * s, Art.hdr(pal.mote, 1.0)])
+		"rock":
+			var rw = (40.0 + Art.hash01(seed, 2) * 70.0) * s
+			var rh = rw * (0.45 + Art.hash01(seed, 3) * 0.5)
+			var pts := PackedVector2Array()
+			for k in 7:
+				var a = PI + PI * float(k) / 6.0
+				pts.append(p + Vector2(cos(a) * rw, sin(a) * rh * (0.75 + Art.hash01(seed, 20 + k) * 0.4) + 10 * s))
+			ci.draw_colored_polygon(pts, col)
+			ci.draw_polyline(pts.slice(1, 4), Color(pal.rim, 0.25), 2.0, Art.AA)
+		"house":
+			var hw = (60.0 + Art.hash01(seed, 2) * 40.0) * s
+			var hh = (50.0 + Art.hash01(seed, 3) * 40.0) * s
+			var flip = 1.0 if Art.hash01(seed, 4) < 0.5 else -1.0
+			ci.draw_rect(Rect2(p.x - hw * 0.5, p.y - hh, hw, hh + 20 * s), col)
+			ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-hw * 0.65, -hh), p + Vector2(0, -hh - hw * 0.55), p + Vector2(hw * 0.65, -hh)]), col)
+			ci.draw_rect(Rect2(p.x + flip * hw * 0.18 - 5 * s, p.y - hh - hw * 0.5, 10 * s, 26 * s), col)
+			if Art.hash01(seed, 5) < 0.7:
+				L.append([p + Vector2(-flip * hw * 0.18, -hh * 0.55), 5.0 * s, Art.hdr(pal.mote, 1.1)])
 		"peak":
 			var pw = (380.0 + Art.hash01(seed, 2) * 300.0) * s
 			var phh = (300.0 + Art.hash01(seed, 3) * 260.0) * s
@@ -272,12 +335,17 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 				ci.draw_line(hub, hub + Vector2(cos(a), sin(a)) * 110.0 * s, col, 6.0 * s)
 			L.append([hub, 6.0 * s, acc])
 		"reed":
-			for k in 6:
-				var bx = p.x + (k - 3) * 9.0 * s
-				var hh = (70.0 + Art.hash01(seed, k) * 70.0) * s
-				var sway = sin(t * 1.2 + k + seed) * 6.0
+			var nr := 3 + int(Art.hash01(seed, 21) * 6.0)
+			var lean = (Art.hash01(seed, 22) - 0.5) * 14.0
+			for k in nr:
+				var bx = p.x + (k - nr * 0.5) * (6.0 + Art.hash01(seed, 30 + k) * 8.0) * s
+				var hh = (50.0 + Art.hash01(seed, k) * 90.0) * s
+				var sway = sin(t * 1.2 + k + seed) * 6.0 + lean
 				ci.draw_line(Vector2(bx, p.y), Vector2(bx + sway, p.y - hh), col, 3.0 * s)
-				ci.draw_colored_polygon(Art.ellipse(Vector2(bx + sway, p.y - hh), Vector2(4 * s, 13 * s), 10), col)
+				if Art.hash01(seed, 40 + k) < 0.6:
+					ci.draw_colored_polygon(Art.ellipse(Vector2(bx + sway, p.y - hh), Vector2(4 * s, 13 * s), 10), col)
+				else:
+					ci.draw_line(Vector2(bx + sway, p.y - hh), Vector2(bx + sway * 1.8 + 14 * s, p.y - hh * 0.7), col, 2.0 * s)
 		"lily":
 			var lh = (120.0 + Art.hash01(seed, 2) * 140.0) * s
 			var tip = p + Vector2(sin(t * 0.8 + seed) * 8.0, -lh)
@@ -352,15 +420,18 @@ func _draw_haze(ci: Node2D, i: int) -> void:
 func _draw_shafts(ci: Node2D) -> void:
 	if Art.Q == 0:
 		return
-	var sp = Vector2(pal.sun_pos.x * size.x - cam_x * 0.004, pal.sun_pos.y * size.y - 200.0)
+	# rays start at the sun/moon disc itself (same position as _draw_sky_light)
+	var c0 = Vector2(pal.sun_pos.x * size.x - cam_x * 0.004, pal.sun_pos.y * size.y - cam_y * 0.02)
 	var sc: Color = pal.sun
+	var r0: float = pal.sun_r * 0.35
 	for k in 7:
-		var a = 1.85 + (k - 3) * 0.16 + sin(t * 0.13 + k * 1.7) * 0.03
+		var a = 1.80 + (k - 3) * 0.20 + sin(t * 0.13 + k * 1.7) * 0.03
 		var len = size.y * 1.4
-		var w0 = 20.0 + Art.hash01(k, 3) * 40.0
+		var w0 = 6.0 + Art.hash01(k, 3) * 14.0
 		var w1 = 180.0 + Art.hash01(k, 4) * 220.0
 		var dir = Vector2(cos(a), sin(a))
 		var nrm = Vector2(-dir.y, dir.x)
+		var sp = c0 + dir * r0
 		var e = sp + dir * len
 		var al = (0.025 + 0.015 * sin(t * 0.4 + k * 2.1)) * (1.0 + calm * 0.5)
 		ci.draw_polygon(PackedVector2Array([sp + nrm * w0, sp - nrm * w0, e - nrm * w1, e + nrm * w1]),
@@ -392,12 +463,17 @@ func draw_foreground(ci: Node2D, gy: float) -> void:
 		var r = Art.hash01(c, 501)
 		var sx = c * cw + r * 500.0 - off
 		if r < 0.55:
-			# leafy clump rising from below
-			for k in 6:
-				var a = -PI * 0.5 + (k - 2.5) * 0.28
-				var base = Vector2(sx + k * 16.0, size.y + 40.0)
-				var tip = base + Vector2(cos(a), sin(a)) * (150.0 + Art.hash01(c, k) * 140.0)
-				var nrm = (tip - base).normalized().orthogonal() * 22.0
+			# leafy clump rising from below: leaf count, fan, length and width vary per clump
+			var nl := 3 + int(Art.hash01(c, 502) * 5.0)
+			var fan = 0.18 + Art.hash01(c, 503) * 0.2
+			var tall = 0.6 + Art.hash01(c, 504) * 0.7
+			var lw = 14.0 + Art.hash01(c, 505) * 14.0
+			var sway = sin(t * 0.9 + c) * 0.03
+			for k in nl:
+				var a = -PI * 0.5 + (k - (nl - 1) * 0.5) * fan + sway + (Art.hash01(c, 520 + k) - 0.5) * 0.15
+				var base = Vector2(sx + k * 14.0, size.y + 40.0)
+				var tip = base + Vector2(cos(a), sin(a)) * (110.0 + Art.hash01(c, k) * 150.0) * tall
+				var nrm = (tip - base).normalized().orthogonal() * lw
 				ci.draw_colored_polygon(PackedVector2Array([base - nrm, (base + tip) * 0.5 - nrm * 1.6, tip, (base + tip) * 0.5 + nrm * 1.6, base + nrm]), col)
 		elif false:
 			# (disabled) hanging vine

@@ -42,7 +42,17 @@ var cast_add: Node2D
 var fg: Node2D
 var hud: Node2D
 var vignette: TextureRect
-var font: SystemFont
+var font: Font       # Fredoka SemiBold: titles, HUD numbers, buttons
+var font_body: Font  # Nunito ExtraBold: captions, tips, descriptions
+
+## Player-facing names live here so a rename is one edit.
+const GAME_TITLE := "VAYU"
+const GAME_SUB := "Letters to Lia"
+const HERO := "Vayu"
+const FRIEND := "Lia"
+const SCENIC_SPEED := 430.0
+const SCENIC_STAY := 38.0  # seconds per country in Scenic View
+var scenic_next := 0.0
 
 # ------------------------------------------------------------------ state
 var state = "title"     # title, run, recovery, junction, rescue, fail, results, finale, paused
@@ -115,11 +125,12 @@ func _ready() -> void:
 	randomize()
 	save.load_data()
 	ads.save = save
-	font = SystemFont.new()
-	font.font_names = PackedStringArray(["Nunito", "Quicksand", "Comfortaa", "Varela Round", "Ubuntu", "Noto Sans", "DejaVu Sans", "sans-serif"])
-	font.font_weight = 800
-	font.antialiasing = TextServer.FONT_ANTIALIASING_GRAY
+	font = _load_font("res://assets/fonts/Fredoka.ttf", 600)
+	font_body = _load_font("res://assets/fonts/Nunito.ttf", 800)
 	_build_scene()
+	# Display title (window / browser tab). project config/name stays "VOLT/RUN"
+	# because it names the save folder on desktop.
+	get_window().title = "%s: %s" % [HERO, GAME_SUB]
 	input_mode = "touch" if DisplayServer.is_touchscreen_available() else "keys"
 	if OS.has_feature("web") or OS.has_feature("mobile"):
 		Engine.max_fps = 60
@@ -231,6 +242,7 @@ func _build_scene() -> void:
 	ui = UI.new()
 	ui.main = self
 	ui.font = font
+	ui.font_body = font_body
 	ul.add_child(ui)
 
 	synth = Synth.new()
@@ -292,6 +304,20 @@ func _apply_settings() -> void:
 	track_view.kind_mode = st.kind_mode
 
 # ------------------------------------------------------------------ flow
+## Bundled OFL fonts (see docs/LEDGER.csv); a system font is the fallback.
+func _load_font(path: String, weight: int) -> Font:
+	var sys := SystemFont.new()
+	sys.font_names = PackedStringArray(["Nunito", "Noto Sans", "DejaVu Sans", "sans-serif"])
+	sys.font_weight = weight
+	var base = load(path) if ResourceLoader.exists(path) else null
+	if base == null:
+		return sys
+	var v := FontVariation.new()
+	v.base_font = base
+	v.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): weight}
+	v.fallbacks = [sys]
+	return v
+
 func go_title() -> void:
 	Engine.time_scale = 1.0
 	state = "title"
@@ -365,7 +391,7 @@ func start_tutorial() -> void:
 	seg_end = Tutorial.build(track)
 	_enter_run()
 	ui.show_tutorial_skip()
-	_show_card("Welcome, courier", "Kite runs on their own. You make the moves.", 0.2)
+	_show_card("Welcome, courier", "%s runs on his own. You make the moves." % HERO, 0.2)
 
 func finish_tutorial() -> void:
 	state = "tut_done"
@@ -441,7 +467,7 @@ func start_endless(daily := false) -> void:
 	dist_start = sim.x
 	_begin_endless_segment()
 	_enter_run()
-	_show_card("The Endless Road" if not daily else "Daily Relay", "How far will Kite's tailwind carry?" if not daily else _daily_key())
+	_show_card("The Endless Road" if not daily else "Daily Relay", "How far will %s's tailwind carry?" % HERO if not daily else _daily_key())
 
 func _daily_key() -> String:
 	var d = Time.get_date_dict_from_system(true)
@@ -505,14 +531,15 @@ func _segment_finished() -> void:
 # ------------------------------------------------------------------ recovery
 const ACTIVITIES := [
 	{"pose": "eat", "npc": "yiayia", "text": "Yiayia Froso insists: \"Eat! You're all circuits and no koulouri!\""},
-	{"pose": "drink", "npc": "shop", "text": "A shopkeeper hands Kite cold water. \"For the road, little courier.\""},
-	{"pose": "read", "npc": "", "text": "Message from Lumi: \"I painted the sunrise for you today.\""},
-	{"pose": "map", "npc": "", "text": "Kite checks the map. Lumi is getting closer."},
+	{"pose": "drink", "npc": "shop", "text": "A shopkeeper hands Vayu cold water. \"For the road, little courier.\""},
+	{"pose": "read", "npc": "", "text": "Message from Lia: \"I painted the sunrise for you today.\""},
+	{"pose": "map", "npc": "", "text": "Vayu checks the map. Lia is getting closer."},
 	{"pose": "photo", "npc": "", "text": "Snap! A new memory for the scrapbook."},
-	{"pose": "stretch", "npc": "kid", "text": "Kids cheer from the roadside: \"Go, Kite, go!\""},
+	{"pose": "stretch", "npc": "kid", "text": "Kids cheer from the roadside: \"Go, Vayu, go!\""},
 	{"pose": "eat", "npc": "farmer", "text": "A farmer shares a ripe peach from the orchard."},
-	{"pose": "read", "npc": "", "text": "Message from Lumi: \"The storks came back today. I saved you a sketch.\""},
-	{"pose": "read", "npc": "", "text": "Message from Lumi: \"If you wanted to, you would. ...You did.\""},
+	{"pose": "read", "npc": "", "text": "Message from Lia: \"The storks came back today. I saved you a sketch.\""},
+	{"pose": "read", "npc": "", "text": "Message from Lia: \"Grandma calls me Cornelia when I'm late for dinner. You can keep calling me Lia.\""},
+	{"pose": "read", "npc": "", "text": "Message from Lia: \"If you wanted to, you would. ...You did.\""},
 ]
 
 func _enter_recovery(then_junction: bool) -> void:
@@ -673,7 +700,7 @@ func _update_rescue(real_dt: float) -> void:
 		if not r.has("thanks"):
 			r.thanks = true
 			var b: Dictionary = Chars.BIKERS[r.v]
-			caption = "%s swoops in out of nowhere!  Kite: \"THANK YOU!!\"  %s: \"Anytime, little courier. Ride safe!\"" % [b.name, b.name]
+			caption = "%s swoops in out of nowhere!  Vayu: \"THANK YOU!!\"  %s: \"Anytime, little courier. Ride safe!\"" % [b.name, b.name]
 			caption_t = 3.6
 			_toast("THANK YOU!", _world_to_screen(kite_pos + Vector2(0, -170)), Color(1.0, 0.6, 0.8), 58)
 			_add_memory("Rescued by " + b.name)
@@ -718,7 +745,7 @@ func _update_finale(dt: float) -> void:
 		sim.x += lerpf(sim.v * 0.6, 140.0, clampf(k / 3.0, 0.0, 1.0)) * dt
 	if k > 3.2 and not finale.has("met"):
 		finale.met = true
-		caption = "Lumi: \"You came all this way...\"   Kite: \"If you wanted to, you would.\""
+		caption = "Lia: \"You came all this way...\"   Vayu: \"If you wanted to, you would.\""
 		caption_t = 5.0
 	if k > 9.0 and not finale.has("end"):
 		finale.end = true
@@ -842,6 +869,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE):
+		if state == "scenic":
+			go_title()
+			return
 		toggle_pause()
 	if state == "recovery" and _is_press(event, ["jump"]):
 		skip_recovery()
@@ -1042,6 +1072,8 @@ func _process(delta: float) -> void:
 		slowmo_t -= real_dt
 		Engine.time_scale = 0.45 if slowmo_t > 0.0 else 1.0
 	match state:
+		"scenic":
+			_update_scenic(real_dt)
 		"title":
 			title_x += real_dt * 60.0
 			sim.x = title_x
@@ -1104,6 +1136,8 @@ func _update_kite_view(dt: float) -> void:
 		# Frozen (tutorial prompt) or paused: hold the pose; legs cycling while
 		# the world stands still reads as moonwalking backwards.
 		kite.speed = 0.0 if (sim.frozen or state == "paused") else sim.cur_speed()
+	elif state == "scenic":
+		kite.speed = SCENIC_SPEED
 	else:
 		kite.speed = 120.0
 	kite.tier = tw.tier()
@@ -1165,7 +1199,7 @@ func _update_camera(dt: float) -> void:
 		target.x = sim.x + size.x * 0.1
 		if state == "finale":
 			target.x = (sim.x + finale.lx) * 0.5
-	if state == "title":
+	if state == "title" or state == "scenic":
 		target.x = sim.x + size.x * 0.27 / zoom
 	cam_pos.x = target.x if cam_pos == Vector2.ZERO else lerpf(cam_pos.x, target.x, 1.0 - exp(-dt * 9.0))
 	cam_pos.y = lerpf(cam_pos.y, target.y, 1.0 - exp(-dt * 4.0))
@@ -1181,7 +1215,7 @@ func _update_views(dt: float) -> void:
 	world_view.cam_x = cam.position.x
 	world_view.cam_y = cam.position.y + size.y * (0.80 - 0.5) / zoom
 	world_view.t = t
-	world_view.calm = move_toward(world_view.calm, 1.0 if state in ["recovery", "finale", "title"] else 0.0, dt)
+	world_view.calm = move_toward(world_view.calm, 1.0 if state in ["recovery", "finale", "title", "scenic"] else 0.0, dt)
 	world_view.refresh()
 	track_view.pal = pal
 	track_view.t = t
@@ -1283,6 +1317,9 @@ func _text(ci: Node2D, s: String, p: Vector2, size: int, col: Color, align := HO
 
 func _draw_hud(ci: Node2D) -> void:
 	var sz = get_viewport_rect().size
+	if has_meta("keyart"):
+		_draw_logo(ci, Vector2(sz.x * 0.75, sz.y * 0.47), 1.0, 1.1)
+		return
 	# letterbox
 	if lb > 0.001:
 		var h = sz.y * 0.09 * ease(lb, 0.6)
@@ -1347,13 +1384,29 @@ func _draw_hud(ci: Node2D) -> void:
 		ci.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.01, 0.01, 0.03, fade))
 
 func _draw_title(ci: Node2D, sz: Vector2) -> void:
-	var k = minf(state_t / 1.2, 1.0)
-	var y = sz.y * 0.24
-	var glow = Color(0.4, 1.0, 1.0, 0.25 * k)
-	for i in 4:
-		_text(ci, "VOLT/RUN", Vector2(sz.x * 0.5, y + 4), 168 + i * 6, Color(glow, glow.a / (i + 1)))
-	_text(ci, "VOLT/RUN", Vector2(sz.x * 0.5, y), 168, Color(1, 0.98, 0.95, k), HORIZONTAL_ALIGNMENT_CENTER, 6)
-	_text(ci, "a long way to Lumi", Vector2(sz.x * 0.5, y + 70), 40, Color(pal.rim, k * 0.9))
+	var k = ease(minf(state_t / 1.0, 1.0), 0.4)
+	_draw_logo(ci, Vector2(sz.x * 0.30, sz.y * 0.26 - (1.0 - k) * 30.0), k, 1.0 + 0.012 * sin(t * 1.6))
+
+## Game logo: big warm title with ink outline, plus the subtitle ribbon.
+func _draw_logo(ci: Node2D, c: Vector2, k: float, breathe: float) -> void:
+	var fs := int(190 * breathe)
+	# soft glow, deep shadow, thick ink outline, warm fill, top highlight
+	for i in 3:
+		_text(ci, GAME_TITLE, c + Vector2(0, 6), fs + 10 + i * 10, Color(1.0, 0.75, 0.45, 0.10 * k / (i + 1)))
+	ci.draw_string_outline(font, Vector2(c.x - 1000, c.y + 12), GAME_TITLE, HORIZONTAL_ALIGNMENT_CENTER, 2000, fs, 22, Color(0.02, 0.03, 0.08, 0.45 * k))
+	ci.draw_string_outline(font, Vector2(c.x - 1000, c.y), GAME_TITLE, HORIZONTAL_ALIGNMENT_CENTER, 2000, fs, 16, Color(0.10, 0.08, 0.20, k))
+	ci.draw_string(font, Vector2(c.x - 1000, c.y), GAME_TITLE, HORIZONTAL_ALIGNMENT_CENTER, 2000, fs, Color(1.0, 0.80, 0.42, k))
+	ci.draw_string(font, Vector2(c.x - 1000, c.y - 4), GAME_TITLE, HORIZONTAL_ALIGNMENT_CENTER, 2000, fs, Color(1.0, 0.95, 0.80, 0.55 * k))
+	# subtitle ribbon with a little paper plane
+	var sub_w = font.get_string_size(GAME_SUB, HORIZONTAL_ALIGNMENT_LEFT, -1, 46).x
+	var r = Rect2(c.x - sub_w * 0.5 - 70, c.y + 36, sub_w + 140, 72)
+	ci.draw_colored_polygon(Art.rrect(r.grow(3), 39), Color(0.10, 0.08, 0.20, 0.9 * k))
+	ci.draw_colored_polygon(Art.rrect(r, 36), Color(0.98, 0.42, 0.45, k))
+	ci.draw_colored_polygon(Art.rrect(Rect2(r.position + Vector2(8, 6), Vector2(r.size.x - 16, 22)), 11), Color(1, 1, 1, 0.16 * k))
+	_text(ci, GAME_SUB, Vector2(c.x + 20, c.y + 88), 46, Color(1, 0.98, 0.94, k))
+	var pp = Vector2(r.position.x + 44, c.y + 72 + sin(t * 2.2) * 3.0)
+	ci.draw_colored_polygon(PackedVector2Array([pp + Vector2(-20, 6), pp + Vector2(20, -10), pp + Vector2(-4, 14)]), Color(1, 1, 1, k))
+	ci.draw_colored_polygon(PackedVector2Array([pp + Vector2(-4, 14), pp + Vector2(20, -10), pp + Vector2(2, 20)]), Color(0.85, 0.88, 0.95, k))
 
 ## Keyboard players see a hint bar at the bottom instead of touch buttons.
 func _key_hints(ci: Node2D, sz: Vector2) -> void:
@@ -1411,7 +1464,7 @@ func _draw_run_hud(ci: Node2D, sz: Vector2) -> void:
 		ci.draw_circle(Vector2(x0 + w * prog, top + 40), 9, Color(0.3, 1, 1))
 		KiteView._heart(ci, Vector2(x0 + w + 22, top + 38), 13.0, Color(1.0, 0.55, 0.8))
 		var km = (story_total - story_done_px - maxf(sim.x - _seg_start_estimate(), 0.0)) / PX_PER_M / 1000.0
-		_text(ci, "%.1f km to Lumi  ·  %s" % [maxf(km, 0.0), pal.name], Vector2(sz.x * 0.5, top + 92), 28, Color(1, 1, 1, 0.75))
+		_text(ci, "%.1f km to Lia  ·  %s" % [maxf(km, 0.0), pal.name], Vector2(sz.x * 0.5, top + 92), 28, Color(1, 1, 1, 0.75))
 	else:
 		_text(ci, str(int(score)), Vector2(sz.x * 0.5, top + 64), 60, Color(1, 0.98, 0.94), HORIZONTAL_ALIGNMENT_CENTER, 8)
 		var key = "best_daily" if mode == "daily" else "best_endless"
@@ -1457,6 +1510,36 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 # ------------------------------------------------------------------ menus glue (called by ui.gd)
+## Scenic View: no obstacles, no HUD. Vayu just runs while the four countries
+## roll past, one full cycle every ~2.5 minutes, then it loops.
+func menu_scenic() -> void:
+	synth.play("ui")
+	state = "scenic"
+	state_t = 0.0
+	mode = "scenic"
+	_new_world(0)
+	set_biome(0, true)
+	sim.frozen = true
+	title_x = 0.0
+	zoom_target = 1.2
+	lb_target = 0.0
+	touch.visible_controls = false
+	scenic_next = SCENIC_STAY
+	ui.show_scenic()
+	synth.set_drive(0.25)
+	_show_card(Art.biome(0).name, Art.biome(0).country, 0.6)
+
+func _update_scenic(dt: float) -> void:
+	title_x += dt * SCENIC_SPEED
+	sim.x = title_x
+	kite.pose = "run"
+	kite.expr = "normal" if fmod(t, 7.0) < 5.5 else "happy"
+	if state_t >= scenic_next:
+		scenic_next += SCENIC_STAY
+		var b: int = (biome + 1) % 4
+		set_biome(b)
+		_show_card(Art.biome(b).name, Art.biome(b).country, 1.5)
+
 func menu_story() -> void:
 	synth.play("ui")
 	var ch := int(save.data.story_chapter)
@@ -1499,6 +1582,16 @@ func _setup_capture() -> void:
 	DirAccess.make_dir_recursive_absolute(capture_dir)
 	autopilot = true
 	save.data.seen_hints = []
+	if "--keyart" in OS.get_cmdline_user_args():
+		# Key art for the loading screen / store banner: the reunion + logo.
+		save.data.tutorial_done = true
+		set_meta("keyart", true)
+		cap_steps = [
+			{"do": "story", "ch": 3}, {"do": "wait", "s": 1.0},
+			{"do": "force_finale"}, {"do": "wait", "s": 7.5}, {"shot": "keyart"},
+			{"do": "quit"},
+		]
+		return
 	if "--trailer" in OS.get_cmdline_user_args():
 		# ~19 s gameplay montage for store/portal preview videos (recorded with --write-movie).
 		save.data.tutorial_done = true
@@ -1531,6 +1624,10 @@ func _setup_capture() -> void:
 		return
 	cap_steps = [
 		{"do": "wait", "s": 3.0}, {"shot": "01-title"},
+		{"do": "scenic"}, {"do": "wait", "s": 5.0}, {"shot": "01d-scenic-greece"},
+		{"do": "scenic_next"}, {"do": "wait", "s": 6.0}, {"shot": "01e-scenic-rhodope"},
+		{"do": "scenic_next"}, {"do": "wait", "s": 6.0}, {"shot": "01f-scenic-danube"},
+		{"do": "scenic_next"}, {"do": "wait", "s": 6.0}, {"shot": "01g-scenic-carpathian"},
 		{"do": "tutorial"}, {"until": "tut_prompt", "max": 12.0}, {"do": "wait", "s": 0.4}, {"shot": "01a-tutorial-hop"},
 		{"until_tut": 4, "max": 40.0}, {"until": "tut_prompt", "max": 20.0}, {"do": "wait", "s": 0.4}, {"shot": "01b-tutorial-hover"},
 		{"until_state": "tut_done", "max": 90.0}, {"do": "wait", "s": 0.6}, {"shot": "01c-tutorial-done"},
@@ -1619,6 +1716,10 @@ func _capture_tick(dt: float) -> void:
 				cap_i += 1
 				cap_wait = 0.0
 			return
+		"scenic":
+			menu_scenic()
+		"scenic_next":
+			scenic_next = state_t
 		"story":
 			start_story(st.ch)
 			card = {}

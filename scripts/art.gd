@@ -77,7 +77,7 @@ const BIOMES := [
 		"ground": Color(0.05, 0.07, 0.10), "rim": Color(1.0, 0.86, 0.66),
 		"accent": Color(0.55, 0.92, 0.90), "mote": Color(1.0, 0.88, 0.68),
 		"obstacle": Color(0.93, 0.88, 0.80),
-		"kinds": [["ring", "spire", "dome"], ["dome", "column", "spire"], ["olive", "column", "cypress"]],
+		"kinds": [["ring", "spire", "dome", "dome"], ["dome", "column", "spire", "house", "cypress"], ["olive", "column", "cypress", "bush", "rock", "olive"]],
 		"stars": 0.15, "aurora": 0.0, "water": 1.0,
 	},
 	{
@@ -89,7 +89,7 @@ const BIOMES := [
 		"ground": Color(0.03, 0.06, 0.07), "rim": Color(0.70, 1.0, 0.86),
 		"accent": Color(1.0, 0.78, 0.45), "mote": Color(0.85, 1.0, 0.65),
 		"obstacle": Color(0.88, 0.93, 0.88),
-		"kinds": [["pine", "pine", "peak"], ["pine", "lantern", "pine"], ["fern", "pine", "lantern"]],
+		"kinds": [["pine", "pine", "peak", "birch"], ["pine", "lantern", "pine", "house", "birch"], ["fern", "pine", "lantern", "bush", "rock"]],
 		"stars": 0.7, "aurora": 0.0, "water": 0.0,
 	},
 	{
@@ -101,7 +101,7 @@ const BIOMES := [
 		"ground": Color(0.06, 0.04, 0.08), "rim": Color(1.0, 0.76, 0.82),
 		"accent": Color(0.66, 0.86, 1.0), "mote": Color(1.0, 0.80, 0.88),
 		"obstacle": Color(0.95, 0.88, 0.88),
-		"kinds": [["bridge", "turbine", "ring"], ["turbine", "reed", "lily"], ["reed", "lily", "reed"]],
+		"kinds": [["bridge", "turbine", "birch", "house"], ["turbine", "reed", "lily", "house", "bush"], ["reed", "lily", "reed", "bush", "rock"]],
 		"stars": 0.3, "aurora": 0.0, "water": 1.0,
 	},
 	{
@@ -113,7 +113,7 @@ const BIOMES := [
 		"ground": Color(0.04, 0.03, 0.07), "rim": Color(0.78, 0.86, 1.0),
 		"accent": Color(0.86, 0.68, 1.0), "mote": Color(0.70, 0.95, 1.0),
 		"obstacle": Color(0.88, 0.88, 0.96),
-		"kinds": [["peak", "castle", "peak"], ["castle", "pine", "pine"], ["pine", "fern", "pine"]],
+		"kinds": [["peak", "castle", "peak", "pine"], ["castle", "pine", "pine", "house", "birch"], ["pine", "fern", "pine", "rock", "bush"]],
 		"stars": 0.8, "aurora": 0.7, "water": 0.0,
 	},
 ]

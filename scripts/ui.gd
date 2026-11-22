@@ -6,10 +6,32 @@ const Art = preload("res://scripts/art.gd")
 
 var main
 var font: Font
+var font_body: Font
 var _box: Control
 var _theme: Theme
+var _primary: Dictionary = {}
 const SCARF_NAMES := ["Sunset Orange", "Sky Blue", "Rose", "Honey Gold", "Mint", "Violet"]
 const SCARF_COST := [0, 3, 3, 5, 5, 8]
+const CREAM := Color(1, 0.97, 0.92)
+const INK := Color(0.13, 0.07, 0.12)
+
+static func _sb(bg: Color, border: Color, bw: int, radius: int, shadow := 0, sh_col := Color(0, 0, 0, 0.3)) -> StyleBoxFlat:
+	var b := StyleBoxFlat.new()
+	b.bg_color = bg
+	b.border_color = border
+	b.set_border_width_all(bw)
+	b.set_corner_radius_all(radius)
+	b.corner_detail = 10
+	b.anti_aliasing = true
+	b.content_margin_left = 40
+	b.content_margin_right = 40
+	b.content_margin_top = 14
+	b.content_margin_bottom = 16
+	if shadow > 0:
+		b.shadow_size = shadow
+		b.shadow_color = sh_col
+		b.shadow_offset = Vector2(0, shadow * 0.5)
+	return b
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -17,30 +39,37 @@ func _ready() -> void:
 	_theme = Theme.new()
 	_theme.default_font = font
 	_theme.default_font_size = 38
-	var n = StyleBoxFlat.new()
-	n.bg_color = Color(0.03, 0.06, 0.10, 0.55)
-	n.border_color = Color(1, 1, 1, 0.22)
-	n.set_border_width_all(2)
-	n.set_corner_radius_all(40)
-	n.content_margin_left = 40
-	n.content_margin_right = 40
-	n.content_margin_top = 16
-	n.content_margin_bottom = 16
-	var h = n.duplicate()
-	h.bg_color = Color(0.10, 0.22, 0.28, 0.75)
-	h.border_color = Color(0.4, 1.0, 1.0, 0.8)
-	var p = h.duplicate()
-	p.bg_color = Color(0.2, 0.45, 0.5, 0.85)
-	for s in ["normal", "focus"]:
-		_theme.set_stylebox(s, "Button", n if s == "normal" else h)
+	# secondary buttons: frosted glass with a soft shadow; hover lifts and glows
+	var n := _sb(Color(1, 1, 1, 0.09), Color(1, 1, 1, 0.24), 2, 30, 6, Color(0, 0, 0, 0.22))
+	var h := _sb(Color(1, 1, 1, 0.18), Color(1.0, 0.86, 0.55, 0.95), 3, 30, 10, Color(0, 0, 0, 0.28))
+	var pr := _sb(Color(1, 1, 1, 0.26), Color(1.0, 0.86, 0.55, 1.0), 3, 30, 2, Color(0, 0, 0, 0.2))
+	pr.content_margin_top = 17
+	pr.content_margin_bottom = 13
+	_theme.set_stylebox("normal", "Button", n)
+	_theme.set_stylebox("focus", "Button", _sb(Color(0, 0, 0, 0), Color(1.0, 0.86, 0.55, 0.9), 3, 30))
 	_theme.set_stylebox("hover", "Button", h)
-	_theme.set_stylebox("pressed", "Button", p)
-	_theme.set_color("font_color", "Button", Color(1, 0.98, 0.94))
+	_theme.set_stylebox("pressed", "Button", pr)
+	_theme.set_color("font_color", "Button", CREAM)
 	_theme.set_color("font_hover_color", "Button", Color(1, 1, 1))
-	_theme.set_color("font_color", "Label", Color(1, 0.98, 0.94))
+	_theme.set_color("font_pressed_color", "Button", Color(1, 0.92, 0.75))
+	_theme.set_color("font_focus_color", "Button", Color(1, 1, 1))
+	_theme.set_color("font_color", "Label", CREAM)
 	_theme.set_constant("outline_size", "Label", 8)
-	_theme.set_color("font_outline_color", "Label", Color(0, 0, 0, 0.5))
+	_theme.set_color("font_outline_color", "Label", Color(0, 0, 0, 0.45))
 	theme = _theme
+	# primary call-to-action: warm sunset orange with a cream rim and deep shadow
+	_primary = {
+		"normal": _sb(Color(1.0, 0.60, 0.32), Color(1.0, 0.85, 0.55), 3, 34, 10, Color(0.35, 0.08, 0.05, 0.45)),
+		"hover": _sb(Color(1.0, 0.68, 0.38), Color(1.0, 0.95, 0.75), 3, 34, 14, Color(0.35, 0.08, 0.05, 0.5)),
+		"pressed": _sb(Color(0.93, 0.50, 0.26), Color(1.0, 0.85, 0.55), 3, 34, 3, Color(0.35, 0.08, 0.05, 0.4)),
+		"focus": _sb(Color(0, 0, 0, 0), Color(1, 1, 1, 0.95), 4, 34),
+	}
+
+func _make_primary(b: Button) -> void:
+	for k in _primary:
+		b.add_theme_stylebox_override(k, _primary[k])
+	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		b.add_theme_color_override(k, INK)
 
 func _clear() -> void:
 	if _box:
@@ -56,12 +85,8 @@ func _panel(anchor_y := 0.5, width := 760.0, backdrop := true) -> VBoxContainer:
 	var holder: Control = c
 	if backdrop:
 		var pc = PanelContainer.new()
-		var sb = StyleBoxFlat.new()
-		sb.bg_color = Color(0.02, 0.03, 0.07, 0.72)
-		sb.set_corner_radius_all(36)
-		sb.set_content_margin_all(40)
-		sb.border_color = Color(1, 1, 1, 0.12)
-		sb.set_border_width_all(2)
+		var sb := _sb(Color(0.05, 0.06, 0.14, 0.74), Color(1, 1, 1, 0.13), 2, 44, 28, Color(0, 0, 0, 0.35))
+		sb.set_content_margin_all(44)
 		pc.add_theme_stylebox_override("panel", sb)
 		c.add_child(pc)
 		holder = pc
@@ -82,7 +107,17 @@ func _panel(anchor_y := 0.5, width := 760.0, backdrop := true) -> VBoxContainer:
 	holder.offset_right = width * 0.5 + (40 if backdrop else 0)
 	holder.grow_vertical = Control.GROW_DIRECTION_BOTH
 	_box = c
+	_appear(c)
 	return v
+
+## Soft entrance for every screen: fade in while settling from 97% scale.
+func _appear(c: Control) -> void:
+	c.modulate.a = 0.0
+	c.pivot_offset = get_viewport_rect().size * 0.5
+	c.scale = Vector2(0.97, 0.97)
+	var tw := c.create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "modulate:a", 1.0, 0.28)
+	tw.tween_property(c, "scale", Vector2.ONE, 0.32)
 
 func _btn(v: Container, text: String, cb: Callable, size := 38) -> Button:
 	var b = Button.new()
@@ -91,7 +126,21 @@ func _btn(v: Container, text: String, cb: Callable, size := 38) -> Button:
 	b.pressed.connect(cb)
 	b.focus_mode = Control.FOCUS_ALL
 	v.add_child(b)
+	_juice(b)
 	return b
+
+## Hover/focus lifts the button a little; pressing squashes it.
+func _juice(b: Button) -> void:
+	b.resized.connect(func(): b.pivot_offset = b.size * 0.5)
+	var to := func(sc: float, d: float):
+		var tw := b.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(b, "scale", Vector2(sc, sc), d)
+	b.mouse_entered.connect(to.bind(1.04, 0.18))
+	b.focus_entered.connect(to.bind(1.04, 0.18))
+	b.mouse_exited.connect(func(): if not b.has_focus(): to.call(1.0, 0.18))
+	b.focus_exited.connect(to.bind(1.0, 0.18))
+	b.button_down.connect(to.bind(0.96, 0.08))
+	b.button_up.connect(to.bind(1.04, 0.14))
 
 func _label(v: Container, text: String, size := 36, col := Color(1, 0.98, 0.94)) -> Label:
 	var l = Label.new()
@@ -100,6 +149,8 @@ func _label(v: Container, text: String, size := 36, col := Color(1, 0.98, 0.94))
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col)
+	if size < 44 and font_body != null:
+		l.add_theme_font_override("font", font_body)
 	v.add_child(l)
 	return l
 
@@ -108,27 +159,58 @@ func show_none() -> void:
 	_clear()
 
 func show_title() -> void:
-	var v = _panel(0.64, 640, false)
+	_clear()
+	var c := Control.new()
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(c)
+	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var card := PanelContainer.new()
+	var sb := _sb(Color(0.05, 0.06, 0.14, 0.80), Color(1, 1, 1, 0.14), 2, 48, 30, Color(0, 0, 0, 0.32))
+	sb.set_content_margin_all(40)
+	card.add_theme_stylebox_override("panel", sb)
+	card.anchor_left = 1.0
+	card.anchor_right = 1.0
+	card.anchor_top = 0.5
+	card.anchor_bottom = 0.5
+	card.offset_left = -760
+	card.offset_right = -110
+	card.grow_vertical = Control.GROW_DIRECTION_BOTH
+	c.add_child(card)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 16)
+	card.add_child(v)
+	_box = c
 	var ch := int(main.save.data.story_chapter)
 	var cont: bool = ch > 0 and not main.save.data.story_done
-	var first = _btn(v, ("Story  ·  Continue chapter %d" % (ch + 1)) if cont else "Story  ·  Find Lumi", main.menu_story, 44)
-	_btn(v, "Endless Road", main.menu_endless)
-	_btn(v, "Daily Relay", main.menu_daily)
-	var row = HBoxContainer.new()
-	row.add_theme_constant_override("separation", 18)
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	var first := _btn(v, ("Continue  ·  Chapter %d" % (ch + 1)) if cont else "Play Story", main.menu_story, 50)
+	_make_primary(first)
+	first.custom_minimum_size.y = 104
+	_label(v, ("%s is waiting. Keep going!" % main.FRIEND) if cont else ("Carry letters across Europe to %s" % main.FRIEND), 26, Color(1, 1, 1, 0.62))
+	_btn(v, "Endless Road", main.menu_endless, 36)
+	_btn(v, "Daily Relay", main.menu_daily, 36)
+	var sv := _btn(v, "Scenic View", main.menu_scenic, 36)
+	sv.add_theme_color_override("font_color", Color(0.72, 1.0, 0.9))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
 	v.add_child(row)
-	var g = _btn(row, "Garage", show_garage, 32)
-	g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var s = _btn(row, "Settings", show_settings, 32)
-	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for it in [["Garage", show_garage], ["Settings", show_settings], ["Tutorial", main.menu_tutorial]]:
+		var b := _btn(row, it[0], it[1], 28)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		for st in ["normal", "hover", "pressed"]:
+			var x: StyleBoxFlat = _theme.get_stylebox(st, "Button").duplicate()
+			x.content_margin_left = 12
+			x.content_margin_right = 12
+			b.add_theme_stylebox_override(st, x)
 	# Portal builds (CrazyGames etc.) must not show their own ad prompts.
 	if main.ads.can_show() and not OS.has_feature("portal"):
-		_btn(v, "Free gift: watch a short ad for +1 Spark  (%d left today)" % main.ads.remaining_today(), main.watch_ad_for_spark, 26)
-	_label(v, "Sparks: %d   ·   Stamps: %d   ·   Best: %d" % [main.save.data.sparks, main.save.data.stamps, main.save.data.best_endless], 26, Color(1, 1, 1, 0.65))
-	var tb := _btn(v, "Tutorial", main.menu_tutorial, 24)
-	tb.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_btn(v, "Free gift: short ad for +1 Spark  (%d left)" % main.ads.remaining_today(), main.watch_ad_for_spark, 24)
+	_label(v, "%d Sparks   ·   %d Stamps   ·   Best %d" % [main.save.data.sparks, main.save.data.stamps, main.save.data.best_endless], 26, Color(1.0, 0.88, 0.6, 0.9))
+	_appear(c)
 	first.grab_focus.call_deferred()
+
+## Scenic View: only a small Back button; Esc also returns.
+func show_scenic() -> void:
+	_corner_button("Back  (Esc)", main.go_title, 28)
 
 func show_garage() -> void:
 	main.synth.play("ui")
@@ -226,7 +308,7 @@ func show_results(r: Dictionary) -> void:
 func show_story_over(ch: int) -> void:
 	var v := _panel(0.5, 720)
 	_label(v, "Out of hearts", 68, Color(1.0, 0.6, 0.7))
-	_label(v, "Kite needs a rest. Your progress is saved: next time you start at chapter %d." % (ch + 1), 32, Color(1, 1, 1, 0.85))
+	_label(v, "Vayu needs a rest. Your progress is saved: next time you start at chapter %d." % (ch + 1), 32, Color(1, 1, 1, 0.85))
 	var b := _btn(v, "Back to home", main.go_title, 44)
 	b.grab_focus.call_deferred()
 
@@ -299,7 +381,7 @@ func show_junction(story: bool) -> void:
 	v.add_theme_constant_override("separation", 22)
 	c.add_child(v)
 	_label(v, "A fork in the road", 60)
-	var w = _btn(v, "WILD ROUTE  (Up)\nshorter and faster to Lumi, but much harder" if story else "WILD ROUTE  (Up)\nharder, faster, score x1.5", main.choose_route.bind("wild"), 34)
+	var w = _btn(v, "WILD ROUTE  (Up)\nshorter and faster to Lia, but much harder" if story else "WILD ROUTE  (Up)\nharder, faster, score x1.5", main.choose_route.bind("wild"), 34)
 	w.add_theme_color_override("font_color", Color(1.0, 0.7, 0.5))
 	var s = _btn(v, "SCENIC ROUTE  (Down)\nlonger and gentler, with more kind strangers" if story else "SCENIC ROUTE  (Down)\ncalmer stretch, steady score", main.choose_route.bind("scenic"), 34)
 	s.add_theme_color_override("font_color", Color(0.6, 1.0, 0.8))
@@ -307,7 +389,7 @@ func show_junction(story: bool) -> void:
 
 func show_finale_end() -> void:
 	var v = _panel(0.74, 700, false)
-	_label(v, "Kite found Lumi.  The Endless Road is waiting.", 34, Color(1, 0.9, 0.95))
+	_label(v, "Vayu found Lia.  The Endless Road is waiting.", 34, Color(1, 0.9, 0.95))
 	var b = _btn(v, "Endless Road", main.menu_endless, 40)
 	_btn(v, "Main menu", main.go_title)
 	b.grab_focus.call_deferred()

@@ -1,4 +1,22 @@
 # Changelog
+## 0.6.0 (2026-11-22)
+- **New names (owner's choice):** the hero is **Vayu** (Hindi/Sanskrit for "wind"), and the girl is **Cornelia, called Lia**. The game is shown as **VAYU: Letters to Lia** (window or tab title, title screen, loading screen, story text). The internal project name stays "VOLT/RUN" so desktop saves are kept. Store pages are not renamed yet.
+- **New menu:** a big logo with a subtitle ribbon and a paper plane, plus a frosted card with a warm "Play Story" button. Every screen fades in softly, and buttons lift on hover and squash when pressed. All panels have new rounded, shadowed styles.
+- **Fonts:** Fredoka for titles, buttons and the HUD, Nunito for body text. Both are bundled and under the OFL licence.
+- **Scenic View** (main menu): no obstacles and no HUD. Vayu just runs while the four countries go by, about 38 s each, then it loops. Esc or Back returns to the menu.
+- **Fixed:** the sun and moon light rays started far above the disc. They now fan out from the sun or moon itself.
+- **Less repetitive scenery:**
+  - Landmarks (bridge, castle, ring, spire) are rare.
+  - Trees come in small groves with varied height, tiers, width and lean.
+  - New props: village houses with lit windows, bushes, birches and rocks.
+  - Some Greek columns are broken ruins.
+  - Reed clumps vary.
+  - Foreground leaves vary.
+  - Some props sit further back in the haze.
+- The stones and roots in the ground are soft-tinted instead of near-black blobs.
+- Performance (chapter 2 benchmark vs 0.5.0):
+  - Draw calls: Low 246 → 243, Medium 329 → 353, High 488 → 524.
+  - Script time per frame: unchanged (2.82 / 3.80 / 4.51 ms).
 ## 0.5.0 (2026-11-22)
 - **Kite runs forward for real.** The old run cycle pushed the planted foot forward (a moonwalk). The new cycle plants each foot and slides it back at ground speed, lifts and tucks it, and swings it forward; the body bobs twice per stride, squashes slightly on landing, leans in, and the arms swing against the legs.
 - **Flowing scarf:** 12-segment cloth with air drag and a ripple running to the tip, drawn as smooth tapered ribbons (two tails, outline and sheen). It holds still while the game is frozen or paused.

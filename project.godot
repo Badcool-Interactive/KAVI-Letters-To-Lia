@@ -3,8 +3,8 @@ config_version=5
 
 [application]
 config/name="VOLT/RUN"
-config/description="Kite runs across a luminous future Europe to reach Lumi."
-config/version="0.5.0"
+config/description="Vayu: Letters to Lia. A little courier robot carries letters across Europe to reach Lia. (config/name stays VOLT/RUN on purpose: it names the save folder, so changing it would wipe players' progress.)"
+config/version="0.6.0"
 run/main_scene="res://main.tscn"
 config/icon="res://icon.svg"
 boot_splash/bg_color=Color(0.055, 0.07, 0.14, 1)
