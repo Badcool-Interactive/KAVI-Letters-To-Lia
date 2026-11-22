@@ -1096,8 +1096,16 @@ func _update_kite_view(dt: float) -> void:
 			_run_pose()
 		elif state == "fail":
 			kite.pose = "fail"
+		elif state == "tut_done":
+			# The course has ended and the world is still: celebrate, don't run in place.
+			kite.pose = "wave"
 	kite.position = p
-	kite.speed = sim.cur_speed() if state == "run" else 120.0
+	if state == "run" or state == "paused":
+		# Frozen (tutorial prompt) or paused: hold the pose; legs cycling while
+		# the world stands still reads as moonwalking backwards.
+		kite.speed = 0.0 if (sim.frozen or state == "paused") else sim.cur_speed()
+	else:
+		kite.speed = 120.0
 	kite.tier = tw.tier()
 	kite.scarf = int(save.data.scarf)
 	kite.rim = pal.rim
