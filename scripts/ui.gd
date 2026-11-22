@@ -122,7 +122,8 @@ func show_title() -> void:
 	g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var s = _btn(row, "Settings", show_settings, 32)
 	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if main.ads.can_show():
+	# Portal builds (CrazyGames etc.) must not show their own ad prompts.
+	if main.ads.can_show() and not OS.has_feature("portal"):
 		_btn(v, "Free gift: watch a short ad for +1 Spark  (%d left today)" % main.ads.remaining_today(), main.watch_ad_for_spark, 26)
 	_label(v, "Sparks: %d   ·   Stamps: %d   ·   Best: %d" % [main.save.data.sparks, main.save.data.stamps, main.save.data.best_endless], 26, Color(1, 1, 1, 0.65))
 	var tb := _btn(v, "Tutorial", main.menu_tutorial, 24)

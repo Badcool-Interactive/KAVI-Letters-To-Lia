@@ -141,7 +141,7 @@ func _ready() -> void:
 		save.save()
 	go_title()
 	if has_meta("hide"):
-		var nodes = {"world": world_view, "track": track_view, "kite": kite, "hud": hud, "fg": fg, "fx": fx, "cast": cast_base, "touch": touch}
+		var nodes = {"world": world_view, "track": track_view, "kite": kite, "hud": hud, "fg": fg, "fx": fx, "cast": cast_base, "touch": touch, "ui": ui, "vignette": vignette}
 		for k in get_meta("hide"):
 			if nodes.has(k):
 				nodes[k].visible = false
