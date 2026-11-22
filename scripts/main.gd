@@ -1380,7 +1380,7 @@ func _draw_run_hud(ci: Node2D, sz: Vector2) -> void:
 	if mode != "tutorial" and not save.data.settings.kind_mode:
 		for i in MAX_HEARTS:
 			KiteView._heart(ci, Vector2(184 + i * 40, top + 112), 15.0, Color(1.0, 0.45, 0.6, 0.95) if i < hearts else Color(1, 1, 1, 0.18))
-	if input_mode == "keys" and state in ["run", "fail"]:
+	if input_mode == "keys" and state in ["run", "fail"] and not has_meta("clean_trailer"):
 		_key_hints(ci, sz)
 	# letters
 	for i in 3:
@@ -1494,6 +1494,24 @@ func _setup_capture() -> void:
 	if "--trailer" in OS.get_cmdline_user_args():
 		# ~19 s gameplay montage for store/portal preview videos (recorded with --write-movie).
 		save.data.tutorial_done = true
+		if "--trailer-long" in OS.get_cmdline_user_args():
+			# ~63 s raw take for the YouTube trailer and Short (cut in ffmpeg).
+			# No tutorial tips or key bar: the video adds its own captions.
+			set_meta("clean_trailer", true)
+			save.data.seen_hints = ["hurdle", "beam", "gap", "wide_gap", "gate", "bell", "bloom"]
+			cap_steps = [
+				{"do": "wait", "s": 3.5},
+				{"do": "story", "ch": 0}, {"do": "wait", "s": 8.0},
+				{"do": "story", "ch": 1}, {"do": "wait", "s": 9.0},
+				{"do": "force_rescue"}, {"do": "wait", "s": 5.0},
+				{"do": "story", "ch": 2}, {"do": "wait", "s": 8.0},
+				{"do": "force_junction"}, {"do": "wait", "s": 3.0},
+				{"do": "story", "ch": 3}, {"do": "wait", "s": 10.0},
+				{"do": "endless"}, {"do": "wait", "s": 8.0},
+				{"do": "force_finale"}, {"do": "wait", "s": 8.0},
+				{"do": "quit"},
+			]
+			return
 		cap_steps = [
 			{"do": "story", "ch": 0}, {"do": "wait", "s": 3.6},
 			{"do": "story", "ch": 1}, {"do": "wait", "s": 4.2},
