@@ -134,7 +134,8 @@ func show_garage() -> void:
 	main.synth.play("ui")
 	var v = _panel(0.5, 760)
 	_label(v, "Garage  ·  Scarves", 56)
-	_label(v, "Sparks: %d  (earn them from stamps, Tailwind x4 runs, or an optional ad)" % main.save.data.sparks, 26, Color(1, 0.9, 0.6))
+	var how := "1 Spark for every 25 stamps you collect, +1 for reaching Tailwind x4" + ("" if OS.has_feature("portal") else ", or an optional ad")
+	_label(v, "Sparks: %d   ·   %s" % [main.save.data.sparks, how], 26, Color(1, 0.9, 0.6))
 	var owned: Array = main.save.data.owned_scarves
 	for i in SCARF_NAMES.size():
 		var txt: String = SCARF_NAMES[i]

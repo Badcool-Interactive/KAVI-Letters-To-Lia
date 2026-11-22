@@ -118,7 +118,8 @@ func _draw_sky_light(ci: Node2D) -> void:
 
 # ------------------------------------------------------------------ layers
 func _layer_base(i: int) -> float:
-	return size.y * BASE[i] - cam_y * PAR[i] * 0.25 + (1.0 - calm) * 0.0
+	var drop = size.y * 0.06 * pal.water if i == 1 else 0.0  # opens a band of sea/river
+	return size.y * BASE[i] - cam_y * PAR[i] * 0.25 + drop
 
 func _ridge_y(i: int, lx: float) -> float:
 	var amp = [70.0, 46.0, 26.0][i]
@@ -153,7 +154,15 @@ func _draw_layer(ci: Node2D, i: int) -> void:
 		var sx = lx - off
 		var s: float = SCALE[i] * (0.7 + Art.hash01(c, 19 + i) * 0.5)
 		_feature(ci, i, kind, Vector2(sx, _ridge_y(i, lx) + 14.0), s, col, c)
-	ci.draw_colored_polygon(pts, col)
+	# aerial perspective: lighter, hazier at the ridge, deeper towards the bottom
+	var top_c: Color = col.lerp(pal.fog, [0.20, 0.12, 0.06][i])
+	var bot_c: Color = col.darkened([0.12, 0.18, 0.22][i])
+	var cols = PackedColorArray()
+	cols.resize(pts.size())
+	cols.fill(top_c)
+	cols[pts.size() - 1] = bot_c
+	cols[pts.size() - 2] = bot_c
+	ci.draw_polygon(pts, cols)
 	# rim light along the ridge, facing the sun
 	var rim: Color = pal.rim
 	var rim_pts = pts.slice(0, pts.size() - 2)
@@ -230,17 +239,28 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 				ci.draw_line(p, tip, col, 5.0 * s)
 				ci.draw_line(tip, tip + Vector2(18 * s * (k - 2), 10 * s), col, 4.0 * s)
 		"bridge":
+			# Tied-arch bridge: the arch springs from the deck, hangers hold the
+			# deck, and piers/towers go down into the hill (bases hidden by the
+			# ridge fill drawn after features), so nothing floats.
 			var bl = 700.0 * s
-			var top = -260.0 * s
+			var deck = p.y - 150.0 * s
+			var rise = 190.0 * s
+			var x0 = p.x - bl * 0.5
 			var arc = PackedVector2Array()
 			for k in 25:
 				var f = float(k) / 24.0
-				arc.append(p + Vector2(-bl * 0.5 + bl * f, top + sin(f * PI) * -90.0 * s))
+				arc.append(Vector2(x0 + bl * f, deck - sin(f * PI) * rise))
+			for px in [x0, x0 + bl * 0.34, x0 + bl * 0.66, x0 + bl]:
+				ci.draw_rect(Rect2(px - 11.0 * s, deck, 22.0 * s, 420.0 * s), col)
+				ci.draw_rect(Rect2(px - 16.0 * s, deck + 4.0 * s, 32.0 * s, 10.0 * s), col)
+			for ex in [x0, x0 + bl]:
+				ci.draw_rect(Rect2(ex - 15.0 * s, deck - 70.0 * s, 30.0 * s, 70.0 * s), col)
+				L.append([Vector2(ex, deck - 78.0 * s), 4.0 * s, acc])
+			ci.draw_line(Vector2(x0 - 30.0 * s, deck), Vector2(x0 + bl + 30.0 * s, deck), col, 14.0 * s)
 			ci.draw_polyline(arc, col, 9.0 * s, Art.AA)
-			ci.draw_line(p + Vector2(-bl * 0.5, -120 * s), p + Vector2(bl * 0.5, -120 * s), col, 12.0 * s)
-			for k in 12:
-				var q: Vector2 = arc[k * 2]
-				ci.draw_line(q, Vector2(q.x, p.y - 120 * s), col, 2.0)
+			for k in range(2, 23, 2):
+				var q: Vector2 = arc[k]
+				ci.draw_line(q, Vector2(q.x, deck), col, 2.0)
 				L.append([q, 3.5 * s, Art.hdr(pal.mote, 1.2)])
 		"turbine":
 			var th = (300.0 + Art.hash01(seed, 3) * 140.0) * s
@@ -284,7 +304,44 @@ func _draw_lights(ci: Node2D, i: int) -> void:
 		Art.glow(ci, L[0], L[1] * 4.0, Color(c, 0.6 * fade), 5)
 		ci.draw_circle(L[0], L[1] * 0.6, Art.hdr(c, 1.6 * fade))
 
+## Sea (Greece) / river (Danube) between the far hills and the middle layer,
+## with the sun's reflection column and drifting glints.
+func _draw_water(ci: Node2D) -> void:
+	var w = size.x
+	var y0 = _layer_base(0) - 6.0
+	var y1 = size.y
+	var hor: Color = pal.sky[2]
+	var sc: Color = pal.sun
+	var near: Color = pal.layers[1].lerp(pal.sky[1], 0.35)
+	var top_c: Color = hor.lerp(sc, 0.25)
+	var mid_c: Color = hor.lerp(near, 0.55)
+	ci.draw_polygon(PackedVector2Array([Vector2(0, y0), Vector2(w, y0), Vector2(w, y0 + 90.0), Vector2(0, y0 + 90.0)]),
+		PackedColorArray([top_c, top_c, mid_c, mid_c]))
+	ci.draw_rect(Rect2(0, y0 + 90.0, w, y1 - y0), mid_c)
+	ci.draw_line(Vector2(0, y0 + 1.0), Vector2(w, y0 + 1.0), Color(sc.lightened(0.3), 0.55), 2.0)
+	var sx: float = pal.sun_pos.x * w - cam_x * 0.004
+	var a: float = 0.55 * pal.water
+	ci.draw_polygon(PackedVector2Array([Vector2(sx - 70, y0), Vector2(sx + 70, y0), Vector2(sx + 150, y0 + 140), Vector2(sx - 150, y0 + 140)]),
+		PackedColorArray([Color(sc, a), Color(sc, a), Color(sc, 0.0), Color(sc, 0.0)]))
+	for i in [10, 22, 40][Art.Q]:
+		var yy = y0 + 4.0 + pow(Art.hash01(i, 3), 1.5) * 120.0
+		var spread = 30.0 + (yy - y0) * 1.8
+		var cx = sx + (Art.hash01(i, 9) - 0.5) * spread * 2.0 + sin(t * 1.3 + i) * 8.0
+		var ln = 8.0 + Art.hash01(i, 4) * 46.0 * (0.4 + (yy - y0) / 120.0)
+		var al = (0.35 + 0.35 * sin(t * 2.2 + i * 1.7)) * pal.water
+		ci.draw_line(Vector2(cx - ln, yy), Vector2(cx + ln, yy), Color(sc.lightened(0.4), al), 2.0)
+	# slow ripple lines across the whole surface
+	for k in 4:
+		var yy = y0 + 18.0 + k * 26.0
+		var off = fposmod(-cam_x * (0.08 + k * 0.03) + k * 211.0, 260.0)
+		var x = off - 260.0
+		while x < w:
+			ci.draw_line(Vector2(x, yy), Vector2(x + 60.0 + k * 20.0, yy), Color(hor.lightened(0.2), 0.10), 1.5)
+			x += 260.0
+
 func _draw_haze(ci: Node2D, i: int) -> void:
+	if i == 0 and pal.water > 0.01:
+		_draw_water(ci)
 	var fog: Color = pal.fog
 	var y = _layer_base(i) - 80.0
 	var h = 220.0

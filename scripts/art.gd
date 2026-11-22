@@ -69,7 +69,7 @@ static func mixc(a: Color, b: Color, t: float) -> Color:
 ## light source, glowing life. Original locations inspired by the route.
 const BIOMES := [
 	{
-		"name": "Kalymera Bay", "country": "Greece",
+		"name": "Kalymera Bay", "surface": "pavers", "country": "Greece",
 		"sky": [Color(0.10, 0.17, 0.27), Color(0.30, 0.42, 0.52), Color(0.96, 0.76, 0.58)],
 		"sun": Color(1.0, 0.84, 0.64), "sun_pos": Vector2(0.72, 0.56), "sun_r": 150.0,
 		"fog": Color(0.70, 0.66, 0.68),
@@ -81,7 +81,7 @@ const BIOMES := [
 		"stars": 0.15, "aurora": 0.0, "water": 1.0,
 	},
 	{
-		"name": "Rhodope Lanterns", "country": "Bulgaria",
+		"name": "Rhodope Lanterns", "surface": "moss", "country": "Bulgaria",
 		"sky": [Color(0.07, 0.13, 0.20), Color(0.17, 0.30, 0.35), Color(0.48, 0.64, 0.60)],
 		"sun": Color(0.86, 1.0, 0.94), "sun_pos": Vector2(0.30, 0.32), "sun_r": 70.0,
 		"fog": Color(0.42, 0.58, 0.56),
@@ -93,7 +93,7 @@ const BIOMES := [
 		"stars": 0.7, "aurora": 0.0, "water": 0.0,
 	},
 	{
-		"name": "Danube Mirror", "country": "Bulgaria · Romania",
+		"name": "Danube Mirror", "surface": "boards", "country": "Bulgaria · Romania",
 		"sky": [Color(0.14, 0.11, 0.22), Color(0.38, 0.28, 0.42), Color(0.94, 0.68, 0.62)],
 		"sun": Color(1.0, 0.72, 0.66), "sun_pos": Vector2(0.50, 0.62), "sun_r": 130.0,
 		"fog": Color(0.70, 0.56, 0.62),
@@ -105,7 +105,7 @@ const BIOMES := [
 		"stars": 0.3, "aurora": 0.0, "water": 1.0,
 	},
 	{
-		"name": "Carpathian Aurora", "country": "Romania",
+		"name": "Carpathian Aurora", "surface": "snow", "country": "Romania",
 		"sky": [Color(0.06, 0.06, 0.14), Color(0.16, 0.15, 0.30), Color(0.38, 0.50, 0.66)],
 		"sun": Color(0.88, 0.84, 1.0), "sun_pos": Vector2(0.62, 0.24), "sun_r": 60.0,
 		"fog": Color(0.44, 0.48, 0.66),
@@ -138,4 +138,5 @@ static func blend_biome(a: Dictionary, b: Dictionary, t: float) -> Dictionary:
 	o.aurora = lerpf(a.aurora, b.aurora, t)
 	o.water = lerpf(a.water, b.water, t)
 	o.kinds = a.kinds if t < 0.5 else b.kinds
+	o.surface = a.get("surface", "") if t < 0.5 else b.get("surface", "")
 	return o

@@ -98,8 +98,8 @@ var last_result = {}
 var capture_dir = ""
 var bench = {}
 var input_mode := "touch"   # "touch" or "keys": decides touch buttons vs key hints
-var hearts := 2
-const MAX_HEARTS := 2
+var hearts := 3
+const MAX_HEARTS := 3
 var env: Environment
 var forced_quality := -1
 var q_frames: Array = []
@@ -795,7 +795,7 @@ func _update_fail(dt: float) -> void:
 			state = "run"
 			state_t = 0.0
 
-## Two hearts per run. When they are gone the run is over: story players go
+## Three hearts per run. When they are gone the run is over: story players go
 ## back to the home screen (their reached chapter is kept); endless shows results.
 func _game_over() -> void:
 	if mode == "story":
@@ -1550,7 +1550,7 @@ func _setup_capture() -> void:
 		{"do": "force_finale"}, {"do": "wait", "s": 7.5}, {"shot": "16-finale"},
 		{"do": "endless"}, {"do": "wait", "s": 14.0}, {"shot": "17-endless"},
 		{"do": "end_run"}, {"do": "wait", "s": 0.6}, {"shot": "18-results"},
-		{"do": "story", "ch": 0}, {"do": "wait", "s": 5.0}, {"do": "die"}, {"do": "wait", "s": 2.2}, {"shot": "19-one-heart-left"},
+		{"do": "story", "ch": 0}, {"do": "wait", "s": 5.0}, {"do": "die"}, {"do": "wait", "s": 2.2}, {"do": "die"}, {"do": "wait", "s": 2.2}, {"shot": "19-one-heart-left"},
 		{"do": "die"}, {"do": "wait", "s": 2.4}, {"shot": "20-out-of-hearts"},
 		{"do": "quit"},
 	]

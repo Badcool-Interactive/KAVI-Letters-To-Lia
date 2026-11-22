@@ -37,6 +37,15 @@ var blink_t = 0.0
 var trail_on = true
 
 var _scarf_pts: Array = []
+var _scarf_prev: Array = []
+
+## Run cycle: a planted foot slides back exactly as fast as the ground moves,
+## so feet stick to the ground (the old cycle pushed the planted foot forward,
+## which read as running backwards).
+const STRIDE := 22.0       # half stride, body units
+const CONTACT := 0.36      # fraction of the cycle a foot is planted
+const SCARF_N := 12
+const SCARF_SEG := 5.6
 var _trail: Array = []
 var _base: Node2D
 var _add: Node2D
@@ -60,7 +69,7 @@ func tick(dt: float) -> void:
 		_last_pose = pose
 	act_t += dt
 	match pose:
-		"run": phase += dt * speed / 520.0 * 15.0
+		"run": phase += dt * speed * CONTACT * TAU / (2.0 * STRIDE * s)
 		"walk": phase += dt * 6.5
 		"slide": phase += dt * 30.0
 	blink_t -= dt
@@ -81,22 +90,43 @@ func _neck_world() -> Vector2:
 
 func _update_scarf(dt: float) -> void:
 	var anchor = _neck_world()
-	if _scarf_pts.size() != 7:
+	if _scarf_pts.size() != SCARF_N or anchor.distance_to(_scarf_pts[0]) > 220.0:
 		_scarf_pts.clear()
-		for k in 7:
-			_scarf_pts.append(anchor + Vector2(-k * 9.0 * s, 0))
+		_scarf_prev.clear()
+		for k in SCARF_N:
+			var q = anchor + Vector2(-k * SCARF_SEG * s, k * 1.5)
+			_scarf_pts.append(q)
+			_scarf_prev.append(q)
+	var shift: Vector2 = anchor - _scarf_pts[0]
+	if pose == "run" and speed <= 0.0:
+		# frozen moment (tutorial prompt / pause): hold the shape
+		for k in SCARF_N:
+			_scarf_pts[k] += shift
+			_scarf_prev[k] += shift
+		return
+	dt = minf(dt, 1.0 / 30.0)
+	var calm_pose = pose in ["idle", "wave", "sit", "eat", "drink", "map", "photo", "read", "stretch"]
+	var spd = clampf(speed / 520.0, 0.25, 1.4) if not calm_pose else 0.18
+	var flap = (1.0 if not reduced_motion else 0.35) * spd
+	var drag = pow(0.32, dt * 60.0)
 	_scarf_pts[0] = anchor
-	var wind = -speed * 0.9 if pose != "idle" and pose != "wave" and pose != "sit" else -30.0
-	for k in range(1, 7):
-		var p: Vector2 = _scarf_pts[k]
-		var flutter = sin(t * 14.0 - k * 0.9) * (3.0 + k * 1.2) * (1.0 if not reduced_motion else 0.4)
-		p += Vector2(wind * dt * 0.5, (40.0 + flutter * 8.0) * dt)
-		var prev: Vector2 = _scarf_pts[k - 1]
-		var d = p - prev
-		var L = 9.0 * s
-		if d.length() > L:
-			p = prev + d.normalized() * L
-		_scarf_pts[k] = p
+	_scarf_prev[0] = anchor
+	for k in range(1, SCARF_N):
+		var q: Vector2 = _scarf_pts[k]
+		var v: Vector2 = (q - _scarf_prev[k]) * drag  # cloth in still air: strong drag, so it trails
+		var f = float(k) / (SCARF_N - 1)
+		# a ripple that travels from the neck to the tip
+		var wave = sin(t * 17.0 - k * 0.85) * 1500.0 * f * flap + sin(t * 9.0 - k * 0.5) * 500.0 * f * flap
+		var acc = Vector2(-140.0 if calm_pose else 0.0, 260.0 + wave)
+		_scarf_prev[k] = q
+		_scarf_pts[k] = q + v + acc * dt * dt
+	var L = SCARF_SEG * s
+	for it in 3:
+		for k in range(1, SCARF_N):
+			var d: Vector2 = _scarf_pts[k] - _scarf_pts[k - 1]
+			var dl = d.length()
+			if dl > L:
+				_scarf_pts[k] = _scarf_pts[k - 1] + d / dl * L
 
 func _update_trail() -> void:
 	if not trail_on or tier < 3 or pose in ["idle", "sit", "wave", "walk"]:
@@ -118,12 +148,29 @@ func _pose_params() -> Dictionary:
 	match pose:
 		"run", "walk":
 			var amp = 1.0 if pose == "run" else 0.6
-			p.ff = Vector2(sin(ph) * 20.0 * amp, -maxf(0.0, -cos(ph)) * 15.0 * amp)
-			p.fb = Vector2(sin(ph + PI) * 20.0 * amp, -maxf(0.0, -cos(ph + PI)) * 15.0 * amp)
-			p.hf = Vector2(-sin(ph) * 13.0 * amp + 4.0, 16.0)
-			p.hb = Vector2(-sin(ph + PI) * 13.0 * amp - 2.0, 16.0)
-			p.off = Vector2(0, -absf(cos(ph)) * 4.0 * amp)
-			p.rot = 0.08 * amp
+			var u = phase / TAU
+			var fa = _leg(u, amp)
+			var fbk = _leg(u + 0.5, amp)
+			# body: two bobs per stride, lowest just after each landing
+			var bob_ph = TAU * 2.0 * (u - 0.07)
+			var bob = cos(bob_ph)
+			p.off = Vector2(0, (bob * 2.6 - 1.0) * amp)
+			p.rot = (0.11 + 0.025 * sin(bob_ph)) * amp
+			var land = pow(maxf(0.0, bob), 4.0)
+			p.sq = Vector2(1.0 + 0.045 * land * amp, 1.0 - 0.045 * land * amp)
+			p.head = -0.04 * cos(bob_ph - 0.7) * amp
+			# keep the feet on the ground through the bob, lean and squash
+			var sr = sin(p.rot)
+			var cr = cos(p.rot)
+			fa.y = (fa.y - p.off.y - fa.x * p.sq.x * sr) / (p.sq.y * cr)
+			fbk.y = (fbk.y - p.off.y - fbk.x * p.sq.x * sr) / (p.sq.y * cr)
+			p.ff = fa
+			p.fb = fbk
+			# arms swing against the legs; the forward hand rises (bent elbow)
+			var sa = clampf(fa.x / (STRIDE * amp), -1.0, 1.0)
+			var sb = clampf(fbk.x / (STRIDE * amp), -1.0, 1.0)
+			p.hf = Vector2(-sa * 13.0 * amp + 4.0, 15.0 - maxf(0.0, -sa) * 10.0 * amp)
+			p.hb = Vector2(-sb * 13.0 * amp - 2.0, 15.0 - maxf(0.0, -sb) * 10.0 * amp)
 		"jump":
 			p.ff = Vector2(12, -18)
 			p.fb = Vector2(-10, -8)
@@ -210,6 +257,18 @@ func _pose_params() -> Dictionary:
 			p.sq = Vector2(1.0 - 0.04 * k2, 1.0 + 0.05 * k2)
 	return p
 
+## Foot position over one stride (u in 0..1): planted, sliding back at
+## ground speed; then lifted, tucked up behind and swung forward.
+static func _leg(u: float, amp: float) -> Vector2:
+	u = fposmod(u, 1.0)
+	var S = STRIDE * amp
+	if u < CONTACT:
+		return Vector2(lerpf(S, -S, u / CONTACT), 0.0)
+	var k = (u - CONTACT) / (1.0 - CONTACT)
+	var e = k * k * (3.0 - 2.0 * k)
+	var lift = sin(pow(k, 0.7) * PI) * 18.0 * amp
+	return Vector2(lerpf(-S, S, e), -lift)
+
 static func _ik(a: Vector2, b: Vector2, l1: float, l2: float, bend: float) -> Vector2:
 	var d = b - a
 	var L = clampf(d.length(), 0.01, l1 + l2 - 0.01)
@@ -272,20 +331,34 @@ func _paint(ci: Node2D, add: bool) -> void:
 		_limb(ci, hip + Vector2(-3, 0), kb, 9, SHADE)
 		_limb(ci, kb, fb + Vector2(0, -6), 8, SHADE)
 		_boot(ci, fb, BOOT.darkened(0.25))
-		# scarf tails (behind body)
-		if _scarf_pts.size() == 7:
+		# scarf tails (behind body): smooth tapered cloth strips
+		if _scarf_pts.size() == SCARF_N:
 			var sc: Color = SCARVES[scarf % SCARVES.size()]
 			ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-			var pts = PackedVector2Array()
+			var raw = PackedVector2Array()
 			for q in _scarf_pts:
-				pts.append(ci.to_local(q))
-			ci.draw_polyline(pts, INK, 11.0 * s, Art.AA)
-			ci.draw_polyline(pts, sc, 7.5 * s, Art.AA)
-			var tail2 = PackedVector2Array()
-			for k in range(1, pts.size()):
-				tail2.append(pts[k] + Vector2(2, 7 + sin(t * 12.0 + k) * 2.0) * s)
-			ci.draw_polyline(tail2, INK, 9.0 * s, Art.AA)
-			ci.draw_polyline(tail2, sc.darkened(0.15), 5.5 * s, Art.AA)
+				raw.append(ci.to_local(q))
+			var main_tail = _smooth(raw)
+			# second, shorter tail hangs a little lower and lags the first
+			var raw2 = PackedVector2Array()
+			for k in range(0, SCARF_N - 3):
+				var f = float(k) / (SCARF_N - 4)
+				raw2.append(raw[k] + Vector2(1.5 * f, (3.0 + 9.0 * f) * s + sin(t * 13.0 - k * 0.9) * 2.5 * f * s))
+			var tail2 = _smooth(raw2)
+			_strip(ci, tail2, 6.2 * s, 4.0 * s, INK)
+			_strip(ci, tail2, 4.6 * s, 2.6 * s, sc.darkened(0.22))
+			_strip(ci, main_tail, 7.6 * s, 4.8 * s, INK)
+			_strip(ci, main_tail, 6.0 * s, 3.4 * s, sc)
+			if Art.Q >= 1:
+				# soft sheen along the upper edge of the cloth
+				var sheen = PackedVector2Array()
+				for k in main_tail.size() - 2:
+					var d = main_tail[k + 1] - main_tail[k]
+					var nrm = d.orthogonal().normalized() if d.length() > 0.01 else Vector2(0, -1)
+					if nrm.y > 0.0:
+						nrm = -nrm
+					sheen.append(main_tail[k] + nrm * 3.4 * s * (1.0 - 0.5 * float(k) / main_tail.size()))
+				ci.draw_polyline(sheen, Color(sc.lightened(0.45), 0.75), 1.6 * s, Art.AA)
 			ci.draw_set_transform(p.off * s, p.rot, p.sq * s)
 		# backpack + thrusters
 		_poly(ci, Art.rrect(Rect2(-27, -66, 18, 30), 6), PACK)
@@ -295,6 +368,9 @@ func _paint(ci: Node2D, add: bool) -> void:
 		# torso
 		_poly(ci, Art.rrect(Rect2(-14, -64, 30, 30), 11), SHADE)
 		ci.draw_colored_polygon(Art.rrect(Rect2(-10, -63, 25, 25), 10), SHELL)
+		if Art.Q >= 1:
+			ci.draw_colored_polygon(Art.rrect(Rect2(-10, -50, 25, 12), 6), Color(SHADE, 0.45))
+			ci.draw_arc(Vector2(4, -52), 9.0, PI * 1.15, PI * 1.6, 6, Color(1, 1, 1, 0.8), 2.0, Art.AA)
 		ci.draw_rect(Rect2(-12, -40, 26, 5), TEAL)
 		ci.draw_colored_polygon(Art.rrect(Rect2(3, -56, 9, 7), 3), VISOR)
 		# front leg
@@ -340,6 +416,11 @@ func _paint(ci: Node2D, add: bool) -> void:
 			var a = lerpf(PI * 1.18, PI * 1.62, float(k) / 8.0)
 			crest.append(hc + Vector2(cos(a) * 26.5, sin(a) * 23.5))
 		ci.draw_polyline(crest, TEAL, 6.0, Art.AA)
+		if Art.Q >= 1:
+			# glossy shell: a soft highlight up front, a shadow crescent behind
+			ci.draw_arc(hc + Vector2(3, -1), 20.0, PI * 1.22, PI * 1.52, 10, Color(1, 1, 1, 0.85), 3.0, Art.AA)
+			ci.draw_circle(hc + Vector2(-4, -15), 2.2, Color(1, 1, 1, 0.9))
+			ci.draw_arc(hc + Vector2(1, 0), 23.5, PI * 0.55, PI * 0.95, 10, Color(SHADE, 0.55), 4.0, Art.AA)
 		# visor
 		var vc = hc + Vector2(9, 2)
 		_poly(ci, Art.ellipse(vc, Vector2(19, 15), 26), TEAL)
@@ -379,8 +460,52 @@ func _paint(ci: Node2D, add: bool) -> void:
 		_props(ci, hf, true)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+## Catmull-Rom smoothing: 2 extra points per segment.
+static func _smooth(pts: PackedVector2Array) -> PackedVector2Array:
+	var out = PackedVector2Array()
+	var n = pts.size()
+	for i in n - 1:
+		var p0 = pts[maxi(i - 1, 0)]
+		var p1 = pts[i]
+		var p2 = pts[i + 1]
+		var p3 = pts[mini(i + 2, n - 1)]
+		for j in 3:
+			var u = j / 3.0
+			var u2 = u * u
+			var u3 = u2 * u
+			out.append(0.5 * ((2.0 * p1) + (-p0 + p2) * u + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * u2 + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * u3))
+	out.append(pts[n - 1])
+	return out
+
+## A tapered ribbon as one triangle strip (one draw call, never fails to
+## triangulate even when the cloth folds over itself).
+static func _strip(ci: Node2D, pts: PackedVector2Array, w0: float, w1: float, col: Color) -> void:
+	var n = pts.size()
+	if n < 2:
+		return
+	var verts = PackedVector2Array()
+	var cols = PackedColorArray()
+	var idx = PackedInt32Array()
+	var nrm = Vector2(0, 1)
+	for i in n:
+		var d = pts[mini(i + 1, n - 1)] - pts[maxi(i - 1, 0)]
+		if d.length() > 0.001:
+			nrm = d.orthogonal().normalized()
+		var w = lerpf(w0, w1, float(i) / (n - 1))
+		verts.append(pts[i] + nrm * w)
+		verts.append(pts[i] - nrm * w)
+		cols.append(col)
+		cols.append(col)
+	for i in n - 1:
+		var a = i * 2
+		idx.append_array([a, a + 1, a + 2, a + 1, a + 3, a + 2])
+	RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), idx, verts, cols)
+
 func _boot(ci: Node2D, f: Vector2, col: Color) -> void:
 	_poly(ci, PackedVector2Array([f + Vector2(-8, -9), f + Vector2(4, -9), f + Vector2(12, -3), f + Vector2(13, 1), f + Vector2(-9, 1)]), col)
+	if Art.Q >= 1:
+		ci.draw_rect(Rect2(f.x - 8, f.y - 2.5, 20, 3), col.lightened(0.55))
+		ci.draw_line(f + Vector2(-5, -7), f + Vector2(2, -7), Color(1, 1, 1, 0.45), 1.5)
 	ci.draw_line(f + Vector2(-9, 0), f + Vector2(13, 0), INK, 2.0)
 
 func _props(ci: Node2D, hand: Vector2, add: bool) -> void:

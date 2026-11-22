@@ -62,20 +62,22 @@ func _draw_base(ci: Node2D) -> void:
 			segs.append([cur, h[0]])
 		cur = maxf(cur, h[1])
 	segs.append([cur, view_r + 300.0])
-	var band_top: Color = pal.layers[1].lerp(pal.fog, 0.22)
-	var band_mid: Color = pal.layers[2].lerp(gcol, 0.3)
+	var band_top: Color = pal.layers[1].lerp(pal.fog, 0.30)
+	var band_mid: Color = pal.layers[2].lerp(pal.layers[1], 0.35)
+	var body: Color = gcol.lerp(pal.layers[2], 0.75)
 	for s in segs:
 		var a: float = s[0]
 		var b: float = s[1]
 		if b - a < 2.0:
 			continue
-		ci.draw_rect(Rect2(a, 0, b - a, 1400), gcol)
+		ci.draw_rect(Rect2(a, 0, b - a, 1400), body)
 		ci.draw_polygon(PackedVector2Array([Vector2(a, 0), Vector2(b, 0), Vector2(b, 60), Vector2(a, 60)]),
 			PackedColorArray([band_top, band_top, band_mid, band_mid]))
-		ci.draw_polygon(PackedVector2Array([Vector2(a, 60), Vector2(b, 60), Vector2(b, 260), Vector2(a, 260)]),
-			PackedColorArray([band_mid, band_mid, gcol, gcol]))
+		ci.draw_polygon(PackedVector2Array([Vector2(a, 60), Vector2(b, 60), Vector2(b, 300), Vector2(a, 300)]),
+			PackedColorArray([band_mid, band_mid, body, body]))
 		if Art.Q >= 2:
 			_strata(ci, a, b, gcol)
+		_surface(ci, a, b, band_top)
 		_tufts(ci, a, b, gcol)
 	# holes: dark depth
 	for h in holes:
@@ -123,6 +125,82 @@ func _strata(ci: Node2D, a: float, b: float, gcol: Color) -> void:
 			for k in 7:
 				pts.append(Vector2(x + k * 18.0, 16.0 + k * 14.0 + sin(k + c) * 6.0))
 			ci.draw_polyline(pts, dark, 5.0, Art.AA)
+
+## Each country has its own walking surface along the top of the ground:
+## Greek stone paving, Bulgarian moss, a Danube boardwalk, Carpathian snow.
+func _surface(ci: Node2D, a: float, b: float, band_top: Color) -> void:
+	var x0 := maxf(a, view_l - 80.0)
+	var x1 := minf(b, view_r + 80.0)
+	if x1 - x0 < 4.0:
+		return
+	var kind: String = pal.get("surface", "")
+	var rim: Color = pal.rim
+	match kind:
+		"pavers":
+			var stone: Color = pal.layers[0].lerp(rim, 0.38)
+			ci.draw_rect(Rect2(x0, -2, x1 - x0, 9), stone.lightened(0.1))
+			var c0 := int(floor(x0 / 74.0))
+			var c1 := int(ceil(x1 / 74.0))
+			for c in range(c0, c1 + 1):
+				var bx := maxf(c * 74.0 + 2.0, x0)
+				var ex := minf(c * 74.0 + 72.0, x1)
+				if ex - bx < 2.0:
+					continue
+				var sh := Art.hash01(c, 61) * 0.12
+				ci.draw_rect(Rect2(bx, 8, ex - bx, 20), stone.darkened(0.05 + sh))
+				if Art.Q >= 1:
+					var off := 37.0 if c % 2 == 0 else 0.0
+					var bx2 := maxf(c * 74.0 + 2.0 + off - 37.0, x0)
+					var ex2 := minf(bx2 + 70.0, x1)
+					if ex2 > bx2 + 2.0:
+						ci.draw_rect(Rect2(bx2, 30, ex2 - bx2, 18), stone.darkened(0.22 + sh))
+		"moss":
+			var moss: Color = pal.layers[0].lerp(Color(0.40, 0.70, 0.46), 0.55)
+			var pts := PackedVector2Array([Vector2(x0, -2), Vector2(x1, -2)])
+			var c1 := int(x1 / 23.0)
+			var c0 := int(x0 / 23.0) + 1
+			pts.append(Vector2(x1, 6))
+			for c in range(c1, c0 - 1, -1):
+				var x := c * 23.0
+				if x < x0 or x + 7.0 > x1:
+					continue
+				var d := 6.0 + Art.hash01(c, 71) * 16.0
+				pts.append(Vector2(x + 7.0, 6.0))
+				pts.append(Vector2(x, d))
+			pts.append(Vector2(x0, 6))
+			ci.draw_colored_polygon(pts, moss)
+		"boards":
+			var wood: Color = pal.layers[0].lerp(Color(0.72, 0.50, 0.42), 0.55)
+			ci.draw_rect(Rect2(x0, -2, x1 - x0, 12), wood)
+			ci.draw_rect(Rect2(x0, 10, x1 - x0, 6), wood.darkened(0.35))
+			var c0 := int(floor(x0 / 34.0))
+			var c1 := int(ceil(x1 / 34.0))
+			if Art.Q >= 1:
+				for c in range(c0, c1 + 1):
+					var x := c * 34.0
+					if x > x0 and x < x1:
+						ci.draw_line(Vector2(x, -1), Vector2(x, 9), wood.darkened(0.3), 2.0)
+			var p0 := int(floor(x0 / 170.0))
+			var p1 := int(ceil(x1 / 170.0))
+			for c in range(p0, p1 + 1):
+				var x := c * 170.0 + 60.0
+				if x > x0 + 10.0 and x < x1 - 10.0:
+					ci.draw_rect(Rect2(x - 7, 16, 14, 150), wood.darkened(0.5))
+		"snow":
+			var snow := Color(0.90, 0.93, 1.0).lerp(pal.layers[0], 0.12)
+			var pts := PackedVector2Array([Vector2(x0, -5), Vector2(x1, -5), Vector2(x1, 10)])
+			var c1 := int(x1 / 29.0)
+			var c0 := int(x0 / 29.0) + 1
+			for c in range(c1, c0 - 1, -1):
+				var x := c * 29.0
+				if x < x0 or x + 10.0 > x1:
+					continue
+				var d := 13.0 + Art.hash01(c, 81) * 14.0
+				pts.append(Vector2(x + 10.0, 10.0))
+				pts.append(Vector2(x + 5.0, d))
+				pts.append(Vector2(x, 10.0))
+			pts.append(Vector2(x0, 10))
+			ci.draw_colored_polygon(pts, snow)
 
 ## Grass along a ground segment as ONE zigzag polygon (was ~60 triangles).
 func _tufts(ci: Node2D, a: float, b: float, gcol: Color) -> void:
