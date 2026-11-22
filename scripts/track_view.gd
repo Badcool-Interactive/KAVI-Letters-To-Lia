@@ -139,12 +139,38 @@ func _strata(ci: Node2D, a: float, b: float, gcol: Color) -> void:
 
 ## Each country has its own walking surface along the top of the ground:
 ## Greek stone paving, Bulgarian moss, a Danube boardwalk, Carpathian snow.
+## World transitions: the old country's walking surface continues up to a
+## seam in world space placed just off-screen right; the new one starts there.
+var surf_from := ""
+var surf_to := ""
+var surf_seam := INF
+
+func begin_transition(from_kind: String, to_kind: String, seam_x: float) -> void:
+	surf_from = from_kind
+	surf_to = to_kind
+	surf_seam = seam_x
+
+func end_transition() -> void:
+	surf_from = ""
+	surf_seam = INF
+
 func _surface(ci: Node2D, a: float, b: float, band_top: Color) -> void:
+	if surf_seam < INF:
+		if surf_seam < view_l - 400.0:
+			end_transition()
+		else:
+			if a < surf_seam:
+				_surface_kind(ci, a, minf(b, surf_seam), band_top, surf_from)
+			if b > surf_seam:
+				_surface_kind(ci, maxf(a, surf_seam), b, band_top, surf_to)
+			return
+	_surface_kind(ci, a, b, band_top, pal.get("surface", ""))
+
+func _surface_kind(ci: Node2D, a: float, b: float, band_top: Color, kind: String) -> void:
 	var x0 := maxf(a, view_l - 80.0)
 	var x1 := minf(b, view_r + 80.0)
 	if x1 - x0 < 4.0:
 		return
-	var kind: String = pal.get("surface", "")
 	var rim: Color = pal.rim
 	match kind:
 		"pavers":

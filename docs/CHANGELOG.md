@@ -1,4 +1,39 @@
 # Changelog
+## 0.8.0 (2026-11-22): smooth journeys, Kavi, new Garage
+- **New name (owner's choice):** the hero is now **Kavi** (KAH-vee). He's easy to say anywhere and means "poet", which suits a robot who carries letters. The game is **KAVI: Letters to Lia**.
+- **Smooth country changes:**
+  - The new country sweeps in from the right, layer by layer. Far hills follow more slowly, and a soft haze band sits where the two worlds meet. Before, everything swapped in one frame.
+  - The old sun sets while the new sun or moon rises.
+  - Colours blend over 7 s (was 3 s).
+  - The walking surface changes at a seam in the road ahead.
+  - Towns, people, ships and the far mountain shape change with the sweep. Sky things crossfade.
+- **Light from the sun and moon:**
+  - Light rays fade when the sun or moon is behind hills or mountains.
+  - The ridge in front of a low sun gets a glowing silver lining.
+  - The water reflection dims when the sun is hidden.
+- **New title screen:**
+  - A clean KAVI logo in the world's style: cream letters with an ink outline and a rim of the country's light. The letters rise in one by one, the letterspaced subtitle sits between hairlines, and a paper plane flies around it. The blurry glow is gone.
+  - The menu is a column of text items with no boxes. A glowing diamond and underline mark the selected item.
+  - On the title, the sun sets behind Kavi instead of behind the menu.
+  - Kavi stands still and looks around; the world no longer slides under him.
+- **New Garage:** a story idea from the owner: Kavi is a little memory chip who can move into new suits.
+  - 5 categories, 25 items:
+    - Suits: Courier, Kitty, Explorer with a headlamp
+    - Paint: 5 colour schemes
+    - Visor: 5 eye colours
+    - Scarves: 8, including Candy Stripes and an animated Rainbow
+    - Antenna tips: kite, star, heart, leaf
+  - The camera zooms in on Kavi, hovering an item tries it on, and buying one plays a sparkle and a chime.
+  - Pace: the first scarf (15) and visor (20) take about 3 runs; everything costs 790 Sparks in total.
+  - Old saves keep their scarves.
+- **Face animations:**
+  - Kavi's eyes follow what he's doing: ahead when running, up on a jump, down when falling. When he's idle they wander around.
+  - He sometimes double-blinks.
+  - A small smile shows when he's happy, and an "o" mouth when he's amazed.
+- **Fixed:** the test script's boot check could report "clean" even when the game had script errors. It now uses a here-string instead of `echo | grep -q` under pipefail.
+- Performance (chapter 2 benchmark vs 0.7.0):
+  - Script time per frame: Low 2.97 → 3.20, Medium 3.81 → 3.93, High 4.87 → 5.08 ms.
+  - Draw calls are about the same: 269 / 391 / 589.
 ## 0.7.0 (2026-11-22): a living world
 - **Towns at night:** distant city skylines (Greece, Danube) and hillside villages with little church towers (Bulgaria, Carpathians). Their windows switch on and off slowly, and some rooftop antennas blink red.
 - **People doing things** in the background:

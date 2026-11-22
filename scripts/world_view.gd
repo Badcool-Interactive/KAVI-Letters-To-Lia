@@ -12,7 +12,7 @@ var t = 0.0
 var quality = 2 # 0 low, 1 medium, 2 high
 var size = Vector2(1920, 1080)
 var calm = 0.0 # 0 running, 1 recovery (warmer, softer)
-var hero_x = -9999.0 # Vayu on screen: background people fade out behind him
+var hero_x = -9999.0 # Kavi on screen: background people fade out behind him
 
 const PAR := [0.06, 0.16, 0.36]
 const BASE := [0.62, 0.71, 0.80]
@@ -44,8 +44,85 @@ func _ready() -> void:
 		add_child(p)
 		_painters.append(p)
 
+# ------------------------------------------------------------------ world transitions
+## A new country sweeps in from the right: each layer has a seam that moves left
+## with its parallax (at least SWEEP px/s). Right of the seam is the new world,
+## left the old; props dissolve in a soft band around it, colours blend across it.
+var tr_from: Dictionary = {}
+var tr_to: Dictionary = {}
+var tr_t0 := 0.0
+var tr_c0 := 0.0
+const SWEEP := 170.0
+const BAND := 280.0
+
+func begin_transition(from: Dictionary, to: Dictionary) -> void:
+	tr_from = from
+	tr_to = to
+	tr_t0 = t
+	tr_c0 = cam_x
+
+func end_transition() -> void:
+	tr_from = {}
+
+func _seam(par: float) -> float:
+	return size.x + BAND + 40.0 - maxf((cam_x - tr_c0) * par, (t - tr_t0) * SWEEP)
+
+## 0 = old world, 1 = new world at screen x for a layer with this parallax.
+func _mix(par: float, sx: float) -> float:
+	if tr_from.is_empty():
+		return 1.0
+	return smoothstep(_seam(par) - BAND, _seam(par) + BAND, sx)
+
+func _side(w: float) -> Dictionary:
+	if tr_from.is_empty():
+		return pal
+	return tr_to if w >= 0.5 else tr_from
+
+func _update_transition() -> void:
+	if not tr_from.is_empty() and _seam(0.04) < -BAND - 300.0:
+		tr_from = {}
+
+## How much of the sun/moon disc is above the hills (0 hidden .. 1 clear).
+## Light shafts, the water reflection and the rim glow all follow it.
+var sun_vis := 1.0
+var _peaks: Array = [] # screen-space mountain triangles that can hide the sun
+
+func _peak_y(x: float) -> float:
+	var y := INF
+	for pk in _peaks:
+		var l: float = pk[0]
+		var tx: float = pk[1]
+		var r: float = pk[3]
+		if x > l and x < r:
+			var f := (x - l) / (tx - l) if x <= tx else (r - x) / (r - tx)
+			y = minf(y, lerpf(pk[4], pk[2], f))
+	return y
+
+## The dominant sun/moon (during a transition: whichever is brighter).
+func _sun_screen() -> Vector2:
+	if tr_from.is_empty():
+		return _sun_at(pal, 0.0)
+	var k := _sky_k()
+	var e := k * k * (3.0 - 2.0 * k)
+	return _sun_at(tr_from, e * 120.0) if e < 0.5 else _sun_at(tr_to, (1.0 - e) * 120.0)
+
+func _update_sun_vis() -> void:
+	var sp := _sun_screen()
+	var r: float = pal.sun_r * 0.45
+	var v := 0.0
+	# sample three points across the disc; each counts for a third
+	for dx in [-0.6, 0.0, 0.6]:
+		var top := INF
+		for i in 2:
+			top = minf(top, _ridge_y(i, sp.x + dx * r + cam_x * PAR[i]))
+		top = minf(top, _peak_y(sp.x + dx * r))
+		v += clampf((top - (sp.y - r)) / (2.0 * r), 0.0, 1.0) / 3.0
+	sun_vis = lerpf(sun_vis, v, 0.25)
+
 func refresh() -> void:
 	size = get_viewport_rect().size
+	_update_transition()
+	_update_sun_vis()
 	for p in _painters:
 		p.queue_redraw()
 
@@ -77,18 +154,39 @@ func _draw_sky(ci: Node2D) -> void:
 			ci.draw_rect(Rect2(sx - sr * 0.5, sy - sr * 0.5, sr, sr), Color(0.9, 0.95, 1.0, a))
 	_draw_air(ci)
 
+## 0..1 progress of the sky part of a world transition (old sun sets, new rises).
+func _sky_k() -> float:
+	return 1.0 if tr_from.is_empty() else clampf((t - tr_t0) / 7.0, 0.0, 1.0)
+
+var sun_shift := 0.0 # title screen: the sun sets behind Kavi, away from the menu
+
+func _sun_at(P: Dictionary, sink: float) -> Vector2:
+	return Vector2(P.sun_pos.x * size.x - cam_x * 0.004 + sun_shift, P.sun_pos.y * size.y - cam_y * 0.02 + sink)
+
+func _draw_sun(ci: Node2D, sp: Vector2, sc: Color, r: float, a: float) -> void:
+	if a < 0.01:
+		return
+	# wide atmospheric halo
+	Art.glow(ci, sp, r * 6.0, Color(sc, 0.30 * a))
+	Art.glow(ci, sp, r * 2.6, Color(sc, 0.30 * a))
+	ci.draw_circle(sp, r * 0.62, Color(sc, 0.35 * a))
+	ci.draw_circle(sp, r * 0.44, Color(Art.hdr(sc, 1.05), a))
+	ci.draw_circle(sp, r * 0.30, Color(Art.hdr(sc.lerp(Color(1, 1, 1), 0.6), 1.25), a))
+
 func _draw_sky_light(ci: Node2D) -> void:
 	var w = size.x
 	var h = size.y
-	var sp: Vector2 = Vector2(pal.sun_pos.x * w - cam_x * 0.004, pal.sun_pos.y * h - cam_y * 0.02)
+	var sp: Vector2 = _sun_screen()
 	var sc: Color = pal.sun
 	var r: float = pal.sun_r
-	# wide atmospheric halo
-	Art.glow(ci, sp, r * 6.0, Color(sc, 0.30))
-	Art.glow(ci, sp, r * 2.6, Color(sc, 0.30))
-	ci.draw_circle(sp, r * 0.62, Color(sc, 0.35))
-	ci.draw_circle(sp, r * 0.44, Art.hdr(sc, 1.05))
-	ci.draw_circle(sp, r * 0.30, Art.hdr(sc.lerp(Color(1, 1, 1), 0.6), 1.25))
+	if tr_from.is_empty():
+		_draw_sun(ci, sp, sc, r, 1.0)
+	else:
+		# the old sun/moon sinks and fades, the new one rises into place
+		var k := _sky_k()
+		var e := k * k * (3.0 - 2.0 * k)
+		_draw_sun(ci, _sun_at(tr_from, e * 120.0), tr_from.sun, tr_from.sun_r, 1.0 - e)
+		_draw_sun(ci, _sun_at(tr_to, (1.0 - e) * 120.0), tr_to.sun, tr_to.sun_r, e)
 	# horizon glow line
 	ci.draw_polygon(PackedVector2Array([Vector2(0, h * 0.52), Vector2(w, h * 0.52), Vector2(w, h * 0.70), Vector2(0, h * 0.70)]),
 		PackedColorArray([Color(sc, 0.0), Color(sc, 0.0), Color(sc, 0.22), Color(sc, 0.22)]))
@@ -129,12 +227,17 @@ func _layer_base(i: int) -> float:
 func _ridge_y(i: int, lx: float) -> float:
 	var amp = [70.0, 46.0, 26.0][i]
 	var fr = [0.0016, 0.0026, 0.004][i]
-	if i == 0 and pal.kinds[0].has("peak"):
-		amp = 150.0
+	if i == 0:
+		var w := _mix(PAR[0], lx - cam_x * PAR[0])
+		var a_new: float = 150.0 if _side(1.0).kinds[0].has("peak") else amp
+		var a_old: float = 150.0 if _side(0.0).kinds[0].has("peak") else amp
+		amp = lerpf(a_old, a_new, w)
 	return _layer_base(i) - Art.ridge(lx, 3.1 + i * 7.7, amp, fr) - amp * 0.6
 
 func _draw_layer(ci: Node2D, i: int) -> void:
 	_lights[i] = []
+	if i == 0:
+		_peaks = []
 	var col: Color = pal.layers[i]
 	var par: float = PAR[i]
 	var off = cam_x * par
@@ -143,17 +246,22 @@ func _draw_layer(ci: Node2D, i: int) -> void:
 	while x <= size.x + 60.0:
 		pts.append(Vector2(x, _ridge_y(i, x + off)))
 		x += 24.0
-	pts.append(Vector2(size.x + 60.0, size.y + 10.0))
-	pts.append(Vector2(-60.0, size.y + 10.0))
 	# features behind the ridge fill so their bases are hidden
 	var cw: float = CELL[i]
 	var c0 = int(floor((off - 700.0) / cw))
 	var c1 = int(floor((off + size.x + 700.0) / cw))
-	var kinds: Array = pal.kinds[i]
 	for c in range(c0, c1 + 1):
 		var r = Art.hash01(c, 101 + i * 31)
 		if r > DENS[i] * [0.55, 0.8, 1.0][Art.Q]:
 			continue
+		var lx = c * cw + Art.hash01(c, 13 + i) * cw * 0.7
+		var w := _mix(par, lx - off)
+		var side := _side(w)
+		var fade := 1.0 if tr_from.is_empty() else absf(w - 0.5) * 2.0
+		if fade < 0.03:
+			continue
+		var kinds: Array = side.kinds[i]
+		var lcol: Color = _side(0.0).layers[i].lerp(_side(1.0).layers[i], w)
 		var kind: String = kinds[int(Art.hash01(c, 7 + i) * kinds.size()) % kinds.size()]
 		# landmarks (bridge, castle, ring, spire) are rare so they never look tiled
 		if LANDMARKS.has(kind) and Art.hash01(c, 211 + i) > 0.38:
@@ -161,35 +269,79 @@ func _draw_layer(ci: Node2D, i: int) -> void:
 			if alt.is_empty():
 				continue
 			kind = alt[int(Art.hash01(c, 223 + i) * alt.size()) % alt.size()]
-		var lx = c * cw + Art.hash01(c, 13 + i) * cw * 0.7
 		# small groves: trees and props often come in twos and threes
 		var n := 1
 		if CLUSTER.has(kind) and Art.Q >= 1:
 			n += int(Art.hash01(c, 29 + i) < 0.45) + int(Art.hash01(c, 31 + i) < 0.18)
+		var nl: int = _lights[i].size()
 		for m in n:
 			var seed: int = c * 7 + m * 131
 			var mx = lx + (m * (46.0 + Art.hash01(seed, 37) * 60.0) * (1.0 if Art.hash01(c, 41) < 0.5 else -1.0)) * SCALE[i]
 			var s: float = SCALE[i] * (0.62 + Art.hash01(seed, 19 + i) * 0.6) * (1.0 - m * 0.16)
 			# per-instance depth tint: some props sit a little further back in the haze
-			var fc: Color = col.lerp(pal.fog, Art.hash01(seed, 43) * 0.12)
+			var fc: Color = lcol.lerp(pal.fog, Art.hash01(seed, 43) * 0.12)
+			fc.a = fade
 			_feature(ci, i, kind, Vector2(mx - off, _ridge_y(i, mx) + 14.0), s, fc, seed)
+		for li in range(nl, _lights[i].size()):
+			_lights[i][li][2] = Color(_lights[i][li][2], _lights[i][li][2].a * fade)
 	if i == 0:
 		_draw_town(ci, off, col)
 	elif i == 2 and Art.Q >= 1:
 		_draw_life(ci, off, col)
-	# aerial perspective: lighter, hazier at the ridge, deeper towards the bottom
-	var top_c: Color = col.lerp(pal.fog, [0.20, 0.12, 0.06][i])
-	var bot_c: Color = col.darkened([0.12, 0.18, 0.22][i])
-	var cols = PackedColorArray()
-	cols.resize(pts.size())
-	cols.fill(top_c)
-	cols[pts.size() - 1] = bot_c
-	cols[pts.size() - 2] = bot_c
-	ci.draw_polygon(pts, cols)
+	# aerial perspective: lighter, hazier at the ridge, deeper towards the bottom.
+	# Drawn as a strip so the colour can change across a world transition.
+	var lift: float = [0.20, 0.12, 0.06][i]
+	var deep: float = [0.12, 0.18, 0.22][i]
+	if tr_from.is_empty():
+		# fast path (no transition): one polygon, as before
+		var poly := pts.duplicate()
+		poly.append(Vector2(size.x + 60.0, size.y + 10.0))
+		poly.append(Vector2(-60.0, size.y + 10.0))
+		var pc := PackedColorArray()
+		pc.resize(poly.size())
+		pc.fill(col.lerp(pal.fog, lift))
+		pc[poly.size() - 1] = col.darkened(deep)
+		pc[poly.size() - 2] = col.darkened(deep)
+		ci.draw_polygon(poly, pc)
+		_draw_rims(ci, i, pts)
+		return
+	var verts := PackedVector2Array()
+	var vcols := PackedColorArray()
+	var idx := PackedInt32Array()
+	var c_old: Color = _side(0.0).layers[i]
+	var c_new: Color = _side(1.0).layers[i]
+	for k in pts.size():
+		var q: Vector2 = pts[k]
+		var lc: Color = c_old.lerp(c_new, _mix(par, q.x))
+		verts.append(q)
+		verts.append(Vector2(q.x, size.y + 10.0))
+		vcols.append(lc.lerp(pal.fog, lift))
+		vcols.append(lc.darkened(deep))
+		if k > 0:
+			var b0 := (k - 1) * 2
+			idx.append_array([b0, b0 + 1, b0 + 2, b0 + 1, b0 + 3, b0 + 2])
+	RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), idx, verts, vcols)
+	_draw_rims(ci, i, pts)
+
+func _draw_rims(ci: Node2D, i: int, rim_pts: PackedVector2Array) -> void:
 	# rim light along the ridge, facing the sun
 	var rim: Color = pal.rim
-	var rim_pts = pts.slice(0, pts.size() - 2)
 	ci.draw_polyline(rim_pts, Color(rim, 0.05 + 0.05 * i), 1.5 + i * 0.5, Art.AA)
+	# silver lining: the ridge right in front of a low sun/moon catches its light
+	if i < 2:
+		var sp := _sun_screen()
+		var reach: float = pal.sun_r * 2.6
+		var seg := PackedVector2Array()
+		var segc := PackedColorArray()
+		for q in rim_pts:
+			var dxs = absf(q.x - sp.x)
+			var dys = q.y - sp.y
+			if dxs < reach and dys > -pal.sun_r * 1.2 and dys < pal.sun_r * 1.6:
+				seg.append(q)
+				var k = (1.0 - dxs / reach) * (1.0 - clampf(absf(dys) / (pal.sun_r * 1.6), 0.0, 1.0))
+				segc.append(Color(Art.hdr(pal.sun, 1.4), k * (1.0 - sun_vis * 0.6) * (0.9 if i == 0 else 0.6)))
+		if seg.size() >= 2:
+			ci.draw_polyline_colors(seg, segc, 2.5, Art.AA)
 
 func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: Color, seed: int) -> void:
 	var acc: Color = pal.accent
@@ -295,6 +447,8 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			var phh = (300.0 + Art.hash01(seed, 3) * 260.0) * s
 			var top = p + Vector2(Art.hash01(seed, 4) * 60.0 - 30.0, -phh)
 			ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-pw, 60), top, p + Vector2(pw, 60)]), col)
+			if layer < 2:
+				_peaks.append([p.x - pw, top.x, top.y, p.x + pw, p.y + 60.0])
 			ci.draw_line(top, top.lerp(p + Vector2(pw, 60), 0.35), Color(pal.rim, 0.45), 3.0)
 		"lantern":
 			var bob = sin(t * 1.3 + seed) * 12.0
@@ -393,8 +547,8 @@ func _draw_water(ci: Node2D) -> void:
 		PackedColorArray([top_c, top_c, mid_c, mid_c]))
 	ci.draw_rect(Rect2(0, y0 + 90.0, w, y1 - y0), mid_c)
 	ci.draw_line(Vector2(0, y0 + 1.0), Vector2(w, y0 + 1.0), Color(sc.lightened(0.3), 0.55), 2.0)
-	var sx: float = pal.sun_pos.x * w - cam_x * 0.004
-	var a: float = 0.55 * pal.water
+	var sx: float = _sun_screen().x
+	var a: float = 0.55 * pal.water * (0.25 + 0.75 * sun_vis)
 	ci.draw_polygon(PackedVector2Array([Vector2(sx - 70, y0), Vector2(sx + 70, y0), Vector2(sx + 150, y0 + 140), Vector2(sx - 150, y0 + 140)]),
 		PackedColorArray([Color(sc, a), Color(sc, a), Color(sc, 0.0), Color(sc, 0.0)]))
 	for i in [10, 22, 40][Art.Q]:
@@ -402,7 +556,7 @@ func _draw_water(ci: Node2D) -> void:
 		var spread = 30.0 + (yy - y0) * 1.8
 		var cx = sx + (Art.hash01(i, 9) - 0.5) * spread * 2.0 + sin(t * 1.3 + i) * 8.0
 		var ln = 8.0 + Art.hash01(i, 4) * 46.0 * (0.4 + (yy - y0) / 120.0)
-		var al = (0.35 + 0.35 * sin(t * 2.2 + i * 1.7)) * pal.water
+		var al = (0.35 + 0.35 * sin(t * 2.2 + i * 1.7)) * pal.water * (0.3 + 0.7 * sun_vis)
 		ci.draw_line(Vector2(cx - ln, yy), Vector2(cx + ln, yy), Color(sc.lightened(0.4), al), 2.0)
 	# slow ripple lines across the whole surface
 	for k in 4:
@@ -425,11 +579,12 @@ func _draw_haze(ci: Node2D, i: int) -> void:
 	ci.draw_rect(Rect2(0, y + h, size.x, size.y), Color(fog, 0.30 - i * 0.08))
 
 func _draw_shafts(ci: Node2D) -> void:
-	if Art.Q == 0:
+	if Art.Q == 0 or sun_vis < 0.02:
 		return
 	# rays start at the sun/moon disc itself (same position as _draw_sky_light)
-	var c0 = Vector2(pal.sun_pos.x * size.x - cam_x * 0.004, pal.sun_pos.y * size.y - cam_y * 0.02)
+	var c0 = _sun_screen()
 	var sc: Color = pal.sun
+	var swap := 1.0 if tr_from.is_empty() else absf(_sky_k() - 0.5) * 2.0
 	var r0: float = pal.sun_r * 0.35
 	for k in 7:
 		var a = 1.80 + (k - 3) * 0.20 + sin(t * 0.13 + k * 1.7) * 0.03
@@ -440,7 +595,7 @@ func _draw_shafts(ci: Node2D) -> void:
 		var nrm = Vector2(-dir.y, dir.x)
 		var sp = c0 + dir * r0
 		var e = sp + dir * len
-		var al = (0.025 + 0.015 * sin(t * 0.4 + k * 2.1)) * (1.0 + calm * 0.5)
+		var al = (0.025 + 0.015 * sin(t * 0.4 + k * 2.1)) * (1.0 + calm * 0.5) * sun_vis * swap
 		ci.draw_polygon(PackedVector2Array([sp + nrm * w0, sp - nrm * w0, e - nrm * w1, e + nrm * w1]),
 			PackedColorArray([Color(sc, al), Color(sc, al), Color(sc, 0.0), Color(sc, 0.0)]))
 
@@ -507,15 +662,21 @@ func _warm(k := 1.15) -> Color:
 ## Far-layer skyline: city blocks (Greece, Danube) or villages (Bulgaria,
 ## Carpathians), with windows that slowly switch on and off.
 func _draw_town(ci: Node2D, off: float, col: Color) -> void:
-	var village: bool = pal.get("town", "city") == "village"
 	var c0 = int(floor((off - 900.0) / TOWN_CELL))
 	var c1 = int(floor((off + size.x + 300.0) / TOWN_CELL))
-	var tc: Color = col.lerp(pal.fog, 0.10)
-	var win := _warm(1.1)
+	var win0 := _warm(1.1)
 	for c in range(c0, c1 + 1):
 		if Art.hash01(c, 601) > [0.25, 0.40, 0.55][Art.Q]:
 			continue
 		var x = c * TOWN_CELL + Art.hash01(c, 602) * TOWN_CELL * 0.4
+		var w := _mix(PAR[0], x - off)
+		var fade := 1.0 if tr_from.is_empty() else absf(w - 0.5) * 2.0
+		if fade < 0.03:
+			continue
+		var village: bool = _side(w).get("town", "city") == "village"
+		var tc: Color = _side(0.0).layers[0].lerp(_side(1.0).layers[0], w).lerp(pal.fog, 0.10)
+		tc.a = fade
+		var win := Color(win0, fade)
 		var n := (4 if village else 6) + int(Art.hash01(c, 603) * (5.0 if village else 9.0))
 		for b in n:
 			var sd := c * 97 + b
@@ -542,7 +703,7 @@ func _draw_town(ci: Node2D, off: float, col: Color) -> void:
 			elif r < 0.32:
 				ci.draw_line(Vector2(sx + bw * 0.5, by - bh), Vector2(sx + bw * 0.5, by - bh - 34.0), tc, 2.0)
 				if fmod(t + sd, 2.0) < 1.0:
-					ci.draw_rect(Rect2(sx + bw * 0.5 - 1.5, by - bh - 36.0, 3, 3), Art.hdr(Color(1.0, 0.35, 0.3), 1.4))
+					ci.draw_rect(Rect2(sx + bw * 0.5 - 1.5, by - bh - 36.0, 3, 3), Color(Art.hdr(Color(1.0, 0.35, 0.3), 1.4), fade))
 			if Art.Q == 0:
 				continue
 			# windows: a handful per building, a few slowly blink on/off
@@ -553,7 +714,7 @@ func _draw_town(ci: Node2D, off: float, col: Color) -> void:
 					continue
 				var wx = sx + 4.0 + floor(Art.hash01(sd, 60 + k) * (bw - 10.0) / 7.0) * 7.0
 				var wy = by - bh + 6.0 + floor(Art.hash01(sd, 80 + k) * maxf(bh - 22.0, 1.0) / 10.0) * 10.0
-				ci.draw_rect(Rect2(wx, wy, 3.0, 4.0), Color(win, 0.55 + 0.45 * Art.hash01(sd, 90 + k)))
+				ci.draw_rect(Rect2(wx, wy, 3.0, 4.0), Color(win, (0.55 + 0.45 * Art.hash01(sd, 90 + k)) * fade))
 			x += bw + 2.0 + Art.hash01(sd, 4) * (14.0 if village else 6.0)
 
 ## A stick-figure silhouette. p = feet. Returns the right hand position.
@@ -576,9 +737,6 @@ func _person(ci: Node2D, p: Vector2, s: float, col: Color, arm_l: float, arm_r: 
 	return hr
 
 func _draw_life(ci: Node2D, off: float, col: Color) -> void:
-	var life: Array = pal.get("life", [])
-	if life.is_empty():
-		return
 	var c0 = int(floor((off - 500.0) / LIFE_CELL))
 	var c1 = int(floor((off + size.x + 300.0) / LIFE_CELL))
 	var s: float = SCALE[2] * 1.75
@@ -586,13 +744,18 @@ func _draw_life(ci: Node2D, off: float, col: Color) -> void:
 	for c in range(c0, c1 + 1):
 		if Art.hash01(c, 701) > [0.25, 0.40, 0.60][Art.Q]:
 			continue
-		var kind: String = life[int(Art.hash01(c, 702) * life.size()) % life.size()]
 		var lx = c * LIFE_CELL + 80.0 + Art.hash01(c, 703) * LIFE_CELL * 0.6
 		var p = Vector2(lx - off, _ridge_y(2, lx) + 3.0)
-		# fade out while passing behind Vayu, so nothing reads as part of him
+		var w := _mix(PAR[2], p.x)
+		var fade := 1.0 if tr_from.is_empty() else absf(w - 0.5) * 2.0
+		var life: Array = _side(w).get("life", [])
+		if life.is_empty() or fade < 0.03:
+			continue
+		var kind: String = life[int(Art.hash01(c, 702) * life.size()) % life.size()]
+		# fade out while passing behind Kavi, so nothing reads as part of him
 		var near = 1.0 - clampf((absf(p.x - hero_x) - 110.0) / 170.0, 0.0, 1.0)
-		col = Color(base_col, 1.0 - near * 0.95)
-		var lamps: bool = near < 0.5
+		col = Color(base_col, (1.0 - near * 0.95) * fade)
+		var lamps: bool = near < 0.5 and fade > 0.5
 		var flip = 1.0 if Art.hash01(c, 704) < 0.5 else -1.0
 		var ph = Art.hash01(c, 705) * TAU
 		match kind:
@@ -669,9 +832,6 @@ func _draw_life(ci: Node2D, off: float, col: Color) -> void:
 ## Ships on the Greek sea and the Danube: they drift slowly on their own and
 ## with the camera; lights reflect in the water.
 func _draw_ships(ci: Node2D, y0: float) -> void:
-	var ships: Array = pal.get("ships", [])
-	if ships.is_empty():
-		return
 	var off = cam_x * 0.11 + t * 9.0
 	var c0 = int(floor((off - 500.0) / SHIP_CELL))
 	var c1 = int(floor((off + size.x + 500.0) / SHIP_CELL))
@@ -679,6 +839,10 @@ func _draw_ships(ci: Node2D, y0: float) -> void:
 	sc.a = pal.water
 	for c in range(c0, c1 + 1):
 		if Art.hash01(c, 801) > 0.6:
+			continue
+		var wsh := _mix(0.11, c * SHIP_CELL + 350.0 - off)
+		var ships: Array = _side(wsh).get("ships", [])
+		if ships.is_empty():
 			continue
 		var kind: String = ships[int(Art.hash01(c, 802) * ships.size()) % ships.size()]
 		var s = 0.55 + Art.hash01(c, 803) * 0.35
@@ -725,12 +889,19 @@ func _draw_ships(ci: Node2D, y0: float) -> void:
 ## Sky traffic: one plane at a time with blinking lights, hot-air balloons
 ## drifting with the wind, or a flock of birds.
 func _draw_air(ci: Node2D) -> void:
-	var air: Array = pal.get("air", [])
-	if air.is_empty():
+	if tr_from.is_empty():
+		_draw_air_set(ci, pal.get("air", []), 1.0)
+		return
+	var k := clampf((t - tr_t0) / 6.0, 0.0, 1.0)
+	_draw_air_set(ci, tr_from.get("air", []), 1.0 - k)
+	_draw_air_set(ci, tr_to.get("air", []), k)
+
+func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
+	if air.is_empty() or alpha < 0.02:
 		return
 	var w = size.x
 	var h = size.y
-	var sil: Color = pal.sky[0].darkened(0.35)
+	var sil: Color = Color(pal.sky[0].darkened(0.35), alpha)
 	# plane: crosses every 24 s, skips some cycles
 	var P := 24.0
 	var n := int(floor((t + 5.0) / P))
@@ -744,11 +915,11 @@ func _draw_air(ci: Node2D) -> void:
 		ci.draw_line(p + Vector2(2 * dir, 0), p + Vector2(-6 * dir, 7), sil, 2.0)
 		ci.draw_line(p + Vector2(-14 * dir, 0), p + Vector2(-18 * dir, -6), sil, 2.0)
 		if pal.stars < 0.35:
-			ci.draw_line(p + Vector2(-18 * dir, 0), p + Vector2(-260 * dir, 6), Color(1, 1, 1, 0.10), 2.0)
+			ci.draw_line(p + Vector2(-18 * dir, 0), p + Vector2(-260 * dir, 6), Color(1, 1, 1, 0.10 * alpha), 2.0)
 		var blink = fmod(t, 1.1) < 0.12
-		ci.draw_rect(Rect2(p.x - 7 * dir - 1.5, p.y + 6, 3, 3), Art.hdr(Color(1.0, 0.3, 0.3), 1.5))
+		ci.draw_rect(Rect2(p.x - 7 * dir - 1.5, p.y + 6, 3, 3), Color(Art.hdr(Color(1.0, 0.3, 0.3), 1.5), alpha))
 		if blink:
-			ci.draw_rect(Rect2(p.x + 15 * dir - 2, p.y - 2, 4, 4), Art.hdr(Color(1, 1, 1), 2.0))
+			ci.draw_rect(Rect2(p.x + 15 * dir - 2, p.y - 2, 4, 4), Color(Art.hdr(Color(1, 1, 1), 2.0), alpha))
 	if air.has("balloon") and Art.Q >= 1:
 		for b in 2:
 			if Art.hash01(b, 910 + int(n / 3.0)) > 0.55:
@@ -757,6 +928,7 @@ func _draw_air(ci: Node2D) -> void:
 			var by = h * (0.18 + Art.hash01(b, 912) * 0.14) + sin(t * 0.5 + b * 2.0) * 8.0
 			var hues := [Color(0.95, 0.42, 0.35), Color(1.0, 0.72, 0.30), Color(0.35, 0.75, 0.80)]
 			var bc: Color = hues[int(Art.hash01(b, 913) * 3.0) % 3].lerp(pal.sky[1], 0.35)
+			bc.a = alpha
 			var bp = Vector2(bx, by)
 			var r = 24.0 + Art.hash01(b, 914) * 10.0
 			# teardrop envelope: round crown narrowing to the throat
@@ -768,15 +940,15 @@ func _draw_air(ci: Node2D) -> void:
 			env.append(bp + Vector2(-r * 0.28, r * 1.35))
 			ci.draw_colored_polygon(env, bc)
 			# vertical gores in a lighter colour
-			ci.draw_colored_polygon(Art.ellipse(bp + Vector2(0, r * 0.1), Vector2(r * 0.32, r * 1.05), 14), bc.lightened(0.22))
-			ci.draw_arc(bp, r * 0.78, PI * 1.15, PI * 1.55, 8, Color(1, 1, 1, 0.22), 2.0)
+			ci.draw_colored_polygon(Art.ellipse(bp + Vector2(0, r * 0.1), Vector2(r * 0.32, r * 1.05), 14), Color(bc.lightened(0.22), alpha))
+			ci.draw_arc(bp, r * 0.78, PI * 1.15, PI * 1.55, 8, Color(1, 1, 1, 0.22 * alpha), 2.0)
 			var thr = bp + Vector2(0, r * 1.35)
 			var bk = thr + Vector2(0, 14)
 			ci.draw_line(thr + Vector2(-r * 0.26, 0), bk + Vector2(-5, 0), sil, 1.0)
 			ci.draw_line(thr + Vector2(r * 0.26, 0), bk + Vector2(5, 0), sil, 1.0)
 			ci.draw_rect(Rect2(bk.x - 6, bk.y, 12, 9), sil)
 			if fmod(t * 0.7 + b, 3.0) < 0.6:
-				ci.draw_circle(thr + Vector2(0, 3), 3.5, _warm(1.8))
+				ci.draw_circle(thr + Vector2(0, 3), 3.5, Color(_warm(1.8), alpha))
 	if air.has("birds"):
 		var fx = fposmod(-t * 40.0 + 300.0, w + 600.0) - 300.0
 		var fy = h * 0.22 + sin(t * 0.3) * 20.0

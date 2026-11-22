@@ -30,7 +30,7 @@ seg() { # name start dur caption geometry(land|short)
   else
     # 1080x1080 window around Kite over a blurred full-frame background.
     vf="split[a][b];[a]$FIX,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,gblur=sigma=30,eq=brightness=-0.12[bg];[b]$FIX,crop=1080:1080:120:0[fg];[bg][fg]overlay=0:420,format=yuv420p"
-    vf="$vf,drawtext=fontfile=$FONT:text='VAYU':fontsize=120:fontcolor=white:shadowcolor=black@0.6:shadowx=4:shadowy=4:x=(w-text_w)/2:y=170"
+    vf="$vf,drawtext=fontfile=$FONT:text='KAVI':fontsize=120:fontcolor=white:shadowcolor=black@0.6:shadowx=4:shadowy=4:x=(w-text_w)/2:y=170"
     [ -n "$cap" ] && vf="$vf,$(caption "$cap" "$d" "1600" 64)"
   fi
   vf="$vf,fade=in:0:9,fade=out:st=$(calc "$d-0.3"):d=0.3"
@@ -45,7 +45,7 @@ endcard() { # geometry, frame time for background
   local txt="drawtext=fontfile=$FONT:fontcolor=white:shadowcolor=black@0.6:shadowx=3:shadowy=3:x=(w-text_w)/2"
   ffmpeg -v error -y -ss 61.0 -i "$RAW" -ss 0.5 -t 5 -i "$RAW" -filter_complex \
     "[0:v]trim=end_frame=1,$FIX,scale=$W:$H:force_original_aspect_ratio=increase,crop=$W:$H,gblur=sigma=24,eq=brightness=-0.18,loop=150:1:0,setpts=N/30/TB,\
-$txt:fontsize=$(calc "150*$fs/1"):text='VAYU':y=h*0.30,\
+$txt:fontsize=$(calc "150*$fs/1"):text='KAVI':y=h*0.30,\
 $txt:fontsize=$(calc "54*$fs/1"):text='Letters to Lia':y=h*0.30+$(calc "190*$fs/1"),\
 $txt:fontsize=$(calc "64*$fs/1"):text='Play free in your browser':y=h*0.58,\
 $txt:fontsize=$(calc "48*$fs/1"):text='badcoolstudio.itch.io/voltrun':fontcolor=0xFFD27A:y=h*0.58+$(calc "90*$fs/1"),\

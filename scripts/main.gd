@@ -17,6 +17,7 @@ const Fx = preload("res://scripts/fx.gd")
 const Synth = preload("res://scripts/synth.gd")
 const Touch = preload("res://scripts/touch.gd")
 const UI = preload("res://scripts/ui.gd")
+const Looks = preload("res://scripts/looks.gd")
 const Tutorial = preload("res://scripts/tutorial.gd")
 
 enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE }
@@ -46,13 +47,31 @@ var font: Font       # Fredoka SemiBold: titles, HUD numbers, buttons
 var font_body: Font  # Nunito ExtraBold: captions, tips, descriptions
 
 ## Player-facing names live here so a rename is one edit.
-const GAME_TITLE := "VAYU"
+const GAME_TITLE := "KAVI"
 const GAME_SUB := "Letters to Lia"
-const HERO := "Vayu"
+const HERO := "Kavi"
 const FRIEND := "Lia"
 const SCENIC_SPEED := 430.0
 const SCENIC_STAY := 38.0  # seconds per country in Scenic View
 var scenic_next := 0.0
+var garage_open := false
+var _look_key := ""
+
+## Garage purchase: sparkle around Kavi, a chime, a happy face.
+func fx_unlock() -> void:
+	synth.play("tier")
+	var p := Vector2(sim.x, sim.y - 60.0)
+	fx.burst(p, Color(1.0, 0.85, 0.4), 26, 420.0, 0.8, 5.0, 300.0)
+	fx.ring(p, Color(1.0, 0.9, 0.6), 160.0, 0.5, 5.0)
+	kite.expr = "heart"
+
+## Dress Kavi in what he wears, or try on one Garage item (preview).
+func apply_look(preview_cat := "", preview_i := -1) -> void:
+	var key := "%s|%s|%d" % [str(save.data.wear), preview_cat, preview_i]
+	if key == _look_key:
+		return
+	_look_key = key
+	kite.set_look(Looks.compose(save.data.wear, preview_cat, preview_i))
 
 # ------------------------------------------------------------------ state
 var state = "title"     # title, run, recovery, junction, rescue, fail, results, finale, paused
@@ -124,6 +143,7 @@ var cap_shots: Array = []
 func _ready() -> void:
 	randomize()
 	save.load_data()
+	Looks.ensure(save.data)
 	ads.save = save
 	font = _load_font("res://assets/fonts/Fredoka.ttf", 600)
 	font_body = _load_font("res://assets/fonts/Nunito.ttf", 800)
@@ -328,6 +348,7 @@ func go_title() -> void:
 	title_x = 0.0
 	lb_target = 0.0
 	zoom_target = 1.3
+	garage_open = false
 	touch.visible_controls = false
 	touch.highlight = ""
 	mode = "story"
@@ -350,6 +371,13 @@ func _new_world(b: int) -> void:
 	_apply_settings()
 
 func set_biome(b: int, instant := false) -> void:
+	if instant:
+		world_view.end_transition()
+		track_view.end_transition()
+	elif b != biome or pal_k < 1.0:
+		# the new country sweeps in from the right (see world_view/track_view)
+		world_view.begin_transition(Art.biome(biome), Art.biome(b))
+		track_view.begin_transition(Art.biome(biome).get("surface", ""), Art.biome(b).get("surface", ""), track_view.view_r + 200.0)
 	pal_from = pal if not instant else Art.biome(b)
 	biome = b
 	pal_k = 1.0 if instant else 0.0
@@ -531,11 +559,11 @@ func _segment_finished() -> void:
 # ------------------------------------------------------------------ recovery
 const ACTIVITIES := [
 	{"pose": "eat", "npc": "yiayia", "text": "Yiayia Froso insists: \"Eat! You're all circuits and no koulouri!\""},
-	{"pose": "drink", "npc": "shop", "text": "A shopkeeper hands Vayu cold water. \"For the road, little courier.\""},
+	{"pose": "drink", "npc": "shop", "text": "A shopkeeper hands Kavi cold water. \"For the road, little courier.\""},
 	{"pose": "read", "npc": "", "text": "Message from Lia: \"I painted the sunrise for you today.\""},
-	{"pose": "map", "npc": "", "text": "Vayu checks the map. Lia is getting closer."},
+	{"pose": "map", "npc": "", "text": "Kavi checks the map. Lia is getting closer."},
 	{"pose": "photo", "npc": "", "text": "Snap! A new memory for the scrapbook."},
-	{"pose": "stretch", "npc": "kid", "text": "Kids cheer from the roadside: \"Go, Vayu, go!\""},
+	{"pose": "stretch", "npc": "kid", "text": "Kids cheer from the roadside: \"Go, Kavi, go!\""},
 	{"pose": "eat", "npc": "farmer", "text": "A farmer shares a ripe peach from the orchard."},
 	{"pose": "read", "npc": "", "text": "Message from Lia: \"The storks came back today. I saved you a sketch.\""},
 	{"pose": "read", "npc": "", "text": "Message from Lia: \"Grandma calls me Cornelia when I'm late for dinner. You can keep calling me Lia.\""},
@@ -700,7 +728,7 @@ func _update_rescue(real_dt: float) -> void:
 		if not r.has("thanks"):
 			r.thanks = true
 			var b: Dictionary = Chars.BIKERS[r.v]
-			caption = "%s swoops in out of nowhere!  Vayu: \"THANK YOU!!\"  %s: \"Anytime, little courier. Ride safe!\"" % [b.name, b.name]
+			caption = "%s swoops in out of nowhere!  Kavi: \"THANK YOU!!\"  %s: \"Anytime, little courier. Ride safe!\"" % [b.name, b.name]
 			caption_t = 3.6
 			_toast("THANK YOU!", _world_to_screen(kite_pos + Vector2(0, -170)), Color(1.0, 0.6, 0.8), 58)
 			_add_memory("Rescued by " + b.name)
@@ -745,7 +773,7 @@ func _update_finale(dt: float) -> void:
 		sim.x += lerpf(sim.v * 0.6, 140.0, clampf(k / 3.0, 0.0, 1.0)) * dt
 	if k > 3.2 and not finale.has("met"):
 		finale.met = true
-		caption = "Lia: \"You came all this way...\"   Vayu: \"If you wanted to, you would.\""
+		caption = "Lia: \"You came all this way...\"   Kavi: \"If you wanted to, you would.\""
 		caption_t = 5.0
 	if k > 9.0 and not finale.has("end"):
 		finale.end = true
@@ -1075,7 +1103,7 @@ func _process(delta: float) -> void:
 		"scenic":
 			_update_scenic(real_dt)
 		"title":
-			title_x += real_dt * 60.0
+			zoom_target = 2.2 if garage_open else 1.3
 			sim.x = title_x
 			kite.pose = "idle"
 			kite.expr = "normal" if fmod(t, 6.0) < 5.0 else "happy"
@@ -1090,7 +1118,7 @@ func _process(delta: float) -> void:
 		"fail":
 			_update_fail(real_dt)
 	if pal_k < 1.0:
-		pal_k = minf(pal_k + real_dt / 3.0, 1.0)
+		pal_k = minf(pal_k + real_dt / 7.0, 1.0)
 		pal = Art.blend_biome(pal_from, Art.biome(biome), pal_k)
 	_update_hints(real_dt)
 	_update_kite_view(real_dt)
@@ -1141,7 +1169,8 @@ func _update_kite_view(dt: float) -> void:
 	else:
 		kite.speed = 120.0
 	kite.tier = tw.tier()
-	kite.scarf = int(save.data.scarf)
+	if _look_key == "":
+		apply_look()
 	kite.rim = pal.rim
 	kite.tick(dt)
 
@@ -1201,6 +1230,10 @@ func _update_camera(dt: float) -> void:
 			target.x = (sim.x + finale.lx) * 0.5
 	if state == "title" or state == "scenic":
 		target.x = sim.x + size.x * 0.27 / zoom
+	if state == "title" and garage_open:
+		# close-up of Kavi on the left while the Garage list is on the right
+		target.x = sim.x + size.x * 0.18 / zoom
+		target.y += size.y * 0.16 / zoom
 	cam_pos.x = target.x if cam_pos == Vector2.ZERO else lerpf(cam_pos.x, target.x, 1.0 - exp(-dt * 9.0))
 	cam_pos.y = lerpf(cam_pos.y, target.y, 1.0 - exp(-dt * 4.0))
 	shake = move_toward(shake, 0.0, dt * 30.0)
@@ -1216,6 +1249,7 @@ func _update_views(dt: float) -> void:
 	world_view.cam_y = cam.position.y + size.y * (0.80 - 0.5) / zoom
 	world_view.t = t
 	world_view.hero_x = _kite_screen().x
+	world_view.sun_shift = -0.30 * get_viewport_rect().size.x if state == "title" else 0.0
 	world_view.calm = move_toward(world_view.calm, 1.0 if state in ["recovery", "finale", "title", "scenic"] else 0.0, dt)
 	world_view.refresh()
 	track_view.pal = pal
@@ -1319,7 +1353,7 @@ func _text(ci: Node2D, s: String, p: Vector2, size: int, col: Color, align := HO
 func _draw_hud(ci: Node2D) -> void:
 	var sz = get_viewport_rect().size
 	if has_meta("keyart"):
-		_draw_logo(ci, Vector2(sz.x * 0.75, sz.y * 0.47), 1.0, 1.1)
+		_draw_logo(ci, Vector2(sz.x * 0.74, sz.y * 0.44), 10.0, 1.1)
 		return
 	# letterbox
 	if lb > 0.001:
@@ -1385,29 +1419,77 @@ func _draw_hud(ci: Node2D) -> void:
 		ci.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.01, 0.01, 0.03, fade))
 
 func _draw_title(ci: Node2D, sz: Vector2) -> void:
-	var k = ease(minf(state_t / 1.0, 1.0), 0.4)
-	_draw_logo(ci, Vector2(sz.x * 0.30, sz.y * 0.26 - (1.0 - k) * 30.0), k, 1.0 + 0.012 * sin(t * 1.6))
+	# soft darkening behind the menu column for readability (no box)
+	var shade := Color(0.01, 0.02, 0.05)
+	ci.draw_polygon(PackedVector2Array([Vector2(sz.x * 0.52, 0), Vector2(sz.x, 0), Vector2(sz.x, sz.y), Vector2(sz.x * 0.52, sz.y)]),
+		PackedColorArray([Color(shade, 0.0), Color(shade, 0.55), Color(shade, 0.55), Color(shade, 0.0)]))
+	if garage_open:
+		return
+	_draw_logo(ci, Vector2(sz.x * 0.29, sz.y * 0.25), state_t, 1.0)
 
-## Game logo: big warm title with ink outline, plus the subtitle ribbon.
-func _draw_logo(ci: Node2D, c: Vector2, k: float, breathe: float) -> void:
-	var fs := int(190 * breathe)
-	# soft glow, deep shadow, thick ink outline, warm fill, top highlight
-	for i in 3:
-		_text(ci, GAME_TITLE, c + Vector2(0, 6), fs + 10 + i * 10, Color(1.0, 0.75, 0.45, 0.10 * k / (i + 1)))
-	ci.draw_string_outline(font, Vector2(c.x - 1000, c.y + 12), GAME_TITLE, HORIZONTAL_ALIGNMENT_CENTER, 2000, fs, 22, Color(0.02, 0.03, 0.08, 0.45 * k))
-	ci.draw_string_outline(font, Vector2(c.x - 1000, c.y), GAME_TITLE, HORIZONTAL_ALIGNMENT_CENTER, 2000, fs, 16, Color(0.10, 0.08, 0.20, k))
-	ci.draw_string(font, Vector2(c.x - 1000, c.y), GAME_TITLE, HORIZONTAL_ALIGNMENT_CENTER, 2000, fs, Color(1.0, 0.80, 0.42, k))
-	ci.draw_string(font, Vector2(c.x - 1000, c.y - 4), GAME_TITLE, HORIZONTAL_ALIGNMENT_CENTER, 2000, fs, Color(1.0, 0.95, 0.80, 0.55 * k))
-	# subtitle ribbon with a little paper plane
-	var sub_w = font.get_string_size(GAME_SUB, HORIZONTAL_ALIGNMENT_LEFT, -1, 46).x
-	var r = Rect2(c.x - sub_w * 0.5 - 70, c.y + 36, sub_w + 140, 72)
-	ci.draw_colored_polygon(Art.rrect(r.grow(3), 39), Color(0.10, 0.08, 0.20, 0.9 * k))
-	ci.draw_colored_polygon(Art.rrect(r, 36), Color(0.98, 0.42, 0.45, k))
-	ci.draw_colored_polygon(Art.rrect(Rect2(r.position + Vector2(8, 6), Vector2(r.size.x - 16, 22)), 11), Color(1, 1, 1, 0.16 * k))
-	_text(ci, GAME_SUB, Vector2(c.x + 20, c.y + 88), 46, Color(1, 0.98, 0.94, k))
-	var pp = Vector2(r.position.x + 44, c.y + 72 + sin(t * 2.2) * 3.0)
-	ci.draw_colored_polygon(PackedVector2Array([pp + Vector2(-20, 6), pp + Vector2(20, -10), pp + Vector2(-4, 14)]), Color(1, 1, 1, k))
-	ci.draw_colored_polygon(PackedVector2Array([pp + Vector2(-4, 14), pp + Vector2(20, -10), pp + Vector2(2, 20)]), Color(0.85, 0.88, 0.95, k))
+## The logo lives in the world: cream letters with an ink outline and a thin
+## rim of the country's light, letters rising in one by one, a letterspaced
+## subtitle and a paper plane (Kavi's letters) gliding around it.
+func _draw_logo(ci: Node2D, c: Vector2, time: float, scale_k: float) -> void:
+	var fs := int(176 * scale_k)
+	var gap := 10.0 * scale_k
+	var cream := Color(1.0, 0.96, 0.90)
+	var rim: Color = pal.rim
+	var ink := Color(0.03, 0.04, 0.09)
+	var letters := GAME_TITLE
+	var widths: Array = []
+	var total := 0.0
+	for ch in letters:
+		var w := font.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		widths.append(w)
+		total += w + gap
+	total -= gap
+	var x := c.x - total * 0.5
+	for i in letters.length():
+		var k := clampf((time - 0.25 - i * 0.12) / 0.55, 0.0, 1.0)
+		var e := 1.0 - pow(1.0 - k, 3.0)
+		var bob := sin(t * 1.4 + i * 0.9) * 3.0 * scale_k
+		var p := Vector2(x, c.y + (1.0 - e) * 26.0 + bob)
+		var ch := letters[i]
+		ci.draw_string_outline(font, p + Vector2(0, 6), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 18, Color(0, 0, 0, 0.35 * e))
+		ci.draw_string_outline(font, p, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 12, Color(ink, e))
+		ci.draw_string(font, p + Vector2(2.5, -2.5), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(rim.lightened(0.2), e))
+		ci.draw_string(font, p, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(cream, e))
+		x += widths[i] + gap
+	# subtitle: letterspaced small caps between two hairlines
+	var sub := GAME_SUB.to_upper()
+	var sfs := int(30 * scale_k)
+	var sgap := 7.0 * scale_k
+	var sw := 0.0
+	for ch in sub:
+		sw += font_body.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs).x + sgap
+	var ks := clampf((time - 0.9) / 0.8, 0.0, 1.0)
+	var sy := c.y + 62.0 * scale_k
+	var sx := c.x - sw * 0.5
+	for ch in sub:
+		ci.draw_string(font_body, Vector2(sx, sy), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs, Color(rim.lerp(cream, 0.35), ks))
+		sx += font_body.get_string_size(ch, HORIZONTAL_ALIGNMENT_LEFT, -1, sfs).x + sgap
+	var lw := 90.0 * scale_k * ks
+	var ly := sy - 10.0 * scale_k
+	ci.draw_line(Vector2(c.x - sw * 0.5 - 24 - lw, ly), Vector2(c.x - sw * 0.5 - 24, ly), Color(rim, 0.7 * ks), 2.0, true)
+	ci.draw_line(Vector2(c.x + sw * 0.5 + 18, ly), Vector2(c.x + sw * 0.5 + 18 + lw, ly), Color(rim, 0.7 * ks), 2.0, true)
+	# paper plane looping around the logo with a dotted trail
+	var kp := clampf((time - 1.4) / 1.0, 0.0, 1.0)
+	if kp > 0.0:
+		# an orbit around the whole logo, passing behind the subtitle
+		var R := Vector2(total * 0.72, 150.0 * scale_k)
+		var oc := c + Vector2(0, -30.0 * scale_k)
+		for d in 9:
+			var td: float = t - d * 0.09
+			var q := oc + Vector2(cos(td * 0.5) * R.x, sin(td * 0.5) * R.y)
+			ci.draw_circle(q, 2.4 * scale_k, Color(cream, kp * 0.5 * (1.0 - d / 9.0)))
+		var q0 := oc + Vector2(cos(t * 0.5) * R.x, sin(t * 0.5) * R.y)
+		var q1 := oc + Vector2(cos((t + 0.05) * 0.5) * R.x, sin((t + 0.05) * 0.5) * R.y)
+		var dir := (q1 - q0).normalized()
+		var nrm := dir.orthogonal()
+		var L := 20.0 * scale_k
+		ci.draw_colored_polygon(PackedVector2Array([q0 + dir * L, q0 - dir * L * 0.6 + nrm * L * 0.55, q0 - dir * L * 0.3]), Color(cream, kp))
+		ci.draw_colored_polygon(PackedVector2Array([q0 + dir * L, q0 - dir * L * 0.3, q0 - dir * L * 0.6 - nrm * L * 0.35]), Color(cream.darkened(0.18), kp))
 
 ## Keyboard players see a hint bar at the bottom instead of touch buttons.
 func _key_hints(ci: Node2D, sz: Vector2) -> void:
@@ -1511,7 +1593,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 # ------------------------------------------------------------------ menus glue (called by ui.gd)
-## Scenic View: no obstacles, no HUD. Vayu just runs while the four countries
+## Scenic View: no obstacles, no HUD. Kavi just runs while the four countries
 ## roll past, one full cycle every ~2.5 minutes, then it loops.
 func menu_scenic() -> void:
 	synth.play("ui")
@@ -1591,6 +1673,24 @@ func _setup_capture() -> void:
 			if b > 0:
 				cap_steps.append({"do": "scenic_next"})
 			cap_steps.append_array([{"do": "wait", "s": 5.0}, {"shot": "scenic-%d-a" % b}, {"do": "wait", "s": 6.0}, {"shot": "scenic-%d-b" % b}])
+		cap_steps.append({"do": "quit"})
+		return
+	if "--menus" in OS.get_cmdline_user_args():
+		# Title + Garage review: the logo reveal, then try-ons of several items.
+		save.data.tutorial_done = true
+		save.data.sparks = 60
+		cap_steps = [{"do": "wait", "s": 0.7}, {"shot": "m0-logo-reveal"}, {"do": "wait", "s": 3.0}, {"shot": "m1-title"},
+			{"do": "garage", "cat": "scarf"}, {"do": "wait", "s": 1.5}, {"shot": "m2-garage"}]
+		for tr in [["suit", 1, "m3-kitty"], ["suit", 2, "m4-explorer"], ["paint", 1, "m5-midnight"], ["scarf", 7, "m6-rainbow"], ["antenna", 1, "m7-star"], ["visor", 2, "m8-pink"]]:
+			cap_steps.append_array([{"do": "garage", "cat": tr[0]}, {"do": "try", "cat": tr[0], "i": tr[1]}, {"do": "wait", "s": 1.2}, {"shot": tr[2]}])
+		cap_steps.append({"do": "quit"})
+		return
+	if "--transition" in OS.get_cmdline_user_args():
+		# Filmstrip of a country change in Scenic View: one shot every 2 s.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "scenic"}, {"do": "wait", "s": 4.0}, {"do": "scenic_next"}]
+		for k in 9:
+			cap_steps.append_array([{"do": "wait", "s": 2.0}, {"shot": "tr-%02d" % k}])
 		cap_steps.append({"do": "quit"})
 		return
 	if "--keyart" in OS.get_cmdline_user_args():
@@ -1727,6 +1827,10 @@ func _capture_tick(dt: float) -> void:
 				cap_i += 1
 				cap_wait = 0.0
 			return
+		"garage":
+			ui.show_garage(st.cat)
+		"try":
+			apply_look(st.cat, st.i)
 		"scenic":
 			menu_scenic()
 		"scenic_next":

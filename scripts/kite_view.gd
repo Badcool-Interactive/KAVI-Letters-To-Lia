@@ -7,13 +7,34 @@ extends Node2D
 const Art = preload("res://scripts/art.gd")
 const Painter = preload("res://scripts/painter.gd")
 
-const SHELL := Color(0.965, 0.973, 0.988)
-const SHADE := Color(0.62, 0.74, 0.88)
-const TEAL := Color(0.15, 0.79, 0.80)
+# Wearable colours (Garage). Defaults are the classic courier look.
+var SHELL := Color(0.965, 0.973, 0.988)
+var SHADE := Color(0.62, 0.74, 0.88)
+var TEAL := Color(0.15, 0.79, 0.80)
 const JOINT := Color(0.32, 0.58, 0.74)
 const BOOT := Color(0.14, 0.34, 0.90)
 const PACK := Color(0.55, 0.15, 0.20)
-const GLOW := Color(0.30, 1.0, 1.0)
+var GLOW := Color(0.30, 1.0, 1.0)
+var scarf_col := Color(1.0, 0.35, 0.14)
+var scarf_col2 := Color(1.0, 0.35, 0.14)
+var scarf_pattern := "solid"
+var tip := "kite"
+var helmet := "round"
+## Face: where the eyes look (-1..1 each axis), eased towards look_target.
+var look := Vector2(1, 0)
+var look_target := Vector2(1, 0)
+var _look_next := 0.0
+
+func set_look(l: Dictionary) -> void:
+	SHELL = l.shell
+	SHADE = l.shade
+	TEAL = l.accent
+	GLOW = l.eye
+	scarf_col = l.scarf
+	scarf_col2 = l.scarf2
+	scarf_pattern = l.pattern
+	tip = l.tip
+	helmet = l.helmet
 const INK := Color(0.04, 0.06, 0.11)
 const VISOR := Color(0.03, 0.05, 0.09)
 const SCARVES := [Color(1.0, 0.35, 0.14), Color(0.30, 0.65, 1.0), Color(1.0, 0.45, 0.65),
@@ -74,7 +95,9 @@ func tick(dt: float) -> void:
 		"slide": phase += dt * 30.0
 	blink_t -= dt
 	if blink_t < -0.12:
-		blink_t = randf_range(2.5, 4.5)
+		# sometimes a quick double blink
+		blink_t = 0.25 if randf() < 0.18 else randf_range(2.5, 4.5)
+	_update_look(dt)
 	_update_scarf(dt)
 	_update_trail()
 	_base.queue_redraw()
@@ -333,7 +356,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 		_boot(ci, fb, BOOT.darkened(0.25))
 		# scarf tails (behind body): smooth tapered cloth strips
 		if _scarf_pts.size() == SCARF_N:
-			var sc: Color = SCARVES[scarf % SCARVES.size()]
+			var sc: Color = scarf_col
 			ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			var raw = PackedVector2Array()
 			for q in _scarf_pts:
@@ -346,9 +369,12 @@ func _paint(ci: Node2D, add: bool) -> void:
 				raw2.append(raw[k] + Vector2(1.5 * f, (3.0 + 9.0 * f) * s + sin(t * 13.0 - k * 0.9) * 2.5 * f * s))
 			var tail2 = _smooth(raw2)
 			_strip(ci, tail2, 6.2 * s, 4.0 * s, INK)
-			_strip(ci, tail2, 4.6 * s, 2.6 * s, sc.darkened(0.22))
+			var pc2 := _scarf_colors(tail2.size())
+			for k in pc2.size():
+				pc2[k] = pc2[k].darkened(0.22)  # (empty for solid scarves)
+			_strip(ci, tail2, 4.6 * s, 2.6 * s, sc.darkened(0.22), pc2)
 			_strip(ci, main_tail, 7.6 * s, 4.8 * s, INK)
-			_strip(ci, main_tail, 6.0 * s, 3.4 * s, sc)
+			_strip(ci, main_tail, 6.0 * s, 3.4 * s, sc, _scarf_colors(main_tail.size()))
 			if Art.Q >= 1:
 				# soft sheen along the upper edge of the cloth
 				var sheen = PackedVector2Array()
@@ -421,6 +447,22 @@ func _paint(ci: Node2D, add: bool) -> void:
 			ci.draw_arc(hc + Vector2(3, -1), 20.0, PI * 1.22, PI * 1.52, 10, Color(1, 1, 1, 0.85), 3.0, Art.AA)
 			ci.draw_circle(hc + Vector2(-4, -15), 2.2, Color(1, 1, 1, 0.9))
 			ci.draw_arc(hc + Vector2(1, 0), 23.5, PI * 0.55, PI * 0.95, 10, Color(SHADE, 0.55), 4.0, Art.AA)
+		match helmet:
+			"cat":
+				# little ears; the inner ear takes the accent colour
+				for e in [[Vector2(-14, -18), -0.35], [Vector2(8, -23), 0.25]]:
+					var b: Vector2 = hc + e[0]
+					var ear := PackedVector2Array([b + Vector2(-9, 4).rotated(e[1]), b + Vector2(0, -14).rotated(e[1]), b + Vector2(9, 4).rotated(e[1])])
+					_poly(ci, ear, SHELL)
+					ci.draw_colored_polygon(PackedVector2Array([b + Vector2(-4.5, 2).rotated(e[1]), b + Vector2(0, -8).rotated(e[1]), b + Vector2(4.5, 2).rotated(e[1])]), TEAL)
+			"explorer":
+				# a brim band round the helmet and a headlamp
+				var band := PackedVector2Array()
+				for k in 11:
+					var a = lerpf(PI * 1.05, PI * 1.95, float(k) / 10.0)
+					band.append(hc + Vector2(cos(a) * 27.0, sin(a) * 15.0 - 4.0))
+				ci.draw_polyline(band, TEAL.darkened(0.15), 6.0, Art.AA)
+				_poly(ci, Art.ellipse(hc + Vector2(14, -19), Vector2(6, 5), 12), SHADE.darkened(0.2))
 		# visor
 		var vc = hc + Vector2(9, 2)
 		_poly(ci, Art.ellipse(vc, Vector2(19, 15), 26), TEAL)
@@ -431,14 +473,30 @@ func _paint(ci: Node2D, add: bool) -> void:
 		var a1 = a0 + Vector2(7, -15) + Vector2(sin(t * 6.0) * 1.5, 0)
 		ci.draw_line(a0, a1, TEAL, 2.5, Art.AA)
 		var kd = a1 + Vector2(0, -6)
-		_poly(ci, PackedVector2Array([kd + Vector2(0, -7), kd + Vector2(5, 0), kd + Vector2(-5, 0)]), Color(1.0, 0.55, 0.35))
-		_poly(ci, PackedVector2Array([kd + Vector2(-5, 0), kd + Vector2(5, 0), kd + Vector2(0, 9)]), Color(0.35, 0.55, 1.0))
-		var tail = PackedVector2Array()
-		for k in 5:
-			tail.append(kd + Vector2(-k * 4.0, 9 + k * 2.0 + sin(t * 10.0 + k) * 2.0))
-		ci.draw_polyline(tail, Color(1.0, 0.55, 0.35), 1.5, Art.AA)
+		match tip:
+			"star":
+				var st := PackedVector2Array()
+				for k in 10:
+					var a = -PI * 0.5 + k * PI / 5.0 + sin(t * 2.0) * 0.15
+					st.append(kd + Vector2(cos(a), sin(a)) * (8.0 if k % 2 == 0 else 3.6))
+				_poly(ci, st, Color(1.0, 0.82, 0.30))
+			"heart":
+				var hbt := 1.0 + 0.12 * maxf(0.0, sin(t * 7.0))
+				_heart(ci, kd + Vector2(0, -1), 7.0 * hbt, INK)
+				_heart(ci, kd + Vector2(0, -1), 5.8 * hbt, Color(1.0, 0.42, 0.62))
+			"leaf":
+				var la := -0.5 + sin(t * 3.0) * 0.2
+				_poly(ci, Art.ellipse(kd + Vector2(2, -2), Vector2(9, 4.5), 14, la), Color(0.40, 0.85, 0.45))
+				ci.draw_line(kd + Vector2(-5, 3), kd + Vector2(8, -6), Color(0.2, 0.5, 0.25), 1.2)
+			_:
+				_poly(ci, PackedVector2Array([kd + Vector2(0, -7), kd + Vector2(5, 0), kd + Vector2(-5, 0)]), Color(1.0, 0.55, 0.35))
+				_poly(ci, PackedVector2Array([kd + Vector2(-5, 0), kd + Vector2(5, 0), kd + Vector2(0, 9)]), Color(0.35, 0.55, 1.0))
+				var tail = PackedVector2Array()
+				for k in 5:
+					tail.append(kd + Vector2(-k * 4.0, 9 + k * 2.0 + sin(t * 10.0 + k) * 2.0))
+				ci.draw_polyline(tail, Color(1.0, 0.55, 0.35), 1.5, Art.AA)
 		# scarf wrap at the neck
-		var sc2: Color = SCARVES[scarf % SCARVES.size()]
+		var sc2: Color = scarf_col
 		ci.draw_set_transform(p.off * s, p.rot, p.sq * s)
 		_poly(ci, Art.rrect(Rect2(-14, -66, 30, 10), 5), sc2)
 		ci.draw_circle(Vector2(12, -60), 4.5, sc2.darkened(0.12))
@@ -451,7 +509,10 @@ func _paint(ci: Node2D, add: bool) -> void:
 		_poly(ci, Art.ellipse(hf, Vector2(5.5, 5), 12), TEAL)
 		_props(ci, hf, false)
 	else:
-		_eyes(ci, hc + Vector2(9, 2))
+		_eyes(ci, hc + Vector2(9, 2) + Vector2(look.x * 2.5, look.y * 2.5))
+		if helmet == "explorer":
+			ci.draw_circle(hc + Vector2(15, -19), 3.0, Art.hdr(Color(1.0, 0.92, 0.7), 2.2))
+			Art.glow(ci, hc + Vector2(17, -19), 22.0, Color(1.0, 0.9, 0.6, 0.35), 3)
 		ci.draw_circle(hc + Vector2(-17, 2), 2.5, Art.hdr(GLOW, 1.8))
 		ci.draw_circle(hc + Vector2(4, -20), 2.0, Art.hdr(GLOW, 1.6))
 		ci.draw_set_transform(p.off * s, p.rot, p.sq * s)
@@ -479,7 +540,7 @@ static func _smooth(pts: PackedVector2Array) -> PackedVector2Array:
 
 ## A tapered ribbon as one triangle strip (one draw call, never fails to
 ## triangulate even when the cloth folds over itself).
-static func _strip(ci: Node2D, pts: PackedVector2Array, w0: float, w1: float, col: Color) -> void:
+static func _strip(ci: Node2D, pts: PackedVector2Array, w0: float, w1: float, col: Color, pcols := PackedColorArray()) -> void:
 	var n = pts.size()
 	if n < 2:
 		return
@@ -494,8 +555,9 @@ static func _strip(ci: Node2D, pts: PackedVector2Array, w0: float, w1: float, co
 		var w = lerpf(w0, w1, float(i) / (n - 1))
 		verts.append(pts[i] + nrm * w)
 		verts.append(pts[i] - nrm * w)
-		cols.append(col)
-		cols.append(col)
+		var c: Color = pcols[i] if pcols.size() == n else col
+		cols.append(c)
+		cols.append(c)
 	for i in n - 1:
 		var a = i * 2
 		idx.append_array([a, a + 1, a + 2, a + 1, a + 3, a + 2])
@@ -533,7 +595,7 @@ func _props(ci: Node2D, hand: Vector2, add: bool) -> void:
 				Art.glow(ci, hand + Vector2(12, -8), 90.0, Color(1, 1, 1, 0.9), 5)
 
 func _eyes(ci: Node2D, vc: Vector2) -> void:
-	var col = Art.hdr(GLOW, 2.4)
+	var col = Art.hdr(GLOW, 1.8)
 	var l = vc + Vector2(-6, -1)
 	var r = vc + Vector2(7, -1)
 	var e = expr
@@ -570,6 +632,40 @@ func _eyes(ci: Node2D, vc: Vector2) -> void:
 		"calm":
 			for c in [l, r]:
 				ci.draw_arc(c + Vector2(0, -1), 3.5, 0.2, PI - 0.2, 8, col, 2.0, Art.AA)
+	# little screen mouth: a smile when happy, an "o" when amazed
+	match e:
+		"happy", "heart", "calm":
+			ci.draw_arc(vc + Vector2(0.5, 6.5), 3.5, 0.35, PI - 0.35, 8, Color(col, 0.85), 1.8, Art.AA)
+		"wow", "scared":
+			ci.draw_arc(vc + Vector2(0.5, 8.0), 1.8, 0.0, TAU, 10, Color(col, 0.85), 1.6, Art.AA)
+
+## Eyes follow what Kavi is doing: forward when running, up on a jump, down
+## when falling, and they wander around (sky, camera, ahead) when he is idle.
+func _update_look(dt: float) -> void:
+	if pose in ["idle", "wave", "sit", "read", "map", "stretch"]:
+		_look_next -= dt
+		if _look_next <= 0.0:
+			_look_next = randf_range(1.2, 3.0)
+			look_target = [Vector2(1, 0), Vector2(0.6, -0.9), Vector2(-0.4, -0.6), Vector2(0, 0.2), Vector2(1, -0.4)].pick_random()
+	elif pose in ["run", "walk", "slide", "gust", "throw"]:
+		look_target = Vector2(1, clampf(vy / 900.0, -0.8, 0.8))
+	elif pose in ["hover", "dive"]:
+		look_target = Vector2(0.8, 0.8 if pose == "dive" else -0.3)
+	look = look.lerp(look_target, 1.0 - exp(-dt * 10.0))
+
+func _scarf_colors(n: int, dark := 0.0) -> PackedColorArray:
+	var cols := PackedColorArray()
+	if scarf_pattern == "solid":
+		return cols  # empty: _strip uses the single colour (cheapest)
+	for i in n:
+		match scarf_pattern:
+			"stripes":
+				cols.append(scarf_col if (i / 3) % 2 == 0 else scarf_col2)
+			"rainbow":
+				cols.append(Color.from_hsv(fposmod(float(i) / n - t * 0.15, 1.0), 0.62, 1.0))
+			_:
+				cols.append(scarf_col)
+	return cols
 
 static func _heart(ci: Node2D, c: Vector2, r: float, col: Color) -> void:
 	ci.draw_circle(c + Vector2(-r * 0.5, -r * 0.2), r * 0.55, col)

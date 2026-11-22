@@ -11,8 +11,10 @@ set +e
 rc=$?
 # Smoke: boot the real game (title + first-launch tutorial) and fail on any script error.
 SMOKE="$("$GODOT" --headless --path . --quit-after 600 2>&1 || true)"
-if echo "$SMOKE" | grep -q "SCRIPT ERROR\|Parse Error"; then
-  echo "SMOKE FAIL: game boot produced script errors:"; echo "$SMOKE" | grep -A2 "SCRIPT ERROR" | head -20; rc=1
+# (here-string, not `echo | grep -q`: with pipefail, grep -q closing the pipe early
+# made a large error log count as "clean")
+if grep -q "SCRIPT ERROR\|Parse Error" <<< "$SMOKE"; then
+  echo "SMOKE FAIL: game boot produced script errors:"; grep -A2 "SCRIPT ERROR" <<< "$SMOKE" | head -20 || true; rc=1
 else
   echo "smoke: game boots clean (600 frames)"
 fi

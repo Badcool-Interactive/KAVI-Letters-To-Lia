@@ -6,4 +6,4 @@ assets/music/*.wav (8 loops),pre-rendered by tools/render_music.gd from scripts/
 assets/splash.png (loading screen) + itch banner,3x in-game render of the finale (capture director) + title text in Poppins Bold (SIL OFL system font),project-original; Poppins OFL,Claude Opus 5.5 (code author),n/a,owner review pending
 assets/fonts/Fredoka.ttf,github.com/google/fonts ofl/fredoka (variable font; sha256 2ba02e68…),SIL OFL 1.1 (assets/fonts/Fredoka-OFL.txt),none,n/a,none
 assets/fonts/Nunito.ttf,github.com/google/fonts ofl/nunito (variable font; sha256 bb55a5ca…),SIL OFL 1.1 (assets/fonts/Nunito-OFL.txt),none,n/a,none
-assets/splash.png (v0.6 key art),in-game render of the finale via capture director --keyart; logo drawn in-engine with Fredoka,project-original; Fredoka OFL,Claude Opus 5.5 (code author),n/a,owner review pending
+assets/splash.png (v0.8 key art, KAVI logo),in-game render of the finale via capture director --keyart; logo drawn in-engine with Fredoka,project-original; Fredoka OFL,Claude Opus 5.5 (code author),n/a,owner review pending
