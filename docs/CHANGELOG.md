@@ -1,4 +1,13 @@
 # Changelog
+## 0.8.4 (2026-11-23): obstacles that belong, closer layers, the fisher
+- **Obstacles reworked for a courier's journey:**
+  - Hop over tied parcels with a shipping label and a red stamp (stacked when tall).
+  - Scoot under a wooden shop sign with bunting (on top, so the gap stays clear).
+  - The gust gate is now a wooden picket gate with a pinwheel.
+  - Bell posts and drawbridges are wooden, and the bounce wall is stone with ivy.
+- **Foreground plants per country** (tinted, with a rim of light; no more black spikes): agave leaves (Greece), big ferns (Bulgaria), reeds and cattails (Danube), snowy pine boughs (Carpathians).
+- **Under the road:** a Greek stone wall, river water with ripples below the Danube boardwalk, roots and glowing mushrooms in the forest, snow layers in the mountains.
+- **The fisher** sits on a little jetty with a sun hat and a bucket; the rod curves and a red float bobs.
 ## 0.8.3 (2026-11-22): prettier Greece, softer people, clean pause
 - **Greece:** the domes (they read as the wrong culture) and the sci-fi ring and spires are replaced by Greek temples (stepped base, columns, pediment), white windmills with turning sails, and a rare lighthouse whose beam slowly sweeps the sky.
 - **Ferns** are now arching fronds with paired leaflets, not sticks.

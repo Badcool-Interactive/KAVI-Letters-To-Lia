@@ -692,38 +692,93 @@ func _draw_motes(ci: Node2D) -> void:
 # ------------------------------------------------------------------ foreground
 ## Dark framing silhouettes drawn in front of gameplay (below the ground line
 ## and in the top corners only, so readability is never hurt).
+## Close foreground plants framing the bottom of the screen (in front of the
+## gameplay, below the ground line). Each country has its own plants, tinted
+## with its colours and caught by a thin rim of light, so they read as plants
+## rather than black spikes.
 func draw_foreground(ci: Node2D, gy: float) -> void:
 	var off = cam_x * 1.55
-	var col: Color = pal.ground.darkened(0.6)
-	col.a = 0.96
-	var cw = 900.0
+	var col: Color = pal.layers[2].darkened(0.62).lerp(pal.ground, 0.3)
+	col.a = 0.97
+	var rim: Color = Color(pal.rim, 0.28)
+	var kind: String = pal.get("surface", "pavers")
+	var cw = 820.0
 	var c0 = int(floor((off - 400.0) / cw))
 	var c1 = int(floor((off + size.x + 400.0) / cw))
 	for c in range(c0, c1 + 1):
 		var r = Art.hash01(c, 501)
-		var sx = c * cw + r * 500.0 - off
-		if r < 0.55:
-			# leafy clump rising from below: leaf count, fan, length and width vary per clump
-			var nl := 3 + int(Art.hash01(c, 502) * 5.0)
-			var fan = 0.18 + Art.hash01(c, 503) * 0.2
-			var tall = 0.6 + Art.hash01(c, 504) * 0.7
-			var lw = 14.0 + Art.hash01(c, 505) * 14.0
-			var sway = sin(t * 0.9 + c) * 0.03
-			for k in nl:
-				var a = -PI * 0.5 + (k - (nl - 1) * 0.5) * fan + sway + (Art.hash01(c, 520 + k) - 0.5) * 0.15
-				var base = Vector2(sx + k * 14.0, size.y + 40.0)
-				var tip = base + Vector2(cos(a), sin(a)) * (110.0 + Art.hash01(c, k) * 150.0) * tall
-				var nrm = (tip - base).normalized().orthogonal() * lw
-				ci.draw_colored_polygon(PackedVector2Array([base - nrm, (base + tip) * 0.5 - nrm * 1.6, tip, (base + tip) * 0.5 + nrm * 1.6, base + nrm]), col)
-		elif false:
-			# (disabled) hanging vine
-			var x0 = sx
-			var pts = PackedVector2Array()
-			for k in 12:
-				pts.append(Vector2(x0 + sin(k * 0.6 + t * 0.6 + c) * 12.0, -20.0 + k * 22.0))
-			ci.draw_polyline(pts, col, 7.0, Art.AA)
-			for k in range(2, 12, 2):
-				ci.draw_colored_polygon(Art.ellipse(pts[k] + Vector2(10, 0), Vector2(18, 8), 10, 0.5), col)
+		if r > 0.6:
+			continue
+		var sx = c * cw + r * 420.0 - off
+		var base = Vector2(sx, size.y + 30.0)
+		var sway = sin(t * 0.8 + c) * 0.04
+		var tall = 0.75 + Art.hash01(c, 504) * 0.5
+		match kind:
+			"moss":
+				# a big fern: arching fronds with leaflets
+				for k in 6:
+					var f = k / 5.0 - 0.5
+					var tip = base + Vector2(f * 300.0, -230.0 * tall * (1.0 - absf(f) * 0.5)).rotated(sway)
+					_frond(ci, base, tip, Vector2(f * 120.0, 60.0), 14.0, col, rim)
+			"boards":
+				# reeds and cattails by the water
+				for k in 7:
+					var bx = base + Vector2((k - 3) * 22.0, 0)
+					var h = (200.0 + Art.hash01(c, 520 + k) * 140.0) * tall
+					var tip = bx + Vector2(sin(t * 1.1 + k + c) * 10.0 + (k - 3) * 8.0, -h)
+					_leaf(ci, bx, tip, Vector2((k - 3) * 10.0, 0), 7.0, col, rim)
+					if k % 2 == 0:
+						ci.draw_colored_polygon(Art.ellipse(tip + Vector2(0, 26), Vector2(7, 22), 12), col)
+			"snow":
+				# a snowy pine bough sweeping in from below
+				var tip = base + Vector2(320.0, -200.0 * tall).rotated(sway)
+				_leaf(ci, base, tip, Vector2(80, 40), 10.0, col, rim)
+				for k in range(1, 9):
+					var u = k / 9.0
+					var q = base.lerp(tip, u) + Vector2(80, 40) * (u - u * u) * 4.0
+					for sd in [-1.0, 1.0]:
+						var nt = q + Vector2(30.0 * (1.0 - u) + 10.0, sd * (40.0 * (1.0 - u) + 12.0)).rotated(-0.5)
+						_leaf(ci, q, nt, Vector2(0, 6 * sd), 6.0 * (1.0 - u * 0.5), col, rim)
+						ci.draw_line(q.lerp(nt, 0.3), nt, Color(0.92, 0.95, 1.0, 0.55), 2.0)
+			_:
+				# Greece: an agave / wild lily clump with broad curved leaves
+				var nl := 5 + int(Art.hash01(c, 502) * 3.0)
+				for k in nl:
+					var f = (float(k) / float(nl - 1)) - 0.5
+					var tip = base + Vector2(f * 340.0, -(170.0 + Art.hash01(c, 530 + k) * 110.0) * tall * (1.0 - absf(f) * 0.4)).rotated(sway)
+					_leaf(ci, base + Vector2(f * 40.0, 0), tip, Vector2(f * 70.0, -20.0), 26.0, col, rim)
+
+## A curved, tapering leaf from base to tip (bend pushes the middle sideways).
+func _leaf(ci: Node2D, base: Vector2, tip: Vector2, bend: Vector2, w: float, col: Color, rim: Color) -> void:
+	var left := PackedVector2Array()
+	var right := PackedVector2Array()
+	var n := 9
+	for k in n + 1:
+		var u := float(k) / n
+		var q := base.lerp(tip, u) + bend * (u - u * u) * 4.0
+		var q2 := base.lerp(tip, minf(u + 0.05, 1.0)) + bend * ((u + 0.05) - (u + 0.05) * (u + 0.05)) * 4.0
+		var nrm := (q2 - q).normalized().orthogonal() if k < n else Vector2.ZERO
+		var ww := w * sin(PI * minf(u * 0.9 + 0.1, 1.0)) * (1.0 - u * 0.4)
+		left.append(q + nrm * ww)
+		right.append(q - nrm * ww)
+	right.reverse()
+	var poly := left + right
+	ci.draw_colored_polygon(poly, col)
+	ci.draw_polyline(left, rim, 1.5, Art.AA)
+
+## A fern frond: a curved stem with paired leaflets shrinking to the tip.
+func _frond(ci: Node2D, base: Vector2, tip: Vector2, bend: Vector2, w: float, col: Color, rim: Color) -> void:
+	var prev := base
+	for k in range(1, 11):
+		var u := k / 10.0
+		var q := base.lerp(tip, u) + bend * (u - u * u) * 4.0
+		ci.draw_line(prev, q, col, maxf(5.0 * (1.0 - u), 1.5))
+		var d := (q - prev).normalized()
+		var lw := w * (1.1 - u)
+		for sd in [-1.0, 1.0]:
+			var lt: Vector2 = q + (d.orthogonal() * sd * 1.6 + d * 0.6).normalized() * lw * 2.2
+			_leaf(ci, q, lt, Vector2.ZERO, lw * 0.45, col, rim)
+		prev = q
 
 # ------------------------------------------------------------------ living world
 ## Distant towns, little people doing things, ships and things in the sky.
@@ -875,12 +930,35 @@ func _draw_life(ci: Node2D, off: float, col: Color) -> void:
 					tail.append(kp - d * 1.3 + Vector2(-q * 7.0 * flip * s, q * 7.0 * s + sin(t * 4.0 + q) * 4.0 * s))
 				ci.draw_polyline(tail, Color(pal.accent, 0.8 * col.a), 1.5, Art.AA)
 			"fisher":
-				ci.draw_colored_polygon(Art.rrect(Rect2(p.x - 7 * s, p.y - 12 * s, 18 * s, 12 * s), 3.0 * s), col)
-				var hand = _person(ci, p + Vector2(0, -10 * s), s, col, PI * 0.45, -0.6 if flip > 0 else PI + 0.6, true)
-				var tip = hand + Vector2(80.0 * flip, -46.0) * s
-				ci.draw_line(hand, tip, col, 2.0)
-				var bob = sin(t * 2.0 + ph) * 3.0
-				ci.draw_line(tip, tip + Vector2(14.0 * flip * s, 70.0 * s + bob), Color(col.lightened(0.3), 0.6 * col.a), 1.0)
+				# sitting on the end of a little wooden jetty, sun hat on, a bucket
+				# beside him; the rod bends and the float bobs on the water
+				var fl: float = flip
+				var jx = p.x - 30 * s * fl
+				ci.draw_colored_polygon(Art.rrect(Rect2(minf(jx, p.x + 16 * s * fl) - 4 * s, p.y - 14 * s, absf(p.x + 16 * s * fl - jx) + 8 * s, 6 * s), 2.0 * s), col)
+				for px in [jx, p.x + 10 * s * fl]:
+					ci.draw_rect(Rect2(px - 2.5 * s, p.y - 10 * s, 5 * s, 40 * s), col)
+				var seat = p + Vector2(4 * s * fl, -13 * s)
+				var hand = _person(ci, seat, s, col, PI * 0.5, (-0.35 if fl > 0 else PI + 0.35), true)
+				# sun hat: brim + crown
+				var hd = seat + Vector2(0.5 * s, -30 * s)
+				ci.draw_colored_polygon(Art.ellipse(hd + Vector2(0, -4 * s), Vector2(11 * s, 2.6 * s), 12), col)
+				ci.draw_colored_polygon(Art.ellipse(hd + Vector2(0, -7 * s), Vector2(6 * s, 4.5 * s), 12), col)
+				# bucket
+				var bk = p + Vector2(-16 * s * fl, -14 * s)
+				ci.draw_colored_polygon(PackedVector2Array([bk + Vector2(-5 * s, -9 * s), bk + Vector2(5 * s, -9 * s), bk + Vector2(4 * s, 0), bk + Vector2(-4 * s, 0)]), col)
+				ci.draw_arc(bk + Vector2(0, -9 * s), 5 * s, PI, TAU, 8, col, 1.2)
+				# rod: a gentle curve, then the line down to a bobbing float
+				var rod := PackedVector2Array()
+				for k in 7:
+					var u = k / 6.0
+					rod.append(hand + Vector2(70.0 * fl * u, -40.0 * u + 18.0 * u * u) * s)
+				ci.draw_polyline(rod, col, 2.2, Art.AA)
+				var tip: Vector2 = rod[6]
+				var bob = sin(t * 2.0 + ph) * 2.5
+				var fpos = tip + Vector2(10.0 * fl * s, 64.0 * s + bob)
+				ci.draw_line(tip, fpos, Color(col.lightened(0.35), 0.55 * col.a), 1.0)
+				ci.draw_circle(fpos, 3.0 * s, Color(1.0, 0.45, 0.4, col.a))
+				ci.draw_arc(fpos + Vector2(0, 3 * s), 8 * s + absf(bob), PI * 0.1, PI * 0.9, 8, Color(col.lightened(0.4), 0.35 * col.a), 1.0)
 			"bench":
 				ci.draw_rect(Rect2(p.x - 30 * s, p.y - 16 * s, 60 * s, 4 * s), col)
 				ci.draw_rect(Rect2(p.x - 30 * s, p.y - 30 * s, 60 * s, 3 * s), col)

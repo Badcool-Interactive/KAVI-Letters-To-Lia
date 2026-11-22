@@ -75,7 +75,9 @@ func _draw_base(ci: Node2D) -> void:
 			PackedColorArray([band_top, band_top, band_mid, band_mid]))
 		ci.draw_polygon(PackedVector2Array([Vector2(a, 60), Vector2(b, 60), Vector2(b, 300), Vector2(a, 300)]),
 			PackedColorArray([band_mid, band_mid, body, body]))
-		if Art.Q >= 2:
+		if Art.Q >= 1:
+			_ground_detail(ci, a, b, body)
+		if Art.Q >= 2 and pal.get("surface", "") in ["moss", "pavers"]:
 			_strata(ci, a, b, gcol)
 		_surface(ci, a, b, band_top)
 		_tufts(ci, a, b, gcol)
@@ -136,6 +138,80 @@ func _strata(ci: Node2D, a: float, b: float, gcol: Color) -> void:
 				pts.append(Vector2(x + dir * k * (12.0 + Art.hash01(c, 80 + k) * 8.0), 10.0 + k * 13.0 + sin(k * 1.3 + c) * 5.0))
 			ci.draw_polyline(pts, Color(root, 0.7), 4.0 - Art.hash01(c, 40) * 1.5, Art.AA)
 			ci.draw_line(pts[3], pts[3] + Vector2(-dir * 16.0, 14.0), Color(root, 0.6), 2.5, Art.AA)
+
+## What is under the road differs by country: a Greek stone retaining wall,
+## dark river water below the Danube boardwalk, roots and glowing mushrooms in
+## the Bulgarian forest, layered snow and ice in the Carpathians.
+func _ground_detail(ci: Node2D, a: float, b: float, body: Color) -> void:
+	var x0 := maxf(a, view_l - 80.0)
+	var x1 := minf(b, view_r + 80.0)
+	if x1 - x0 < 8.0:
+		return
+	var kind: String = pal.get("surface", "")
+	if surf_seam < INF and x0 < surf_seam:
+		kind = surf_from if x1 <= surf_seam else kind
+	match kind:
+		"pavers":
+			# big dressed stones with mortar lines, a little lighter at the top
+			var stone: Color = body.lerp(pal.layers[1], 0.35)
+			for row in 4:
+				var y := 40.0 + row * 46.0
+				var bw := 150.0 - row * 12.0
+				var shift := (row % 2) * bw * 0.5
+				var c0 := int(floor((x0 - shift) / bw))
+				var c1 := int(ceil((x1 - shift) / bw))
+				for c in range(c0, c1 + 1):
+					var bx := c * bw + shift
+					var l := maxf(bx + 3.0, x0)
+					var r := minf(bx + bw - 3.0, x1)
+					if r - l < 6.0:
+						continue
+					var shade := Art.hash01(c, 300 + row) * 0.12
+					ci.draw_colored_polygon(Art.rrect(Rect2(l, y, r - l, 40.0), 6.0), Color(stone.darkened(shade + row * 0.08), 0.85 - row * 0.15))
+		"boards":
+			# river water under the boardwalk: dark, with drifting ripples
+			var wtop: Color = pal.sky[2].lerp(pal.layers[2], 0.7)
+			var wbot: Color = pal.layers[2].darkened(0.5)
+			ci.draw_polygon(PackedVector2Array([Vector2(x0, 34), Vector2(x1, 34), Vector2(x1, 320), Vector2(x0, 320)]),
+				PackedColorArray([wtop, wtop, wbot, wbot]))
+			for k in 6:
+				var y := 50.0 + k * 34.0
+				var step := 220.0 + k * 40.0
+				var off: float = fposmod(t * (18.0 + k * 6.0) + k * 97.0, step)
+				var x: float = floor(x0 / step) * step - off
+				while x < x1:
+					if x + 60.0 > x0:
+						ci.draw_line(Vector2(maxf(x, x0), y), Vector2(minf(x + 50.0 + k * 8.0, x1), y), Color(pal.rim, 0.10 - k * 0.012), 2.0)
+					x += step
+		"moss":
+			# roots and a few glowing mushrooms
+			var root: Color = body.darkened(0.2)
+			var c0 := int(floor(x0 / 260.0))
+			var c1 := int(ceil(x1 / 260.0))
+			for c in range(c0, c1 + 1):
+				var x: float = c * 260.0 + Art.hash01(c, 401) * 140.0
+				if x < x0 + 20.0 or x > x1 - 20.0:
+					continue
+				var pts := PackedVector2Array()
+				for k in 7:
+					pts.append(Vector2(x + sin(k * 1.1 + c) * 16.0 + k * 6.0, 8.0 + k * 22.0))
+				ci.draw_polyline(pts, Color(root, 0.8), 6.0 - Art.hash01(c, 402) * 2.0, Art.AA)
+				if Art.hash01(c, 403) < 0.45:
+					var m := Vector2(x + 26.0, 58.0 + Art.hash01(c, 404) * 50.0)
+					ci.draw_line(m, m + Vector2(0, 12), Color(body.lightened(0.15), 0.9), 3.0)
+					ci.draw_colored_polygon(Art.ellipse(m, Vector2(9, 5), 12), Art.hdr(Color(pal.mote, 0.85), 1.15))
+		"snow":
+			# packed snow layers with icy blue streaks
+			var sn := Color(0.86, 0.90, 1.0).lerp(pal.layers[1], 0.55)
+			for k in 3:
+				var y := 30.0 + k * 40.0
+				var pts := PackedVector2Array()
+				var x := x0
+				while x <= x1:
+					pts.append(Vector2(x, y + sin(x * 0.01 + k * 2.0) * 6.0))
+					x += 40.0
+				pts.append(Vector2(x1, y + sin(x1 * 0.01 + k * 2.0) * 6.0))
+				ci.draw_polyline(pts, Color(sn, 0.35 - k * 0.09), 6.0 - k, Art.AA)
 
 ## Each country has its own walking surface along the top of the ground:
 ## Greek stone paving, Bulgarian moss, a Danube boardwalk, Carpathian snow.
@@ -271,38 +347,83 @@ func _solid(ci: Node2D, pts: PackedVector2Array, fill: Color, ink_w := 3.0) -> v
 	c.append(pts[0])
 	ci.draw_polyline(c, INK, ink_w, Art.AA)
 
+## Obstacles belong to a courier's journey (owner, 0.8.4): parcels to hop,
+## a shop sign with bunting to scoot under, a wooden garden gate with a
+## pinwheel, a village bell and drawbridge, a garden wall, old planks.
+## Light warm materials with an ink outline keep them readable on any sky.
+func _wood() -> Color:
+	return Color(0.80, 0.58, 0.38).lerp(pal.rim, 0.12)
+
+func _kraft() -> Color:
+	return Color(0.90, 0.72, 0.50).lerp(pal.rim, 0.10)
+
+func _parcel(ci: Node2D, r: Rect2, seed: int) -> void:
+	var kc := _kraft().darkened(Art.hash01(seed, 1) * 0.08)
+	_solid(ci, Art.rrect(r, 6.0), kc)
+	# shading on the lower part and the flap line
+	ci.draw_colored_polygon(Art.rrect(Rect2(r.position.x + 3, r.end.y - r.size.y * 0.3, r.size.x - 6, r.size.y * 0.3 - 3), 4.0), kc.darkened(0.12))
+	ci.draw_line(Vector2(r.position.x + 4, r.position.y + 10), Vector2(r.end.x - 4, r.position.y + 10), kc.darkened(0.22), 2.0)
+	# string tied round it
+	ci.draw_line(Vector2(r.get_center().x, r.position.y + 2), Vector2(r.get_center().x, r.end.y - 2), Color(0.55, 0.30, 0.22), 3.0)
+	ci.draw_line(Vector2(r.position.x + 2, r.get_center().y), Vector2(r.end.x - 2, r.get_center().y), Color(0.55, 0.30, 0.22), 3.0)
+
 func _hurdle(ci: Node2D, o: Dictionary) -> void:
-	var body := _mat()
-	_solid(ci, Art.rrect(Rect2(o.x, -o.h, o.w, o.h + 4), 14.0), body)
-	ci.draw_colored_polygon(Art.rrect(Rect2(o.x + 5, -o.h * 0.45, o.w - 10, o.h * 0.45 - 2), 8.0), body.darkened(0.18))
-	ci.draw_colored_polygon(Art.rrect(Rect2(o.x + 6, -o.h + 6, o.w - 12, 10), 5.0), AMBER.darkened(0.05))
-	var c := Vector2(o.x + o.w * 0.5, -o.h * 0.5)
-	ci.draw_polyline(PackedVector2Array([c + Vector2(-11, 6), c + Vector2(0, -6), c + Vector2(11, 6)]), INK, 4.0, Art.AA)
+	var seed := int(o.x)
+	if o.h > 95.0:
+		# two parcels: a big one with a smaller one on top
+		_parcel(ci, Rect2(o.x, -o.h * 0.55, o.w, o.h * 0.55 + 4), seed)
+		_parcel(ci, Rect2(o.x + o.w * 0.12, -o.h, o.w * 0.76, o.h * 0.45 + 2), seed + 7)
+	else:
+		_parcel(ci, Rect2(o.x, -o.h, o.w, o.h + 4), seed)
+	# shipping label with the hop chevron, and a red stamp
+	var lc := Vector2(o.x + o.w * 0.5, -o.h * 0.30)
+	ci.draw_colored_polygon(Art.rrect(Rect2(lc.x - 16, lc.y - 11, 32, 22), 3.0), Color(0.98, 0.95, 0.88))
+	ci.draw_polyline(PackedVector2Array([lc + Vector2(-9, 5), lc + Vector2(0, -5), lc + Vector2(9, 5)]), INK, 3.5, Art.AA)
+	ci.draw_circle(Vector2(o.x + o.w - 14, -o.h + 16), 6.0, Color(0.92, 0.32, 0.30))
 
 func _beam(ci: Node2D, o: Dictionary) -> void:
-	var body := _mat()
+	# a wooden shop sign hanging between two posts, bunting along the top
 	var bottom: float = -o.h
-	var pillar := body.darkened(0.45)
-	ci.draw_rect(Rect2(o.x + 18, bottom - 1400, 24, 1340), pillar)
-	ci.draw_rect(Rect2(o.x + o.w - 42, bottom - 1400, 24, 1340), pillar)
-	_solid(ci, Art.rrect(Rect2(o.x, bottom - 72, o.w, 72), 16.0), body)
-	ci.draw_colored_polygon(Art.rrect(Rect2(o.x + 6, bottom - 18, o.w - 12, 12), 6.0), ROSE.darkened(0.1))
+	var wood := _wood()
+	var post := wood.darkened(0.45)
+	for px in [o.x + 18.0, o.x + o.w - 42.0]:
+		ci.draw_rect(Rect2(px, bottom - 1400, 24, 1340), post)
+		ci.draw_rect(Rect2(px + 4, bottom - 1400, 5, 1340), post.lightened(0.12))
+	_solid(ci, Art.rrect(Rect2(o.x, bottom - 72, o.w, 72), 12.0), wood)
+	# planks
+	ci.draw_line(Vector2(o.x + 6, bottom - 48), Vector2(o.x + o.w - 6, bottom - 48), wood.darkened(0.22), 2.0)
+	ci.draw_line(Vector2(o.x + 6, bottom - 24), Vector2(o.x + o.w - 6, bottom - 24), wood.darkened(0.22), 2.0)
+	# bunting on top (never below the sign, so the gap underneath stays clear)
+	var flags := [Color(1.0, 0.45, 0.45), Color(1.0, 0.85, 0.40), pal.accent, Color(0.98, 0.95, 0.88)]
+	var nfl := int(o.w / 34.0)
+	for k in nfl:
+		var fx: float = o.x + 10.0 + k * (o.w - 20.0) / float(maxi(nfl - 1, 1))
+		var sw := sin(t * 2.4 + k) * 3.0
+		_solid(ci, PackedVector2Array([Vector2(fx - 11, bottom - 92), Vector2(fx + 11, bottom - 92), Vector2(fx + sw, bottom - 72)]), flags[k % flags.size()], 2.0)
+	ci.draw_line(Vector2(o.x, bottom - 92), Vector2(o.x + o.w, bottom - 92), INK, 2.0)
+	# painted "scoot" chevrons
 	for k in maxi(1, int(o.w / 120.0)):
-		var c := Vector2(o.x + 60.0 + k * 120.0, bottom - 42)
+		var c := Vector2(o.x + 60.0 + k * 120.0, bottom - 36)
 		if c.x > o.x + o.w - 30.0:
 			break
-		ci.draw_polyline(PackedVector2Array([c + Vector2(-11, -6), c + Vector2(0, 6), c + Vector2(11, -6)]), INK, 4.0, Art.AA)
+		ci.draw_polyline(PackedVector2Array([c + Vector2(-12, -6), c + Vector2(0, 6), c + Vector2(12, -6)]), Color(0.98, 0.95, 0.88), 5.0, Art.AA)
 
 func _gate(ci: Node2D, o: Dictionary) -> void:
 	var body := _mat()
 	var x: float = o.x
-	_solid(ci, Art.rrect(Rect2(x - 10, -o.h, 14, o.h), 6.0), body.darkened(0.1))
-	_solid(ci, Art.rrect(Rect2(x + o.w - 4, -o.h, 14, o.h), 6.0), body.darkened(0.1))
+	_solid(ci, Art.rrect(Rect2(x - 10, -o.h, 14, o.h), 6.0), _wood().darkened(0.35))
+	_solid(ci, Art.rrect(Rect2(x + o.w - 4, -o.h, 14, o.h), 6.0), _wood().darkened(0.35))
 	var f = clampf(o.open_t / 0.45, 0.0, 1.0)
 	var swing = ease(f, 0.4) * 1.45
 	var hinge = Vector2(x + o.w * 0.5, -o.h)
 	ci.draw_set_transform(hinge, -swing, Vector2.ONE)
-	_solid(ci, Art.rrect(Rect2(-o.w * 0.5 + 4, 4, o.w - 8, o.h - 10), 8.0), body)
+	var wood := _wood()
+	_solid(ci, Art.rrect(Rect2(-o.w * 0.5 + 4, 4, o.w - 8, o.h - 10), 8.0), wood)
+	var np := maxi(2, int((o.w - 8) / 22.0))
+	for k in range(1, np):
+		var px: float = -o.w * 0.5 + 4 + k * (o.w - 8) / float(np)
+		ci.draw_line(Vector2(px, 8), Vector2(px, o.h - 10), wood.darkened(0.25), 2.0)
+	ci.draw_line(Vector2(-o.w * 0.5 + 8, o.h * 0.25), Vector2(o.w * 0.5 - 8, o.h * 0.25), wood.darkened(0.3), 5.0)
 	var hub = Vector2(0, o.h * 0.55)
 	var spin = t * (0.8 + f * 14.0)
 	for k in 4:
@@ -316,9 +437,9 @@ func _bell(ci: Node2D, o: Dictionary) -> void:
 	var body := _mat()
 	var bp = Vector2(o.bell_x, o.bell_y)
 	ci.draw_line(Vector2(o.bell_x, 0), bp + Vector2(0, -40), INK, 14.0)
-	ci.draw_line(Vector2(o.bell_x, 0), bp + Vector2(0, -40), body.darkened(0.2), 9.0)
+	ci.draw_line(Vector2(o.bell_x, 0), bp + Vector2(0, -40), _wood().darkened(0.3), 9.0)
 	ci.draw_line(bp + Vector2(-52, -40), bp + Vector2(32, -40), INK, 12.0)
-	ci.draw_line(bp + Vector2(-50, -40), bp + Vector2(30, -40), body.darkened(0.2), 7.0)
+	ci.draw_line(bp + Vector2(-50, -40), bp + Vector2(30, -40), _wood().darkened(0.3), 7.0)
 	var swing = sin(o.open_t * 18.0) * exp(-o.open_t * 2.5) * 0.6 if o.open else sin(t * 1.6) * 0.06
 	ci.draw_set_transform(bp + Vector2(-20, -40), swing, Vector2.ONE)
 	_solid(ci, PackedVector2Array([Vector2(-14, 4), Vector2(14, 4), Vector2(28, 48), Vector2(-28, 48)]), GOLD.darkened(0.08))
@@ -328,11 +449,11 @@ func _bell(ci: Node2D, o: Dictionary) -> void:
 	var ang = lerpf(1.35, 0.0, ease(f, 0.35))
 	var half: float = o.w * 0.5 + 4.0
 	ci.draw_set_transform(Vector2(o.x, 0), -ang, Vector2.ONE)
-	_solid(ci, PackedVector2Array([Vector2(0, -6), Vector2(half, -6), Vector2(half, 12), Vector2(0, 12)]), body)
+	_solid(ci, PackedVector2Array([Vector2(0, -6), Vector2(half, -6), Vector2(half, 12), Vector2(0, 12)]), _wood())
 	for k in int(half / 36.0):
 		ci.draw_line(Vector2(k * 36.0 + 18, -6), Vector2(k * 36.0 + 18, 12), INK, 2.0)
 	ci.draw_set_transform(Vector2(o.x + o.w, 0), ang, Vector2.ONE)
-	_solid(ci, PackedVector2Array([Vector2(-half, -6), Vector2(0, -6), Vector2(0, 12), Vector2(-half, 12)]), body)
+	_solid(ci, PackedVector2Array([Vector2(-half, -6), Vector2(0, -6), Vector2(0, 12), Vector2(-half, 12)]), _wood())
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _bloom(ci: Node2D, o: Dictionary) -> void:
@@ -344,11 +465,16 @@ func _bloom(ci: Node2D, o: Dictionary) -> void:
 	_solid(ci, Art.ellipse(c, Vector2(16, 8), 14), GOLD, 2.0)
 	var wx: float = o.wall_x
 	_solid(ci, PackedVector2Array([Vector2(wx, 2), Vector2(wx + 6, -o.wall_h + 30), Vector2(wx + o.wall_w * 0.5, -o.wall_h),
-		Vector2(wx + o.wall_w - 4, -o.wall_h + 40), Vector2(wx + o.wall_w, 2)]), body.lerp(pal.accent, 0.25))
-	ci.draw_line(Vector2(wx + o.wall_w * 0.5, -o.wall_h + 8), Vector2(wx + o.wall_w * 0.5, -10), body.darkened(0.2), 3.0)
+		Vector2(wx + o.wall_w - 4, -o.wall_h + 40), Vector2(wx + o.wall_w, 2)]), body.lerp(Color(0.72, 0.68, 0.62), 0.5))
+	# stone courses and a trail of ivy
+	for k in int(o.wall_h / 34.0):
+		var yy: float = -12.0 - k * 34.0
+		ci.draw_line(Vector2(wx + 6, yy), Vector2(wx + o.wall_w - 6, yy), body.darkened(0.25), 2.0)
+	for k in 6:
+		ci.draw_circle(Vector2(wx + o.wall_w * (0.2 + 0.12 * k), -o.wall_h * (0.2 + 0.11 * k)), 7.0, LEAF.darkened(0.35))
 
 func _rescue(ci: Node2D, o: Dictionary) -> void:
-	var body := _mat().darkened(0.15)
+	var body := _wood().darkened(0.1)
 	var ft: float = o.get("fall_t", -1.0)
 	var n = int(o.w / 60.0)
 	for k in n:
