@@ -430,11 +430,6 @@ func show_settings(animate := true) -> void:
 	_cycle(v, "Music", "music", [0.0, 0.4, 0.8, 1.0])
 	_cycle(v, "Sound effects", "sfx", [0.0, 0.5, 0.9, 1.0])
 	_cycle(v, "Button size", "controls_scale", [0.8, 1.0, 1.2, 1.4])
-	var lq: String = st.get("kavi_limbs2", "jointed")
-	var lb := _item(v, "Kavi's limbs", func():
-		st["kavi_limbs2"] = "jointed" if lq == "floating" else "floating"
-		_settings_changed(), 32)
-	lb.status = lq.capitalize()
 	var gq: String = st.get("graphics", "auto")
 	var g := _item(v, "Graphics", func():
 		var opts := ["auto", "low", "medium", "high"]

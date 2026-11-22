@@ -8,15 +8,15 @@ const Art = preload("res://scripts/art.gd")
 const Painter = preload("res://scripts/painter.gd")
 
 # Wearable colours (Garage). Defaults are the classic courier look.
-var SHELL := Color(0.98, 0.92, 0.80)
+var SHELL := Color8(254, 240, 216)
 var SHADE := Color(0.84, 0.74, 0.58)
-var TEAL := Color(0.20, 0.70, 0.68)
+var TEAL := Color8(58, 169, 162)
 const JOINT := Color(0.32, 0.58, 0.74)
 const BOOT := Color(0.14, 0.34, 0.90)
 const PACK := Color(0.55, 0.15, 0.20)
 var GLOW := Color(0.30, 1.0, 1.0)
-var scarf_col := Color(1.0, 0.50, 0.15)
-var scarf_col2 := Color(1.0, 0.35, 0.14)
+var scarf_col := Color8(255, 124, 42)
+var scarf_col2 := Color8(255, 124, 42)
 var scarf_pattern := "solid"
 var tip := "kite"
 var helmet := "round"
@@ -42,6 +42,7 @@ func set_look(l: Dictionary) -> void:
 	scarf_pattern = l.pattern
 	tip = l.tip
 	helmet = l.helmet
+	_push_swap()
 const INK := Color(0.04, 0.06, 0.11)
 const VISOR := Color(0.03, 0.05, 0.09)
 const SCARVES := [Color(1.0, 0.35, 0.14), Color(0.30, 0.65, 1.0), Color(1.0, 0.45, 0.65),
@@ -89,6 +90,8 @@ func _ready() -> void:
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_add.material = m
 	add_child(_add)
+	_make_art_painter()
+	_push_swap()
 
 func tick(dt: float) -> void:
 	t += dt
@@ -111,6 +114,12 @@ func tick(dt: float) -> void:
 	_update_trail()
 	_base.queue_redraw()
 	_add.queue_redraw()
+	if _art:
+		_art.queue_redraw()
+		var hdr := 1.0 if (get_viewport() and get_viewport().use_hdr_2d and RenderingServer.get_current_rendering_method() != "gl_compatibility") else 0.0
+		_swap.set_shader_parameter("encode", hdr)
+		if scarf_pattern == "rainbow":
+			_swap.set_shader_parameter("time_s", t)
 
 func reset_scarf() -> void:
 	_scarf_pts.clear()
@@ -564,179 +573,296 @@ const HEAD_SIDE := [Vector2(-24, -35), Vector2(35, -31), Vector2(44, -25), Vecto
 const SCREEN_SIDE := [Vector2(-2, -24), Vector2(37, -27), Vector2(44, -21), Vector2(45, 28), Vector2(39, 33), Vector2(11, 33)]
 const PANEL_SIDE := [Vector2(-39, 3), Vector2(-14, 0), Vector2(-7, 20), Vector2(-31, 27)]
 
-func _paint(ci: Node2D, add: bool) -> void:
+# ------------------------------------------------------------------ Kavi art (0.8.8)
+## Kavi is now the approved concept art itself (codex-r1/kavi-e-keystone-floating.png),
+## cut into floating parts by tools/art/kavi_parts.py and animated here: the
+## run uses Codex's stride rig; idle/waves face the camera; a quick squash
+## turns him between the two. The face is drawn live on his screen, the antenna
+## is drawn live (so it can wobble and be swapped), and Garage colours go
+## through a palette-swap shader that keeps the art's own shading.
+const G := 0.40   # concept-sheet pixels -> rig units
+const TEX_FRONT := preload("res://assets/kavi/front_upper.png")
+const TEX_SIDE := preload("res://assets/kavi/side_upper.png")
+const TEX_MITT := preload("res://assets/kavi/side_mitten_near.png")
+const TEX_BOOT := preload("res://assets/kavi/side_boot.png")
+const TEX_FMITT_L := preload("res://assets/kavi/front_mitten_l.png")
+const TEX_FMITT_R := preload("res://assets/kavi/front_mitten_r.png")
+const TEX_FBOOT_L := preload("res://assets/kavi/front_boot_l.png")
+const TEX_FBOOT_R := preload("res://assets/kavi/front_boot_r.png")
+# anchors in each sprite's own pixels (measured on the sheet)
+const SIDE_PIVOT := Vector2(493, 466)    # pelvis
+const SIDE_EYE := Vector2(661, 196)
+const SIDE_MOUTH := Vector2(653, 258)
+const SIDE_ANT := Vector2(568, 100)
+const SIDE_HEAD := Vector2(553, 211)
+const SIDE_NOZ := [Vector2(493, 518), Vector2(535, 520)]
+const FRONT_PIVOT := Vector2(283, 647)   # floor centre between the boots
+const FRONT_EYES := [Vector2(235, 201), Vector2(345, 201)]
+const FRONT_MOUTH := Vector2(288, 250)
+const FRONT_ANT := Vector2(288, 95)
+const FRONT_HEAD := Vector2(288, 196)
+# front-view floating parts: sheet pixels from the floor centre
+const F_MITT_L := Vector2(-184, -198)
+const F_MITT_R := Vector2(186, -201)
+const F_BOOT_L := Vector2(-103, -52)
+const F_BOOT_R := Vector2(103, -52)
+const FRONT_POSES := ["idle", "wave", "front", "front_wave", "stretch"]
+var _turn := 0.0
+var _art: Node2D
+var _swap: ShaderMaterial
+var _pat := 0.0
+
+const SWAP_SHADER := """
+shader_type canvas_item;
+uniform vec4 key_shell : source_color = vec4(0.996, 0.941, 0.847, 1.0);
+uniform vec4 key_teal : source_color = vec4(0.227, 0.663, 0.635, 1.0);
+uniform vec4 key_orange : source_color = vec4(1.0, 0.486, 0.165, 1.0);
+uniform vec4 to_shell : source_color = vec4(0.996, 0.941, 0.847, 1.0);
+uniform vec4 to_teal : source_color = vec4(0.227, 0.663, 0.635, 1.0);
+uniform vec4 to_orange : source_color = vec4(1.0, 0.486, 0.165, 1.0);
+uniform vec4 to_orange2 : source_color = vec4(1.0, 0.486, 0.165, 1.0);
+uniform float pattern = 0.0;
+uniform float time_s = 0.0;
+uniform float encode = 0.0; // HDR 2D: texture comes in linear; re-encode to match drawn colours
+varying vec4 vcol;
+void vertex() { vcol = COLOR; }
+float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+vec3 hsv(float h) { return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0); }
+void fragment() {
+	vec4 tex = texture(TEXTURE, UV);
+	vec3 c = tex.rgb;
+	float ws = 1.0 - smoothstep(0.10, 0.24, distance(c, key_shell.rgb));
+	float wt = 1.0 - smoothstep(0.08, 0.20, distance(c, key_teal.rgb));
+	float wo = 1.0 - smoothstep(0.12, 0.32, distance(c, key_orange.rgb));
+	vec3 tor = to_orange.rgb;
+	if (pattern > 0.5 && pattern < 1.5) {
+		tor = mod(floor(UV.x * 26.0 + UV.y * 10.0), 2.0) < 1.0 ? to_orange.rgb : to_orange2.rgb;
+	} else if (pattern > 1.5) {
+		tor = mix(vec3(1.0), hsv(fract(UV.x * 2.0 - time_s * 0.15)), 0.65);
+	}
+	vec3 o = c;
+	o = mix(o, to_shell.rgb * (lum(c) / max(lum(key_shell.rgb), 0.01)), ws);
+	o = mix(o, to_teal.rgb * (lum(c) / max(lum(key_teal.rgb), 0.01)), wt);
+	o = mix(o, tor * (lum(c) / max(lum(key_orange.rgb), 0.01)), wo);
+	vec3 enc = mix(o * 12.92, 1.055 * pow(max(o, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), o));
+	o = mix(o, enc, encode);
+	COLOR = vec4(o, tex.a) * vcol;
+}
+"""
+
+func _make_art_painter() -> void:
+	_art = Painter.new()
+	_art.fn = _paint_art
+	_swap = ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = SWAP_SHADER
+	_swap.shader = sh
+	_art.material = _swap
+	add_child(_art)
+	move_child(_art, 0)
+
+func _push_swap() -> void:
+	if _swap == null:
+		return
+	_swap.set_shader_parameter("to_shell", SHELL)
+	_swap.set_shader_parameter("to_teal", TEAL)
+	_swap.set_shader_parameter("to_orange", scarf_col)
+	_swap.set_shader_parameter("to_orange2", scarf_col2)
+	_swap.set_shader_parameter("pattern", {"stripes": 1.0, "rainbow": 2.0}.get(scarf_pattern, 0.0))
+
+## Where everything goes this frame (node-local coordinates), shared by the
+## sprite, line and glow passes.
+func _frame() -> Dictionary:
 	var p = _pose_params()
+	var front := _turn >= 0.5
+	var sqx: float = ((_turn - 0.5) * 2.0) if front else (1.0 - _turn * 2.0)
+	var sc: float = K * s
+	var F := {"front": front, "sc": sc, "u": G * sc, "p": p}
+	if front:
+		var br := sin(t * 1.8)
+		var base: Vector2 = p.off * s
+		var sq := Vector2(sqx * maxf(p.sq.x, 0.01), p.sq.y)
+		F.sq = sq
+		var at := func(sheet_px: Vector2, lift := 0.0) -> Vector2:
+			return base + Vector2(sheet_px.x * G * sc * sq.x, (sheet_px.y * (1.0 + 0.012 * br * lift)) * G * sc * sq.y)
+		F.upper = at.call(Vector2.ZERO)
+		F.upper_sq = Vector2(sq.x, sq.y * (1.0 + 0.012 * br))
+		F.boot_l = at.call(F_BOOT_L)
+		F.boot_r = at.call(F_BOOT_R)
+		F.mitt_l = at.call(F_MITT_L + Vector2(0, sin(t * 1.8) * 6.0), 1.0)
+		var mr := F_MITT_R + Vector2(0, sin(t * 1.8 + 1.0) * 6.0)
+		if pose in ["wave", "front_wave"]:
+			mr = Vector2(225 + sin(t * 9.0) * 20.0, -420)
+		elif pose == "stretch":
+			mr = Vector2(200, -420 - 60 * (0.5 + 0.5 * sin(t * 2.0)))
+		F.mitt_r = at.call(mr, 1.0)
+		F.eyes = [at.call(FRONT_EYES[0] - FRONT_PIVOT, 1.0), at.call(FRONT_EYES[1] - FRONT_PIVOT, 1.0)]
+		F.mouth = at.call(FRONT_MOUTH - FRONT_PIVOT, 1.0)
+		F.ant = at.call(FRONT_ANT - FRONT_PIVOT, 1.0)
+		F.head = at.call(FRONT_HEAD - FRONT_PIVOT, 1.0)
+		F.rot = 0.0
+		F.noz = []
+		return F
+	var R := _rig(p)
+	if pose in ["run", "walk"] and stumble_t <= 0.0:
+		p.rot = 0.0
+		p.off = Vector2.ZERO
+		p.sq = Vector2.ONE
+	var sq := Vector2(sqx * p.sq.x, p.sq.y)
+	F.sq = sq
+	var base: Vector2 = p.off * s + Vector2(0, -FLOOR * sc)
+	var prot: float = p.rot
+	var place := func(ref: Vector2) -> Vector2:
+		return base + Vector2(ref.x * sc * sq.x, ref.y * sc * sq.y).rotated(prot)
+	var pel: Vector2 = R.pelvis
+	var trot: float = (R.tilt - deg_to_rad(14.0)) * 0.8 + 0.03 + p.head * 0.5
+	var local := func(px: Vector2) -> Vector2:
+		return place.call(pel + ((px - SIDE_PIVOT) * G).rotated(trot))
+	F.rot = prot
+	F.upper = place.call(pel)
+	F.upper_rot = prot + trot
+	F.eye = local.call(SIDE_EYE)
+	F.mouth = local.call(SIDE_MOUTH)
+	F.ant = local.call(SIDE_ANT)
+	F.head = local.call(SIDE_HEAD)
+	F.noz = [local.call(SIDE_NOZ[0]), local.call(SIDE_NOZ[1])]
+	for side in ["near", "far"]:
+		var S: Dictionary = R[side]
+		var arm: Vector2 = S.mitten - (pel + S.shoulder)
+		F[side + "_mitt"] = place.call(S.mitten)
+		F[side + "_mitt_rot"] = prot + arm.angle()
+		F[side + "_boot"] = place.call(S.boot + Vector2(0, -6))
+		F[side + "_boot_rot"] = prot + float(S.boot_rot)
+	return F
+
+func _spr(ci: Node2D, tex: Texture2D, pivot: Vector2, at: Vector2, rot: float, sc: Vector2, mod := Color(1, 1, 1)) -> void:
+	ci.draw_set_transform(at, rot, sc)
+	ci.draw_texture(tex, -pivot, mod)
+
+## Sprite pass (palette-swap shader).
+func _paint_art(ci: Node2D) -> void:
+	var F := _frame()
+	var p: Dictionary = F.p
+	if pose in ["run", "walk", "idle", "slide", "gust", "throw", "wave", "eat", "drink", "map", "photo", "read", "stretch", "front", "front_wave"]:
+		ci.draw_colored_polygon(Art.ellipse(Vector2(0, 2), Vector2(30 * s, 5 * s), 16), Color(0, 0, 0, 0.35))
+	var u: float = F.u
+	var sq: Vector2 = F.sq
+	var us := Vector2(u * sq.x, u * sq.y)
+	if F.front:
+		_spr(ci, TEX_FBOOT_L, Vector2(72, 52), F.boot_l, 0.0, us)
+		_spr(ci, TEX_FBOOT_R, Vector2(72, 52), F.boot_r, 0.0, us)
+		_spr(ci, TEX_FRONT, FRONT_PIVOT, F.upper, 0.0, Vector2(u * F.upper_sq.x, u * F.upper_sq.y))
+		_spr(ci, TEX_FMITT_L, Vector2(48, 52), F.mitt_l, 0.0, us)
+		_spr(ci, TEX_FMITT_R, Vector2(48, 52), F.mitt_r, 0.0, us)
+	else:
+		var far_c := Color(0.86, 0.86, 0.90)
+		_spr(ci, TEX_BOOT, Vector2(107, 98), F.far_boot, F.far_boot_rot, us, far_c)
+		_spr(ci, TEX_MITT, Vector2(53, 47), F.far_mitt, F.far_mitt_rot, us, far_c)
+		_spr(ci, TEX_SIDE, SIDE_PIVOT, F.upper, F.upper_rot, us)
+		_spr(ci, TEX_BOOT, Vector2(107, 98), F.near_boot, F.near_boot_rot, us)
+		_spr(ci, TEX_MITT, Vector2(53, 47), F.near_mitt, F.near_mitt_rot, us)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+## Line pass (antenna, helmet extras, props) and glow pass (face, jets, trail).
+func _paint(ci: Node2D, add: bool) -> void:
+	var F := _frame()
+	var p: Dictionary = F.p
+	var sc: float = F.sc
+	var sq: Vector2 = F.sq
 	var tc: Color = TIER_COL[clampi(tier - 1, 0, 3)]
-	# trail ribbon (world-space history)
+	var rs := Vector2(sc * absf(sq.x), sc * sq.y)
 	if add and _trail.size() > 2:
 		for k in range(1, _trail.size()):
 			var a = float(k) / _trail.size()
 			var w = 1.5 + a * 2.5 * (tier - 1)
 			ci.draw_line(ci.to_local(_trail[k - 1]), ci.to_local(_trail[k]), Art.hdr(Color(tc, a * 0.35), 1.3), w, Art.AA)
-	if not add and pose in ["run", "walk", "idle", "slide", "gust", "throw", "wave", "eat", "drink", "map", "photo", "read", "stretch", "front", "front_wave"]:
-		ci.draw_colored_polygon(Art.ellipse(Vector2(0, 2), Vector2(28 * s, 5 * s), 16), Color(0, 0, 0, 0.35))
-	if _turn > 0.0:
-		if _turn >= 0.5:
-			_paint_front(ci, add, (_turn - 0.5) * 2.0)
-			return
-		p.sq.x *= 1.0 - _turn * 2.0
-	var R := _rig(p)
-	var sc: float = K * s
-	var rigged: bool = pose in ["run", "walk"] and stumble_t <= 0.0
-	if rigged:
-		# the stride rig already carries the lean, bob and squash: no extra
-		# rotation about the pelvis (that would lift the planted foot)
-		p.rot = 0.0
-		p.sq = Vector2(p.sq.x * (1.0 - _turn * 2.0) / maxf(p.sq.x, 0.001), 1.0) if _turn > 0.0 else Vector2.ONE
-		p.off = Vector2.ZERO
-		p.head = 0.0
-	# rig space -> body: pelvis sits FLOOR above the feet; pose offsets and lean
-	var base: Vector2 = p.off * s + Vector2(0, -FLOOR * sc)
-	ci.draw_set_transform(base, p.rot, p.sq * sc)
-	var pel: Vector2 = R.pelvis
-	var tilt: float = R.tilt * 0.8
-	var near: Dictionary = R.near
-	var far: Dictionary = R.far
-	var jointed := limbs == "jointed"
-	var chest := pel + Vector2(8, -43).rotated(tilt * 0.5)
-	var headc := pel + Vector2(10, -88).rotated(tilt * 0.4)
-	var head_rot: float = tilt * 0.3 + p.head
+	var hrot: float = 0.0 if F.front else F.upper_rot
 	if not add:
-		# far arm + far leg (behind)
-		_limb_side(ci, far, pel, jointed, 0.18, false)
-		# scarf tails behind everything else of the body
-		_draw_scarf(ci, p)
-		ci.draw_set_transform(base, p.rot, p.sq * sc)
-		# satchel high on the back, two jet nozzles under it
-		var bagc := pel + Vector2(-28, -30).rotated(tilt * 0.5)
-		for nx in [-9.0, 5.0]:
-			_poly4(ci, Art.rrect(Rect2(bagc.x + nx - 5, bagc.y + 14, 11, 11), 3.0), SHELL, 3.0)
-			ci.draw_circle(Vector2(bagc.x + nx + 0.5, bagc.y + 25), 3.8, TEAL)
-		_poly4(ci, Art.rrect(Rect2(bagc.x - 20, bagc.y - 17, 38, 32), 7.0), BAG)
-		ci.draw_colored_polygon(Art.rrect(Rect2(bagc.x - 19, bagc.y + 6, 36, 8), 4.0), BAG.darkened(0.2))
-		ci.draw_colored_polygon(Art.rrect(Rect2(bagc.x - 20, bagc.y - 17, 38, 13), 6.0), BAG.darkened(0.12))
-		ci.draw_line(Vector2(bagc.x - 16, bagc.y - 14), Vector2(bagc.x + 12, bagc.y - 14), Color(1, 1, 1, 0.25), 2.0)
-		var env := Rect2(bagc.x - 9, bagc.y - 3, 18, 12)
-		ci.draw_rect(env, Color(0.97, 0.93, 0.84))
-		ci.draw_polyline(PackedVector2Array([env.position, env.position + Vector2(8, 6), env.position + Vector2(16, 0)]), STRAP, 1.6)
-		# body: a small cream bean with a teal chest plate
-		# body: a sturdy rounded torso, cel-shaded (lit front-top, shaded back),
-		# a big teal chest plate and a dark waist joint
-		_ball(ci, pel + Vector2(1, 2), 9.0)
-		var body := _xf([Vector2(-19, -4), Vector2(-21, -24), Vector2(-14, -44), Vector2(8, -48), Vector2(22, -34), Vector2(21, -10), Vector2(8, 2)], pel, tilt * 0.5)
-		_poly4(ci, _smooth_closed(body), SHELL)
-		ci.draw_colored_polygon(_smooth_closed(_xf([Vector2(-18, -6), Vector2(-20, -24), Vector2(-13, -42), Vector2(-5, -44), Vector2(-7, -22), Vector2(-4, -4)], pel, tilt * 0.5)), Color(SHADE, 0.9))
-		ci.draw_colored_polygon(_xf([Vector2(2, -40), Vector2(16, -37), Vector2(18, -18), Vector2(4, -17)], pel, tilt * 0.5), TEAL)
-		ci.draw_line(pel + Vector2(3, -38).rotated(tilt * 0.5), pel + Vector2(15, -35).rotated(tilt * 0.5), TEAL.lightened(0.35), 2.5, true)
-		ci.draw_colored_polygon(_xf([Vector2(4, -22), Vector2(18, -22), Vector2(18, -18), Vector2(4, -17)], pel, tilt * 0.5), TEAL.darkened(0.2))
-		if Art.Q >= 1:
-			ci.draw_arc(pel + Vector2(4, -26).rotated(tilt * 0.5), 16.0, PI * 1.25, PI * 1.6, 8, Color(1, 1, 1, 0.65), 3.5, Art.AA)
-		# strap across the body
-		ci.draw_line(chest + Vector2(-14, -2), pel + Vector2(14, -4), INK4, 8.0, true)
-		ci.draw_line(chest + Vector2(-14, -2), pel + Vector2(14, -4), STRAP, 5.0, true)
-		# near leg
-		_limb_side(ci, near, pel, jointed, 0.0, true)
-		# head: collar, helmet, screen face, side panel, antenna
-		ci.draw_colored_polygon(Art.ellipse(chest + Vector2(2, -2), Vector2(15, 6), 14), TEAL.darkened(0.1))
-		_poly4(ci, _xf(HEAD_SIDE, headc, head_rot), SHELL, 5.0)
-		# flat cream like the reference, with one small highlight on the top edge
-		ci.draw_line(headc + Vector2(-20, -31).rotated(head_rot), headc + Vector2(16, -29).rotated(head_rot), Color(1, 1, 1, 0.6), 3.0, true)
-		ci.draw_colored_polygon(_xf(PANEL_SIDE, headc, head_rot), TEAL)
-		_poly4(ci, _xf(SCREEN_SIDE, headc, head_rot), VISOR, 3.0)
-		# glassy screen: a soft reflection band and a gloss streak
-		ci.draw_line(headc + Vector2(40, -20).rotated(head_rot), headc + Vector2(42, -12).rotated(head_rot), Color(1, 1, 1, 0.25), 2.5, true)
-		_helmet_extras4(ci, headc, head_rot, false)
-		_antenna4(ci, headc + Vector2(6, -34).rotated(head_rot), head_rot)
-		# scarf wrap at the neck
-		var nk := chest + Vector2(2, -4)
-		_poly4(ci, _xf([Vector2(-16, -6), Vector2(16, -7), Vector2(17, 5), Vector2(-15, 6)], nk, tilt * 0.4), scarf_col, 3.5)
-		ci.draw_circle(nk + Vector2(17, 2), 6.0, scarf_col.darkened(0.15))
-		# near arm on top
-		_arm_side(ci, near, pel, jointed, 0.0)
-		_props(ci, near.mitten, false)
+		# antenna and helmet extras on the head
+		ci.draw_set_transform(F.ant, hrot, rs * 1.15)
+		_antenna4(ci, Vector2.ZERO, 0.0)
+		ci.draw_set_transform(F.head, hrot, rs * (1.3 if F.front else 1.2))
+		_helmet_extras4(ci, Vector2.ZERO, 0.0, F.front)
+		if not F.front:
+			ci.draw_set_transform(F.near_mitt, 0.0, Vector2(s, s))
+			_props(ci, Vector2.ZERO, false)
 	else:
-		# screen face (one eye + mouth in side view), thrusters, jets
-		_face_side(ci, headc, head_rot)
-		var bagc2 := pel + Vector2(-26, -30).rotated(tilt * 0.5)
-		var th: float = p.thrust
-		for nx in [-8.0, 4.0]:
-			var q := Vector2(bagc2.x + nx + 0.5, bagc2.y + 22)
-			ci.draw_circle(q, 3.0, Art.hdr(tc, 0.5 + th * 1.5))
-			if th > 0.01:
-				var fl := (40.0 + sin(t * 40.0 + nx) * 8.0) * th
-				ci.draw_colored_polygon(PackedVector2Array([q + Vector2(-6, 0), q + Vector2(6, 0), q + Vector2(0, fl)]), Art.hdr(Color(tc, 0.9), 1.6))
-				ci.draw_colored_polygon(PackedVector2Array([q + Vector2(-3, 0), q + Vector2(3, 0), q + Vector2(0, fl * 0.55)]), Art.hdr(Color(1, 1, 1), 2.5))
-		if tier >= 2:
-			Art.glow(ci, bagc2 + Vector2(0, 10), (14.0 + tier * 4.0) / K, Color(tc, 0.35), 3)
-		if p.jets:
-			for j in [[near.mitten, 0.7], [far.mitten, 0.6], [near.boot, 1.0], [far.boot, 0.9]]:
-				var q: Vector2 = j[0] + Vector2(0, 10)
-				var fl: float = (18.0 + sin(t * 37.0 + q.x) * 6.0) * j[1]
-				ci.draw_colored_polygon(PackedVector2Array([q + Vector2(-5, 0), q + Vector2(5, 0), q + Vector2(0, fl)]), Art.hdr(Color(tc, 0.9), 1.5))
+		# live face on the screen
+		if F.front:
+			for e in F.eyes:
+				ci.draw_set_transform(e + Vector2(look.x * 2.0, look.y * 2.0) * sc, 0.0, rs)
+				_eye(ci)
+			ci.draw_set_transform(F.mouth, 0.0, rs)
+			_mouth(ci)
+		else:
+			ci.draw_set_transform(F.eye + Vector2(look.x * 2.0, look.y * 3.0) * sc, hrot, rs)
+			_eye(ci)
+			ci.draw_set_transform(F.mouth, hrot, rs)
+			_mouth(ci)
 		if helmet == "explorer":
-			var lamp := headc + Vector2(30, -38).rotated(head_rot)
-			ci.draw_circle(lamp, 5.0, Art.hdr(Color(1.0, 0.92, 0.7), 2.2))
-			Art.glow(ci, lamp + Vector2(4, 0), 40.0, Color(1.0, 0.9, 0.6, 0.35), 3)
-		if pose == "gust":
-			Art.glow(ci, near.mitten + Vector2(10, 0), 50.0, Color(0.6, 1.0, 0.8, 0.6), 4)
-		_props(ci, near.mitten, true)
+			ci.draw_set_transform(F.head, hrot, rs * 1.2)
+			ci.draw_circle(Vector2(30, -38) if not F.front else Vector2(0, -40), 5.0, Art.hdr(Color(1.0, 0.92, 0.7), 2.2))
+		# satchel thrusters
+		var th: float = p.thrust
+		for q in F.noz:
+			ci.draw_set_transform(q, F.rot, rs)
+			ci.draw_circle(Vector2.ZERO, 3.5, Art.hdr(tc, 0.5 + th * 1.5))
+			if th > 0.01:
+				var fl := (40.0 + sin(t * 40.0 + q.x) * 8.0) * th
+				ci.draw_colored_polygon(PackedVector2Array([Vector2(-6, 0), Vector2(6, 0), Vector2(0, fl)]), Art.hdr(Color(tc, 0.9), 1.6))
+				ci.draw_colored_polygon(PackedVector2Array([Vector2(-3, 0), Vector2(3, 0), Vector2(0, fl * 0.55)]), Art.hdr(Color(1, 1, 1), 2.5))
+		if not F.front:
+			if tier >= 2 and F.noz.size() > 0:
+				ci.draw_set_transform(F.noz[0], 0.0, rs)
+				Art.glow(ci, Vector2(10, 6), (14.0 + tier * 4.0) / K, Color(tc, 0.35), 3)
+			if p.jets:
+				for q in [F.near_mitt, F.far_mitt, F.near_boot, F.far_boot]:
+					ci.draw_set_transform(q + Vector2(0, 10) * sc, 0.0, rs)
+					var fl2: float = 18.0 + sin(t * 37.0 + q.x) * 6.0
+					ci.draw_colored_polygon(PackedVector2Array([Vector2(-5, 0), Vector2(5, 0), Vector2(0, fl2)]), Art.hdr(Color(tc, 0.9), 1.5))
+			if pose == "gust":
+				ci.draw_set_transform(F.near_mitt, 0.0, rs)
+				Art.glow(ci, Vector2(10, 0), 50.0, Color(0.6, 1.0, 0.8, 0.6), 4)
+			ci.draw_set_transform(F.near_mitt, 0.0, Vector2(s, s))
+			_props(ci, Vector2.ZERO, true)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-func _limb_side(ci: Node2D, S: Dictionary, pel: Vector2, jointed: bool, dark: float, near_side: bool) -> void:
-	var hip: Vector2 = pel + S.hip
-	var ankle: Vector2 = S.ankle
-	if jointed:
-		var knee := _knee(hip, ankle, THIGH, SHIN, 1.0)
-		_seg(ci, hip, knee, 15.0, SHELL.darkened(dark))
-		_seg(ci, knee, ankle, 13.5, SHELL.darkened(dark))
-		_ball(ci, knee, 7.0, dark)
-		_ball(ci, hip, 6.5, dark)
-	_boot4(ci, S.boot, S.boot_rot, dark)
-	if not near_side:
-		_arm_side(ci, S, pel, jointed, dark)
-
-func _arm_side(ci: Node2D, S: Dictionary, pel: Vector2, jointed: bool, dark: float) -> void:
-	var sh: Vector2 = pel + S.shoulder
-	var m: Vector2 = S.mitten
-	if jointed:
-		var el := _knee(sh, m, UPPER, FORE, -1.0)
-		_seg(ci, sh, el, 12.5, SHELL.darkened(dark))
-		_seg(ci, el, m, 11.5, SHELL.darkened(dark))
-		_ball(ci, el, 6.0, dark)
-		_ball(ci, sh, 7.5, dark)
-	_mitten4(ci, m, S.mitten_rot, dark)
-
-func _face_side(ci: Node2D, hc: Vector2, rot: float) -> void:
+## One glowing eye for the current expression (rig units, centred).
+func _eye(ci: Node2D) -> void:
 	var col := Art.hdr(GLOW, 1.8)
 	var e: String = expr
 	if e == "normal" and blink_t < 0.0:
 		e = "blink"
-	var c := hc + Vector2(34 + look.x * 2.0, -2 + look.y * 3.0).rotated(rot)
-	ci.draw_colored_polygon(_xf(SCREEN_SIDE, hc, rot), Color(GLOW, 0.05))
 	match e:
 		"blink":
-			ci.draw_line(c + Vector2(-6, 2), c + Vector2(6, 2), col, 4.0)
+			ci.draw_line(Vector2(-6, 2), Vector2(6, 2), col, 4.0)
 		"happy", "calm":
-			ci.draw_polyline(PackedVector2Array([c + Vector2(-7, 4), c + Vector2(0, -5), c + Vector2(7, 4)]), col, 4.5, Art.AA)
+			ci.draw_polyline(PackedVector2Array([Vector2(-8, 5), Vector2(0, -6), Vector2(8, 5)]), col, 4.5, Art.AA)
 		"wow", "scared":
-			ci.draw_arc(c, 7.5, 0, TAU, 16, col, 4.0, Art.AA)
+			ci.draw_arc(Vector2.ZERO, 8.0, 0, TAU, 16, col, 4.0, Art.AA)
 		"heart":
-			_heart(ci, c, 9.0, Art.hdr(Color(1.0, 0.45, 0.7), 2.0))
+			_heart(ci, Vector2.ZERO, 10.0, Art.hdr(Color(1.0, 0.45, 0.7), 2.0))
 		"dizzy":
-			ci.draw_line(c + Vector2(-6, -6), c + Vector2(6, 6), col, 4.0)
-			ci.draw_line(c + Vector2(-6, 6), c + Vector2(6, -6), col, 4.0)
+			ci.draw_line(Vector2(-6, -6), Vector2(6, 6), col, 4.0)
+			ci.draw_line(Vector2(-6, 6), Vector2(6, -6), col, 4.0)
 		"focus":
-			ci.draw_colored_polygon(_xf([Vector2(-5, -6), Vector2(6, -10), Vector2(6, 11), Vector2(-5, 11)], c, rot), col)
+			ci.draw_colored_polygon(PackedVector2Array([Vector2(-5, -6), Vector2(6, -11), Vector2(6, 12), Vector2(-5, 12)]), col)
 		_:
-			ci.draw_colored_polygon(Art.rrect(Rect2(c.x - 4.5, c.y - 10, 9, 20), 4.5), col)
-	var mc := hc + Vector2(31, 17).rotated(rot)
-	match e:
+			ci.draw_colored_polygon(Art.rrect(Rect2(-5, -12, 10, 24), 5.0), col)
+
+func _mouth(ci: Node2D) -> void:
+	var col := Art.hdr(GLOW, 1.8)
+	match expr:
 		"wow", "scared":
-			ci.draw_arc(mc, 3.5, 0, TAU, 10, col, 3.0, Art.AA)
+			ci.draw_arc(Vector2.ZERO, 3.5, 0, TAU, 10, col, 3.0, Art.AA)
 		"focus", "dizzy":
-			ci.draw_line(mc + Vector2(-5, 0), mc + Vector2(5, 0), col, 3.0)
+			ci.draw_line(Vector2(-5, 0), Vector2(5, 0), col, 3.0)
 		_:
-			ci.draw_arc(mc + Vector2(0, -3), 6.0, 0.3, PI - 0.3, 8, col, 3.5, Art.AA)
+			var bowl := PackedVector2Array([Vector2(-7, -2)])
+			for k in 7:
+				var a := PI * k / 6.0
+				bowl.append(Vector2(-cos(a) * 7.0, -2.0 + sin(a) * 6.0))
+			ci.draw_colored_polygon(bowl, col)
 
 func _antenna4(ci: Node2D, top: Vector2, rot: float) -> void:
 	var a1 := top + Vector2(0, -16).rotated(rot) + Vector2(sin(t * 5.0) * 1.5, 0)
@@ -951,78 +1077,3 @@ static func _heart(ci: Node2D, c: Vector2, r: float, col: Color) -> void:
 	ci.draw_circle(c + Vector2(-r * 0.5, -r * 0.2), r * 0.55, col)
 	ci.draw_circle(c + Vector2(r * 0.5, -r * 0.2), r * 0.55, col)
 	ci.draw_colored_polygon(PackedVector2Array([c + Vector2(-r, 0), c + Vector2(r, 0), c + Vector2(0, r)]), col)
-
-## Front view of Kavi E (reunion): keystone helmet with the whole screen
-## facing us, both mittens and boots, satchel at his side.
-# measured from codex-r1/kavi-e-keystone-floating.png (front view, 128 wide)
-const HEAD_FRONT := [Vector2(-46, -36), Vector2(46, -36), Vector2(64, -12), Vector2(48, 30), Vector2(40, 36), Vector2(-40, 36), Vector2(-48, 30), Vector2(-64, -12)]
-const SCREEN_FRONT := [Vector2(-39, -26), Vector2(40, -26), Vector2(51, -13), Vector2(39, 31), Vector2(-38, 31), Vector2(-51, -13)]
-const FRONT_POSES := ["front", "front_wave"]
-var _turn := 0.0
-
-func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
-	var br := sin(t * 1.8)
-	var sc: float = K * s
-	ci.draw_set_transform(Vector2(0, -FLOOR * sc + br * 0.5), 0.0, Vector2(sx * sc, sc))
-	var hc := Vector2(0, -92)
-	var waving: bool = pose == "front_wave"
-	var mr: Vector2 = Vector2(88 + sin(t * 9.0) * 8.0, -96) if waving else Vector2(40, -6)
-	var ml := Vector2(-40, -6)
-	var jointed := limbs == "jointed"
-	if not add:
-		for bx in [-16.0, 16.0]:
-			if jointed:
-				_seg(ci, Vector2(bx * 0.6, 0), Vector2(bx, 30), 15.0, SHELL)
-				_seg(ci, Vector2(bx, 30), Vector2(bx, 58), 13.5, SHELL)
-				_ball(ci, Vector2(bx, 30), 7.0)
-			_poly4(ci, Art.rrect(Rect2(bx - 15, 56, 30, 18), 8.0), SHELL)
-			ci.draw_colored_polygon(Art.rrect(Rect2(bx - 14, 60, 28, 8), 4.0), TEAL)
-			ci.draw_rect(Rect2(bx - 15, 69, 30, 5), INK4)
-		# satchel at his side, strap across
-		_poly4(ci, Art.rrect(Rect2(-44, -26, 24, 28), 6.0), BAG)
-		ci.draw_rect(Rect2(-38, -16, 12, 8), Color(0.97, 0.93, 0.84))
-		_poly4(ci, _smooth_closed(PackedVector2Array([Vector2(-26, 8), Vector2(-34, -20), Vector2(-26, -46), Vector2(26, -46), Vector2(34, -20), Vector2(26, 8)])), SHELL)
-		ci.draw_colored_polygon(Art.rrect(Rect2(-12, -44, 24, 22), 5.0), TEAL)
-		ci.draw_line(Vector2(-16, -40), Vector2(16, -2), INK4, 8.0, true)
-		ci.draw_line(Vector2(-16, -40), Vector2(16, -2), STRAP, 5.0, true)
-		for side in [[-1.0, ml], [1.0, mr]]:
-			var sh := Vector2(18.0 * side[0], -36)
-			if jointed:
-				var el := _knee(sh, side[1], UPPER, FORE, side[0])
-				_seg(ci, sh, el, 12.5, SHELL)
-				_seg(ci, el, side[1], 11.5, SHELL)
-				_ball(ci, el, 6.0)
-				_ball(ci, sh, 7.5)
-			_mitten4(ci, side[1], (side[1] - sh).angle())
-		ci.draw_colored_polygon(Art.ellipse(Vector2(0, -46), Vector2(18, 6), 14), TEAL.darkened(0.1))
-		_poly4(ci, _xf(HEAD_FRONT, hc, 0.0), SHELL, 5.0)
-		ci.draw_colored_polygon(_xf([Vector2(-61, 7), Vector2(-53, 7), Vector2(-45, 29), Vector2(-50, 29)], hc, 0.0), TEAL)
-		ci.draw_colored_polygon(_xf([Vector2(61, 7), Vector2(53, 7), Vector2(45, 29), Vector2(50, 29)], hc, 0.0), TEAL)
-		_poly4(ci, _xf(SCREEN_FRONT, hc, 0.0), VISOR, 3.5)
-		_helmet_extras4(ci, hc, 0.0, true)
-		_antenna4(ci, hc + Vector2(0, -38), 0.0)
-		_poly4(ci, Art.rrect(Rect2(-20, -54, 40, 12), 5.0), scarf_col, 3.5)
-		var tl := PackedVector2Array()
-		for k in 8:
-			tl.append(Vector2(-16 - k * 2.0 + sin(t * 3.0 + k * 0.8) * 3.0 * k / 7.0, -46 + k * 9.0))
-		_strip(ci, tl, 9.0, 6.0, INK4)
-		_strip(ci, tl, 7.0, 4.2, scarf_col, _scarf_colors(tl.size()))
-	else:
-		var col := Art.hdr(GLOW, 1.8)
-		ci.draw_colored_polygon(_xf(SCREEN_FRONT, hc, 0.0), Color(GLOW, 0.05))
-		var e: String = expr
-		if e == "normal" and blink_t < 0.0:
-			e = "blink"
-		for ex in [-19.0, 21.0]:
-			var c := hc + Vector2(ex + look.x * 2.0, 1 + look.y * 2.0)
-			match e:
-				"heart":
-					_heart(ci, c, 11.0, Art.hdr(Color(1.0, 0.45, 0.7), 2.0))
-				"happy", "calm":
-					ci.draw_polyline(PackedVector2Array([c + Vector2(-8, 4), c + Vector2(0, -6), c + Vector2(8, 4)]), col, 4.5, Art.AA)
-				"blink":
-					ci.draw_line(c + Vector2(-7, 2), c + Vector2(7, 2), col, 4.0)
-				_:
-					ci.draw_colored_polygon(Art.rrect(Rect2(c.x - 5.5, c.y - 11, 11, 22), 5.5), col)
-		ci.draw_colored_polygon(Art.ellipse(hc + Vector2(1, 18), Vector2(6.5, 4), 12, 0.0), col) if e in ["happy", "heart", "normal", "blink", "calm"] else ci.draw_line(hc + Vector2(-5, 19), hc + Vector2(7, 19), col, 3.0)
-	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

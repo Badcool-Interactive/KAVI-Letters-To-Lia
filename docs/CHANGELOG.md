@@ -1,4 +1,14 @@
 # Changelog
+## 0.8.8 (2026-11-23): Kavi is the concept art
+- **Kavi is now the approved concept art itself** (`codex-r1/kavi-e-keystone-floating.png`), not a code redraw:
+  - `tools/art/kavi_parts.py` cuts it into parts: front body and head, side body and head, mittens and boots.
+  - The script also removes the background, softens the outline edge, and erases the drawn face and antenna.
+  - The game animates the parts on Codex's stride rig.
+- **Facing:** Kavi faces the camera when standing (title, waves, reunion) and turns sideways with a quick squash when he starts running.
+- **Live face:** blinks, happy, heart eyes, surprised and determined eyes plus a smile on his real screen. The antenna is drawn live, so it wobbles and the Garage tips (diamond, star, heart, leaf) still work.
+- **Garage colours** go through a palette-swap shader that keeps the art's own shading: paints, scarf colours, stripes and an animated rainbow.
+- **Fixed:** under HDR 2D the sprite came out darker and more saturated. The shader re-encodes it so the colours match the sheet (measured: body 252/238/214 against 254/240/216).
+- Settings → "Kavi's limbs" is removed (the art is the floating design).
 ## 0.8.7 (2026-11-23): Kavi's helmet matches the concept sheet
 - Kavi's helmet shapes are measured from `codex-r1/kavi-e-keystone-floating.png`:
   - **Side view:** a flat top with a large diagonal back-top corner, a back edge that slants in towards the bottom, a dark screen wrapping the front with a slanted edge, a low teal side panel, one tall eye pill and a small smile near the front.
