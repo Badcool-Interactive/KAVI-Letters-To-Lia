@@ -29,6 +29,12 @@ need the owner's OK first (gate G4) and a ledger entry.
 - ★ **Haptics** on phones (light tap on PERFECT); off switch in Settings.
 
 ## 3. World beauty
+- ★★★ **Living world (owner request 2026-11-22, next batch):**
+  - Tiny background people doing things: a fisher on the pier, kids flying kites, a farmer with a cart, a couple on a bench, a café table with a waiter.
+  - Distant city skylines at night with twinkling windows on the far layer (Thessaloniki-style bay, Plovdiv hills, Ruse/Giurgiu riverside, a Carpathian village).
+  - Ships now and then: sailboats and a lit ferry on the Greek sea; barges and a paddle steamer on the Danube.
+  - Planes crossing the open sky: blinking lights at night, a thin contrail by day. Also hot-air balloons and kites.
+  - Rules: drawn as silhouettes in the layer colour with a few warm lights, slow and rare enough to stay special, Medium/High only where heavy, and never near the play line.
 - ★★ **Ambient life:** butterflies (Greece), lantern moths (Bulgaria),
   birds over the Danube, snowflakes under the aurora.
 - ★★ **Water reflections** on the Danube chapter.
