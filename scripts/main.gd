@@ -393,6 +393,7 @@ func _load_font(path: String, weight: int) -> Font:
 	return v
 
 func go_title() -> void:
+	reset_title_quotes()
 	Engine.time_scale = 1.0
 	state = "title"
 	state_t = 0.0
@@ -1919,6 +1920,14 @@ func _setup_capture() -> void:
 			cap_steps.append_array([{"do": "kpose", "pose": ps[0], "speed": ps[1], "expr": ps[2]}, {"do": "wait", "s": 0.55 if ps[0] == "run" else 1.0}, {"shot": ps[3]}])
 		cap_steps.append({"do": "quit"})
 		return
+	if "--quotes" in OS.get_cmdline_user_args():
+		# Title quotes: four shuffled picks (time skipped forward 12 s each).
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 4.5}, {"shot": "q0"}]
+		for k in 3:
+			cap_steps.append_array([{"do": "skip_t", "s": 12.0}, {"do": "wait", "s": 1.5}, {"shot": "q%d" % (k + 1)}])
+		cap_steps.append({"do": "quit"})
+		return
 	if "--suits" in OS.get_cmdline_user_args():
 		# New silhouette suits in the Garage close-up, then the tab keys.
 		save.data.tutorial_done = true
@@ -2130,6 +2139,8 @@ func _capture_tick(dt: float) -> void:
 					break
 			if not found and cap_wait < 30.0:
 				return
+		"skip_t":
+			state_t += st.s
 		"unfocus":
 			get_viewport().gui_release_focus()
 		"key":
@@ -2527,16 +2538,86 @@ func _update_cursor_hover() -> void:
 
 
 ## A line from Kavi's notebook fades in under the logo, a new one every 12 s.
+## Title quotes (0.8.16): Kavi's own lines mixed with public-domain love
+## poetry (all authors died long ago; every line was checked against
+## Wikisource). A shuffle bag: each line shows once before any repeats, and a
+## fresh shuffle on every visit to the title. "/" splits a line in two.
+const LOVE_LINES := [
+	["Shall I compare thee to a summer's day? / Thou art more lovely and more temperate.", "William Shakespeare"],
+	["So long as men can breathe or eyes can see, / So long lives this, and this gives life to thee.", "William Shakespeare"],
+	["My bounty is as boundless as the sea, / My love as deep.", "William Shakespeare, Romeo and Juliet"],
+	["How do I love thee? Let me count the ways.", "Elizabeth Barrett Browning"],
+	["O my Luve's like a red, red rose / That's newly sprung in June.", "Robert Burns"],
+	["And I will love thee still, my dear, / Till a' the seas gang dry.", "Robert Burns"],
+	["My heart is like a singing bird.", "Christina Rossetti"],
+	["She walks in beauty, like the night / Of cloudless climes and starry skies.", "Lord Byron"],
+	["Grow old along with me! / The best is yet to be.", "Robert Browning"],
+	["Tread softly because you tread on my dreams.", "W. B. Yeats"],
+	["And the sunlight clasps the earth, / And the moonbeams kiss the sea.", "Percy Bysshe Shelley"],
+	["Life has loveliness to sell.", "Sara Teasdale"],
+	["\"Hope\" is the thing with feathers / That perches in the soul.", "Emily Dickinson"],
+	["Come live with me and be my love.", "Christopher Marlowe"],
+	["Forever is composed of Nows.", "Emily Dickinson"],
+	["That Love is all there is / Is all we know of Love.", "Emily Dickinson"],
+	["If you shed tears when you miss the sun, / you also miss the stars.", "Rabindranath Tagore"],
+	["Let life be beautiful like summer flowers / and death like autumn leaves.", "Rabindranath Tagore"],
+	["The butterfly counts not months but moments, / and has time enough.", "Rabindranath Tagore"],
+	["Whatever our souls are made of, / his and mine are the same.", "Emily Bront\u00eb, Wuthering Heights"],
+	["A thing of beauty is a joy for ever.", "John Keats"],
+	["The course of true love never did run smooth.", "William Shakespeare"],
+	["Love looks not with the eyes, but with the mind.", "William Shakespeare"],
+	["Doubt thou the stars are fire... / But never doubt I love.", "William Shakespeare, Hamlet"],
+]
+
+var _quote_bag: Array = []
+var _quote_cur := -1
+var _quote_slot := -1
+
+func _next_quote() -> int:
+	if _quote_bag.is_empty():
+		var n := POEMS.size() + LOVE_LINES.size()
+		for i in n:
+			_quote_bag.append(i)
+		_quote_bag.shuffle()
+		if _quote_bag[0] == _quote_cur and n > 1:
+			_quote_bag.append(_quote_bag.pop_front())
+	return _quote_bag.pop_front()
+
+## Called when the title opens: start somewhere random.
+func reset_title_quotes() -> void:
+	_quote_bag.clear()
+	_quote_slot = -1
+
+## A quote fades in under the logo, a new random one every 12 s.
 func _draw_title_poem(ci: Node2D) -> void:
 	if state_t < 3.0:
 		return
 	var sz := get_viewport_rect().size
 	var k: float = (state_t - 3.0) / 12.0
-	var idx := int(k) % POEMS.size()
+	var slot := int(k)
+	if slot != _quote_slot or _quote_cur < 0:
+		_quote_slot = slot
+		_quote_cur = _next_quote()
+	var text: String
+	var by: String
+	if _quote_cur < POEMS.size():
+		text = POEMS[_quote_cur]
+		by = "from Kavi's notebook"
+	else:
+		var q: Array = LOVE_LINES[_quote_cur - POEMS.size()]
+		text = q[0]
+		by = "\u2014 " + q[1]
 	var f := fmod(k, 1.0)
 	var a := clampf(f / 0.1, 0.0, 1.0) * clampf((1.0 - f) / 0.12, 0.0, 1.0)
 	var y := sz.y * 0.25 + 168.0
 	var cx := sz.x * 0.29
 	var col := Color(1.0, 0.93, 0.85, 0.85 * a)
-	_text(ci, "\u201c%s\u201d" % POEMS[idx], Vector2(cx, y), 25, col, HORIZONTAL_ALIGNMENT_CENTER, 6)
-	_text(ci, "from Kavi's notebook", Vector2(cx, y + 30.0), 19, Color(pal.rim.lerp(Color(1, 1, 1), 0.4), 0.7 * a), HORIZONTAL_ALIGNMENT_CENTER, 4)
+	var parts := text.split(" / ")
+	for i in parts.size():
+		var s0: String = parts[i]
+		if i == 0:
+			s0 = "\u201c" + s0
+		if i == parts.size() - 1:
+			s0 += "\u201d"
+		_text(ci, s0, Vector2(cx, y + i * 31.0), 25, col, HORIZONTAL_ALIGNMENT_CENTER, 6)
+	_text(ci, by, Vector2(cx, y + parts.size() * 31.0), 19, Color(pal.rim.lerp(Color(1, 1, 1), 0.4), 0.7 * a), HORIZONTAL_ALIGNMENT_CENTER, 4)

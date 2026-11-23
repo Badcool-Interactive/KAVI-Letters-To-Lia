@@ -1,4 +1,11 @@
 # Changelog
+## 0.8.16 (2026-11-23): love lines on the title, shuffled
+- **Title quotes:** Kavi's 9 notebook lines are now mixed with 24 short public-domain love lines, each credited:
+  - Shakespeare, Elizabeth Barrett Browning, Burns, Christina Rossetti, Byron, Robert Browning, Yeats, Shelley, Sara Teasdale, Emily Dickinson, Marlowe, Tagore, Emily Brontë and Keats.
+  - Mostly sweet, a few deeper ones for grown-ups.
+  - Each line was matched word for word on Wikisource. Two that could not be matched were left out.
+- **Randomizer:** a shuffle bag, so every line shows once before any repeats. It reshuffles each time you return to the title, and the same line never shows twice in a row. Long lines split over two rows.
+- Capture mode `--quotes`. Ledger row for the quotes.
 ## 0.8.15 (2026-11-23): new suits, a richer ground, a fluid Garage, Kavi's poems
 - **Five suits that change Kavi's silhouette** (his face screen and scarf always stay):
   - Astro Bubble: a fishbowl dome with a collar.
