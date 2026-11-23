@@ -1,4 +1,9 @@
 # Changelog
+## 0.8.9 (2026-11-23): the original Kavi is back
+- **Owner request:** bring back the Kavi from before the full replacement. `scripts/kite_view.gd` is restored from 0.8.4: the code-drawn white and teal robot with a TV head, red scarf and blue boots, plus his faces, wobbly limb-jet hover, rough landings and the front-facing reunion.
+- The Classic paint and Sunset Orange scarf are back to their 0.8.4 colours.
+- Everything else from 0.8.5–0.8.8 stays: batched ferns (the performance fix), world, obstacles and menus.
+- The 0.8.8 sprite parts stay in `assets/kavi/` (unused) in case they're wanted later.
 ## 0.8.8 (2026-11-23): Kavi is the concept art
 - **Kavi is now the approved concept art itself** (`codex-r1/kavi-e-keystone-floating.png`), not a code redraw:
   - `tools/art/kavi_parts.py` cuts it into parts: front body and head, side body and head, mittens and boots.

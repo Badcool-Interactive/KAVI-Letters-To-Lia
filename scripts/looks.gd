@@ -18,7 +18,7 @@ const CAT_NAMES := {"suit": "Suits", "paint": "Paint", "visor": "Visor", "scarf"
 ## The first six scarves keep the old save indices (owned_scarves) valid.
 const ITEMS := {
 	"scarf": [
-		{"name": "Sunset Orange", "cost": 0, "col": Color8(255, 124, 42)},
+		{"name": "Sunset Orange", "cost": 0, "col": Color(1.0, 0.35, 0.14)},
 		{"name": "Sky Blue", "cost": 400, "cur": "stamps", "col": Color(0.30, 0.65, 1.0)},
 		{"name": "Rose", "cost": 500, "cur": "stamps", "col": Color(1.0, 0.45, 0.65)},
 		{"name": "Honey Gold", "cost": 600, "cur": "stamps", "col": Color(1.0, 0.80, 0.25)},
@@ -35,7 +35,7 @@ const ITEMS := {
 		{"name": "Lavender", "cost": 700, "cur": "stamps", "eye": Color(0.75, 0.62, 1.0)},
 	],
 	"paint": [
-		{"name": "Classic", "cost": 0, "shell": Color8(254, 240, 216), "shade": Color(0.84, 0.74, 0.58), "accent": Color8(58, 169, 162)},
+		{"name": "Classic", "cost": 0, "shell": Color(0.965, 0.973, 0.988), "shade": Color(0.62, 0.74, 0.88), "accent": Color(0.15, 0.79, 0.80)},
 		{"name": "Midnight", "cost": 900, "cur": "stamps", "shell": Color(0.30, 0.34, 0.52), "shade": Color(0.18, 0.20, 0.34), "accent": Color(1.0, 0.78, 0.30)},
 		{"name": "Coral Reef", "cost": 900, "cur": "stamps", "shell": Color(1.0, 0.92, 0.86), "shade": Color(0.90, 0.66, 0.62), "accent": Color(1.0, 0.45, 0.42)},
 		{"name": "Forest", "cost": 1000, "cur": "stamps", "shell": Color(0.86, 0.95, 0.86), "shade": Color(0.52, 0.70, 0.56), "accent": Color(0.25, 0.62, 0.38)},
