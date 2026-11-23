@@ -1,4 +1,8 @@
 # Changelog
+## 0.8.10 (2026-11-23): a more fluid title screen
+- **Menu:** the rows slide in one after another, and a soft warm light band glides to whichever item you hover or select, sized to the words. The focused item swells slightly. Reduced motion turns off the slide-in.
+- **Logo:** a sheen sweeps across KAVI every few seconds, and letters hop up and glow when the mouse passes over them.
+- **Ambience:** warm motes of light drift up through the title scene, twinkling, with gentle mouse parallax (14/26/40 motes on Low/Medium/High).
 ## 0.8.9 (2026-11-23): the original Kavi is back
 - **Owner request:** bring back the Kavi from before the full replacement. `scripts/kite_view.gd` is restored from 0.8.4: the code-drawn white and teal robot with a TV head, red scarf and blue boots, plus his faces, wobbly limb-jet hover, rough landings and the front-facing reunion.
 - The Classic paint and Sunset Orange scarf are back to their 0.8.4 colours.

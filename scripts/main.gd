@@ -59,6 +59,7 @@ var debug_pose := ""     # capture director: show Kavi in a given pose on the ti
 var debug_speed := 0.0
 var debug_expr := ""
 var menu_dim := false  # stronger shade behind the menu column (Garage, Settings)
+var logo_lift: Array = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # per-letter mouse hop (title logo)
 var _look_key := ""
 
 ## Garage purchase: sparkle around Kavi, a chime, a happy face.
@@ -1486,7 +1487,33 @@ func _draw_title(ci: Node2D, sz: Vector2) -> void:
 		PackedColorArray([Color(shade, 0.0), Color(shade, 0.78 if menu_dim else 0.55), Color(shade, 0.78 if menu_dim else 0.55), Color(shade, 0.0)]))
 	if garage_open or menu_dim:
 		return
+	_draw_motes(ci, sz)
 	_draw_logo(ci, Vector2(sz.x * 0.29, sz.y * 0.25), state_t, 1.0)
+
+## Title ambience (0.8.10): warm motes of light drifting up through the scene,
+## twinkling, nudged a little by the mouse (parallax by depth).
+func _draw_motes(ci: Node2D, sz: Vector2) -> void:
+	var n: int = [14, 26, 40][Art.Q]
+	var fade_in := clampf(state_t / 1.5, 0.0, 1.0)
+	var m := (get_viewport().get_mouse_position() / sz - Vector2(0.5, 0.5))
+	if DisplayServer.get_name().begins_with("headless"):
+		m = Vector2.ZERO
+	var warm: Color = pal.rim.lerp(Color(1.0, 0.9, 0.7), 0.5)
+	for i in n:
+		var h1 := fposmod(sin(i * 12.9898) * 43758.5453, 1.0)
+		var h2 := fposmod(sin(i * 78.233) * 12543.123, 1.0)
+		var h3 := fposmod(sin(i * 39.425) * 24634.634, 1.0)
+		var depth := 0.35 + h3 * 0.65
+		var spd := 18.0 + 30.0 * depth
+		var y := fposmod(h2 * sz.y - t * spd, sz.y + 40.0) - 20.0
+		var x := h1 * sz.x + sin(t * (0.4 + h3) + i) * 26.0 - m.x * 40.0 * depth
+		y -= m.y * 24.0 * depth
+		var tw := 0.55 + 0.45 * sin(t * (1.5 + h2 * 2.0) + i * 2.1)
+		var r := (1.4 + 2.6 * depth)
+		var a := fade_in * tw * (0.25 + 0.5 * depth) * smoothstep(0.0, 0.25, y / sz.y)
+		ci.draw_circle(Vector2(x, y), r * 3.0, Color(warm, a * 0.05))
+		ci.draw_circle(Vector2(x, y), r * 1.8, Color(warm, a * 0.12))
+		ci.draw_circle(Vector2(x, y), r, Color(1.0, 0.97, 0.9, a))
 
 ## The logo lives in the world: cream letters with an ink outline and a thin
 ## rim of the country's light, letters rising in one by one, a letterspaced
@@ -1506,16 +1533,36 @@ func _draw_logo(ci: Node2D, c: Vector2, time: float, scale_k: float) -> void:
 		total += w + gap
 	total -= gap
 	var x := c.x - total * 0.5
+	# a sheen sweeps across the letters every few seconds (0.8.10)
+	var sweep_k := fmod(maxf(time - 1.2, 0.0), 5.5) / 1.1
+	var sweep_x := lerpf(c.x - total * 0.7, c.x + total * 0.7, sweep_k) if sweep_k < 1.0 else -99999.0
+	var mouse := get_viewport().get_mouse_position()
+	var live := not has_meta("keyart") and not DisplayServer.get_name().begins_with("headless")
 	for i in letters.length():
 		var k := clampf((time - 0.25 - i * 0.12) / 0.55, 0.0, 1.0)
 		var e := 1.0 - pow(1.0 - k, 3.0)
 		var bob := sin(t * 1.4 + i * 0.9) * 3.0 * scale_k
-		var p := Vector2(x, c.y + (1.0 - e) * 26.0 + bob)
+		var mid: float = x + widths[i] * 0.5
+		# letters hop up when the mouse passes over them
+		var near := 0.0
+		if live:
+			var d := Vector2((mouse.x - mid) / (widths[i] * 0.9), (mouse.y - (c.y - fs * 0.35)) / (fs * 0.8))
+			near = clampf(1.0 - d.length(), 0.0, 1.0)
+		var lift_i: float = logo_lift[i] if i < logo_lift.size() else 0.0
+		lift_i = lerpf(lift_i, near, 0.18)
+		if i < logo_lift.size():
+			logo_lift[i] = lift_i
+		var p := Vector2(x, c.y + (1.0 - e) * 26.0 + bob - lift_i * 22.0 * scale_k)
 		var ch := letters[i]
-		ci.draw_string_outline(font, p + Vector2(0, 6), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 18, Color(0, 0, 0, 0.35 * e))
+		ci.draw_string_outline(font, Vector2(x, c.y + (1.0 - e) * 26.0 + bob) + Vector2(0, 6 + lift_i * 8.0), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 18, Color(0, 0, 0, 0.35 * e * (1.0 - lift_i * 0.4)))
 		ci.draw_string_outline(font, p, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 12, Color(ink, e))
 		ci.draw_string(font, p + Vector2(2.5, -2.5), ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(rim.lightened(0.2), e))
 		ci.draw_string(font, p, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(cream, e))
+		var shine := exp(-pow((mid - sweep_x) / (widths[i] * 0.8), 2.0))
+		var glow := maxf(shine, lift_i * 0.5) * e
+		if glow > 0.02:
+			ci.draw_string(font, p, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1.0, 1.0, 0.97, 0.75 * glow))
+			ci.draw_string_outline(font, p, ch, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(rim.lightened(0.5), 0.6 * glow))
 		x += widths[i] + gap
 	# subtitle: letterspaced small caps between two hairlines
 	var sub := GAME_SUB.to_upper()

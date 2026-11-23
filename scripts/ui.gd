@@ -199,6 +199,10 @@ class MenuItem extends Button:
 			hot = move_toward(hot, target, dt * 7.0)
 			queue_redraw()
 		self_modulate.a = 0.58 + 0.42 * maxf(hot, 1.0 if selected else 0.0)
+		# the focused item swells a little from its left edge (eased)
+		var e := hot * hot * (3.0 - 2.0 * hot)
+		pivot_offset = Vector2(0, size.y * 0.5)
+		scale = Vector2.ONE * (1.0 + 0.06 * e)
 
 	func _draw() -> void:
 		var y := size.y * 0.5 - 2.0
@@ -304,6 +308,92 @@ func show_title() -> void:
 		l.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.05, 0.85))
 		stats.add_child(l)
 	first.grab_focus.call_deferred()
+	_glide_and_stagger(v)
+
+## Title polish (0.8.10): a soft light band that glides to whichever item has
+## focus, and the menu rows sliding in one after another.
+class Glide extends Control:
+	var col: VBoxContainer
+	var r := Rect2()
+	var vel := Vector2.ZERO
+	var a := 0.0
+
+	func _process(dt: float) -> void:
+		var f := get_viewport().gui_get_focus_owner()
+		var target_a := 0.0
+		if f != null and col.is_ancestor_of(f) and f is Button:
+			var fr: Rect2 = f.get_global_rect()
+			# fit the band to the words, not the whole row
+			var b: Button = f
+			var tw: float = b.get_theme_font("font").get_string_size(b.text, HORIZONTAL_ALIGNMENT_LEFT, -1, b.get_theme_font_size("font_size")).x
+			fr.size.x = minf(fr.size.x, (tw + 90.0) * b.scale.x)
+			var local := Rect2(fr.position - global_position, fr.size)
+			if r.size == Vector2.ZERO:
+				r = local
+			# critically damped spring toward the focused row
+			var k := 1.0 - exp(-dt * 16.0)
+			r.position = r.position.lerp(local.position, k)
+			r.size = r.size.lerp(local.size, k)
+			target_a = 1.0
+		a = move_toward(a, target_a, dt * 4.0)
+		queue_redraw()
+
+	func _draw() -> void:
+		if a <= 0.01 or r.size == Vector2.ZERO:
+			return
+		var warm := Color(1.0, 0.78, 0.45)
+		var x0 := r.position.x - 30.0
+		var x1 := r.position.x + r.size.x * 0.95
+		var y0 := r.position.y + 2.0
+		var y1 := r.end.y - 2.0
+		var xm := lerpf(x0, x1, 0.22)
+		var t := Time.get_ticks_msec() * 0.001
+		var pulse := 0.85 + 0.15 * sin(t * 3.0)
+		# soft glow: fades in from the left, out to the right, and out at the top
+		# and bottom (a 2x3 grid of gradient quads, so there are no hard edges)
+		var xs := [x0, xm, x1]
+		var ax := [0.0, 1.0, 0.0]
+		var hgt := y1 - y0
+		var ys := [y0 - 8.0, y0 + hgt * 0.35, y1 - hgt * 0.35, y1 + 8.0]
+		var ay := [0.0, 1.0, 1.0, 0.0]
+		var pk := 0.24 * a * pulse
+		for cx in 2:
+			for cy in 3:
+				draw_polygon(PackedVector2Array([Vector2(xs[cx], ys[cy]), Vector2(xs[cx + 1], ys[cy]), Vector2(xs[cx + 1], ys[cy + 1]), Vector2(xs[cx], ys[cy + 1])]),
+					PackedColorArray([Color(warm, pk * ax[cx] * ay[cy]), Color(warm, pk * ax[cx + 1] * ay[cy]), Color(warm, pk * ax[cx + 1] * ay[cy + 1]), Color(warm, pk * ax[cx] * ay[cy + 1])]))
+		# bright edge on the left, like light catching a page
+		draw_line(Vector2(x0 + 18.0, y0 + 6.0), Vector2(x0 + 18.0, y1 - 6.0), Color(1.0, 0.92, 0.75, 0.75 * a), 3.0, true)
+		# a little glint travelling along the row
+		var gx := lerpf(xm, x1, fmod(t * 0.45, 1.0))
+		draw_circle(Vector2(gx, y1 - 1.0), 2.5, Color(1, 0.95, 0.85, 0.6 * a))
+
+func _glide_and_stagger(v: VBoxContainer) -> void:
+	var g := Glide.new()
+	g.col = v
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var holder := v.get_parent()
+	holder.add_child(g)
+	holder.move_child(g, 0)
+	g.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if bool(main.save.data.settings.get("reduced_motion", false)):
+		return
+	var rows: Array = v.get_children()
+	for n in rows:
+		if n is CanvasItem:
+			n.modulate.a = 0.0
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var i := 0
+	for n in rows:
+		if not is_instance_valid(n) or not (n is Control):
+			continue
+		var c: Control = n
+		var base := c.position.x
+		c.position.x = base + 70.0
+		var tw := c.create_tween().set_parallel().set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+		tw.tween_property(c, "modulate:a", 1.0, 0.45).set_delay(0.15 + i * 0.06)
+		tw.tween_property(c, "position:x", base, 0.6).set_delay(0.15 + i * 0.06)
+		i += 1
 
 ## Garage: Kavi in close-up on the left; categories and items on the right.
 ## Hovering an item tries it on; pressing buys (if affordable) or wears it.
