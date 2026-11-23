@@ -1,4 +1,18 @@
 # Changelog
+## 0.8.18 (2026-11-23): obstacles with character
+- **Every country has its own hop obstacles** (60% of the time; the rest are courier parcels). Hitboxes are unchanged:
+  - Greek amphoras with a black-figure band, and crates heaped with oranges.
+  - Forest log piles with a little mushroom on top.
+  - Danube barrels with iron hoops and a rope coil.
+  - Mountain snowmen with a carrot nose and a red scarf.
+- **The scoot sign hangs from a proper gateway** that stands on the ground: stone with ivy in Greece, timber in the forest, lantern poles by the Danube, icicles in the mountains. Fixed: the sign's posts used to run straight up off the top of the screen.
+- **Gaps have depth instead of a black box:** sea glinting below in Greece, a fern ravine in the forest, the river by the Danube, an ice-blue crevasse in the mountains. Rocky lips at both edges.
+- **Obstacles react:**
+  - Hop obstacles wobble when cleared; the sign swings after Kavi scoots under it, more on a perfect.
+  - A perfect clear bursts confetti from the obstacle itself.
+- **Less repetitive:** the generator never places the same single obstacle three times in a row.
+- Performance (Medium benchmark): 5.68 ms, 489 draws (0.8.17: 5.45 / 460).
+- Capture mode `--obs` (autopilot through all four countries).
 ## 0.8.17 (2026-11-23): smoother country changes, lighter everywhere, current Kavi on the loading screen
 - **Fixed: hitch when the country changes** (owner felt it going from Greece to Bulgaria). Measured with the new `tools/bench.sh … --bench-transition`, where the run starts in Greece and switches to Bulgaria at 5 s:
   - Cause: the chapter card and popping texts drew letters at font sizes not yet rasterised, so one HUD frame took 6.7 ms.

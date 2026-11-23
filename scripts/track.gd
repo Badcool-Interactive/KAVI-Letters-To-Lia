@@ -100,6 +100,7 @@ func gen_segment(x0: float, secs: float, sp: float, diff: float, types: Array,
 	if easy.is_empty():
 		easy = types
 	var placed: Array = []
+	var hist: Array = []
 	var rescue_at := secs * rng.randf_range(0.45, 0.7) if rescue else -1.0
 	while t < secs - 0.6:
 		if rescue_at > 0.0 and t >= rescue_at:
@@ -112,13 +113,20 @@ func gen_segment(x0: float, secs: float, sp: float, diff: float, types: Array,
 		# difficulty only after ~45% of the stretch.
 		var ramp := clampf((t - lead_in) / maxf(secs * 0.45, 1.0), 0.0, 1.0)
 		var ld := diff * lerpf(0.2, 1.0, ramp)
-		var phrase := _pick_phrase(rng, easy if ramp < 0.3 else types, ld, combos and ramp > 0.6)
+		var pool: Array = easy if ramp < 0.3 else types
+		var phrase := _pick_phrase(rng, pool, ld, combos and ramp > 0.6)
+		# variety (0.8.18): never the same single obstacle three times running
+		var tries := 0
+		while tries < 4 and phrase.size() == 1 and hist.size() >= 2 and phrase[0] == hist[-1] and phrase[0] == hist[-2] and pool.size() > 1:
+			phrase = _pick_phrase(rng, pool, ld, false)
+			tries += 1
 		for step in phrase:
 			if step is float:
 				t += step
 				continue
 			var o := make(step, x0 + t * sp, sp, rng)
 			placed.append(o)
+			hist.append(step)
 			t += obstacle_extent(o) / sp
 		t += lerpf(1.45, 0.62, ld) + rng.randf_range(0.0, lerpf(0.5, 0.25, ld)) + (1.0 - ramp) * 0.8
 	var seg_end := x0 + secs * sp

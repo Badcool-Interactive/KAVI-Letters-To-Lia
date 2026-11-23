@@ -1207,7 +1207,14 @@ func _on_event(e: Dictionary) -> void:
 					_perfect("PERFECT BLOOM", Color(1.0, 0.45, 0.8))
 		"clear":
 			var o: Dictionary = e.o
+			o.clear_t = t
 			score += 25.0 * tw.tier()
+			if e.perfect and o.t in [HURDLE, BEAM]:
+				# confetti from the obstacle itself (0.8.18)
+				var top_y: float = -o.h - (60.0 if o.t == BEAM else 0.0)
+				var cols := [TrackView.AMBER, TrackView.ROSE, TrackView.CYAN, Color(1, 1, 1)]
+				for ci2 in 4:
+					fx.burst(Vector2(o.x + o.w * 0.5, top_y), cols[ci2], 6, 380.0, 0.9, 5.0, 520.0, PI * 0.9, -PI * 0.5)
 			if e.perfect and o.t in [HURDLE, GAP, WIDE_GAP, BEAM]:
 				_perfect("PERFECT", TrackView.AMBER if o.t == HURDLE else (TrackView.ROSE if o.t == BEAM else TrackView.CYAN))
 			if o.t in [WIDE_GAP] and not e.perfect:
@@ -1952,6 +1959,17 @@ func _setup_capture() -> void:
 				["jump", 0.0, "wow", "k6-jump"], ["hover", 0.0, "", "k7-hover"], ["slide", 0.0, "", "k8-scoot"],
 				["wave", 0.0, "heart", "k9-wave"], ["fall", 0.0, "scared", "k10-fall"], ["gust", 0.0, "focus", "k11-gust"]]:
 			cap_steps.append_array([{"do": "kpose", "pose": ps[0], "speed": ps[1], "expr": ps[2]}, {"do": "wait", "s": 0.55 if ps[0] == "run" else 1.0}, {"shot": ps[3]}])
+		cap_steps.append({"do": "quit"})
+		return
+	if "--obs" in OS.get_cmdline_user_args():
+		# Obstacle review: autopilot through chapters 1 and 3, a frame every 0.3 s.
+		save.data.tutorial_done = true
+		autopilot = true
+		cap_steps = []
+		for ch in [0, 1, 2, 3]:
+			cap_steps.append_array([{"do": "story", "ch": ch}, {"do": "wait", "s": 6.0}])
+			for k in 16:
+				cap_steps.append_array([{"do": "wait", "s": 0.45}, {"shot": "o%d-%02d" % [ch, k]}])
 		cap_steps.append({"do": "quit"})
 		return
 	if "--quotes" in OS.get_cmdline_user_args():
