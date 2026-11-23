@@ -504,8 +504,9 @@ func _paint(ci: Node2D, add: bool) -> void:
 		# ear dial on the back side
 		_poly(ci, Art.ellipse(hc + Vector2(-25, 3), Vector2(6, 8), 14), SHELL)
 		ci.draw_arc(hc + Vector2(-25, 3), 4.0, 0, TAU, 14, TEAL, 2.5, Art.AA)
-		# head shell: a soft rounded rectangle (TV head)
-		_poly(ci, Art.rrect(head_r, 15, 6), SHELL)
+		# head shell: a soft rounded rectangle (TV head); suits reshape it
+		_helmet_back(ci, hc, head_r)
+		_head_shell(ci, head_r)
 		if Art.Q >= 1:
 			ci.draw_colored_polygon(Art.rrect(Rect2(head_r.position.x + 2, head_r.end.y - 11, head_r.size.x - 4, 9), 6), Color(SHADE, 0.5))
 			ci.draw_arc(hc + Vector2(-8, -6), 14.0, PI * 1.05, PI * 1.45, 8, Color(1, 1, 1, 0.8), 2.5, Art.AA)
@@ -517,7 +518,8 @@ func _paint(ci: Node2D, add: bool) -> void:
 		ci.draw_colored_polygon(Art.rrect(scr, 9), VISOR)
 		ci.draw_colored_polygon(Art.rrect(Rect2(scr.position.x + 3, scr.position.y + 2, scr.size.x - 6, 6), 3), Color(1, 1, 1, 0.08))
 		ci.draw_line(scr.position + Vector2(scr.size.x - 9, 4), scr.position + Vector2(scr.size.x - 4, 10), Color(1, 1, 1, 0.22), 2.0)
-		_antenna(ci, Vector2(hc.x + 10, head_r.position.y))
+		_antenna(ci, Vector2(hc.x + 10, head_r.position.y - (4.0 if helmet == "teapot" else 0.0)))
+		_helmet_front(ci, hc, head_r)
 		# scarf wrap at the neck
 		ci.draw_set_transform(p.off * s, p.rot, p.sq * s)
 		_poly(ci, Art.rrect(Rect2(-12, -68, 28, 9), 4.5), scarf_col)
@@ -581,6 +583,72 @@ static func _smooth_closed(pts: PackedVector2Array) -> PackedVector2Array:
 			var u := k / 3.0
 			out.append(0.5 * ((2.0 * p1) + (-p0 + p2) * u + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * u * u + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * u * u * u))
 	return out
+
+## Suits that change Kavi's silhouette (0.8.15). His face screen and scarf
+## always stay, so he is still Kavi in any suit.
+func _head_shell(ci: Node2D, hr: Rect2) -> void:
+	match helmet:
+		"astro":
+			_poly(ci, Art.rrect(hr, 20, 8), SHELL)
+		"teapot":
+			_poly(ci, Art.rrect(Rect2(hr.position.x - 3, hr.position.y - 1, hr.size.x + 6, hr.size.y + 3), 22, 8), SHELL)
+		"block":
+			_poly(ci, Art.rrect(hr.grow(3), 4, 2), SHELL)
+		"sprout":
+			_poly(ci, Art.rrect(hr, 19, 7), SHELL)
+		_:
+			_poly(ci, Art.rrect(hr, 15, 6), SHELL)
+
+## Parts that sit behind the head shell.
+func _helmet_back(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
+	match helmet:
+		"teapot":
+			# handle on the left, spout on the right
+			ci.draw_arc(Vector2(hr.position.x - 4, hc.y + 1), 11.0, PI * 0.5, PI * 1.5, 14, INK, 9.0, Art.AA)
+			ci.draw_arc(Vector2(hr.position.x - 4, hc.y + 1), 11.0, PI * 0.5, PI * 1.5, 14, SHELL, 5.0, Art.AA)
+			var sp := Vector2(hr.end.x + 1, hc.y + 9)
+			_poly(ci, PackedVector2Array([sp + Vector2(-6, -6), sp + Vector2(-6, 7), sp + Vector2(9, -6), sp + Vector2(17, -16), sp + Vector2(19, -12), sp + Vector2(10, 2)]), SHELL)
+			ci.draw_circle(sp + Vector2(18, -14), 2.2, TEAL)
+		"bunny":
+			var wob := sin(t * 3.0) * 0.12
+			for e in [[Vector2(hc.x - 10, hr.position.y + 4), -0.18, 0.0], [Vector2(hc.x + 10, hr.position.y + 4), 0.25, 1.0]]:
+				var b: Vector2 = e[0]
+				var flop: float = e[2]
+				var ang: float = e[1] + wob * (1.0 + flop) + flop * (0.75 + sin(t * 2.2) * 0.15)
+				var c := b + Vector2(0, -17).rotated(ang)
+				_poly(ci, Art.ellipse(c, Vector2(7.5, 18), 16, ang), SHELL)
+				ci.draw_colored_polygon(Art.ellipse(c + Vector2(0, 2).rotated(ang), Vector2(3.6, 12), 12, ang), Color(1.0, 0.62, 0.72))
+
+func _helmet_front(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
+	match helmet:
+		"astro":
+			# fishbowl glass dome with a collar ring
+			ci.draw_colored_polygon(Art.rrect(Rect2(hc.x - 22, hr.end.y - 3, 44, 7), 3.5), TEAL)
+			ci.draw_colored_polygon(Art.ellipse(hc + Vector2(0, -2), Vector2(34, 31), 28), Color(0.75, 0.92, 1.0, 0.12))
+			ci.draw_arc(hc + Vector2(0, -2), 33.0, 0.0, TAU, 32, Color(0.9, 0.97, 1.0, 0.55), 2.2, Art.AA)
+			ci.draw_arc(hc + Vector2(-4, -6), 26.0, PI * 1.08, PI * 1.42, 10, Color(1, 1, 1, 0.85), 3.0, Art.AA)
+			ci.draw_arc(hc + Vector2(4, 2), 28.0, PI * 0.12, PI * 0.3, 6, Color(1, 1, 1, 0.45), 2.0, Art.AA)
+		"teapot":
+			# lid with a knob
+			_poly(ci, Art.ellipse(Vector2(hc.x - 4, hr.position.y - 1), Vector2(15, 5), 16), SHELL)
+			_poly(ci, Art.ellipse(Vector2(hc.x - 4, hr.position.y - 7), Vector2(4.5, 4), 12), TEAL)
+		"block":
+			for bx in [hr.position.x - 2.0, hr.end.x + 2.0]:
+				ci.draw_circle(Vector2(bx, hc.y + 2), 4.2, INK)
+				ci.draw_circle(Vector2(bx, hc.y + 2), 2.8, TEAL)
+		"sprout":
+			var sw := sin(t * 2.4) * 0.2
+			var base := Vector2(hc.x - 6, hr.position.y + 1)
+			var top := base + Vector2(0, -13).rotated(sw)
+			ci.draw_line(base, top, INK, 4.0, Art.AA)
+			ci.draw_line(base, top, Color(0.35, 0.7, 0.35), 2.2, Art.AA)
+			for e in [[-1.0, 0.7], [1.0, -0.7]]:
+				var a: float = e[1] + sw
+				_poly(ci, Art.ellipse(top + Vector2(e[0] * 7, 1).rotated(sw), Vector2(8, 4), 12, a), Color(0.45, 0.85, 0.45))
+			var fl := top + Vector2(0, -4).rotated(sw)
+			for k in 5:
+				ci.draw_circle(fl + Vector2.from_angle(k * TAU / 5.0 + t) * 3.6, 2.6, Color(1.0, 0.62, 0.75))
+			ci.draw_circle(fl, 2.2, Color(1.0, 0.85, 0.35))
 
 func _helmet_extras(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
 	match helmet:
@@ -866,7 +934,8 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 		for ex in [-27.0, 27.0]:
 			_poly(ci, Art.ellipse(Vector2(ex, -84), Vector2(5, 8), 14), SHELL)
 			ci.draw_arc(Vector2(ex, -84), 3.4, 0, TAU, 12, TEAL, 2.2, Art.AA)
-		_poly(ci, Art.rrect(hr, 15, 6), SHELL)
+		_helmet_back(ci, hc, hr)
+		_head_shell(ci, hr)
 		if Art.Q >= 1:
 			ci.draw_colored_polygon(Art.rrect(Rect2(hr.position.x + 2, hr.end.y - 11, hr.size.x - 4, 9), 6), Color(SHADE, 0.5))
 			ci.draw_arc(hc + Vector2(-12, -6), 14.0, PI * 1.05, PI * 1.45, 8, Color(1, 1, 1, 0.8), 2.5, Art.AA)
@@ -875,7 +944,8 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 		_poly(ci, Art.rrect(scr.grow(3), 11), TEAL)
 		ci.draw_colored_polygon(Art.rrect(scr, 9), VISOR)
 		ci.draw_colored_polygon(Art.rrect(Rect2(scr.position.x + 3, scr.position.y + 2, scr.size.x - 6, 6), 3), Color(1, 1, 1, 0.08))
-		_antenna(ci, Vector2(0, hr.position.y))
+		_antenna(ci, Vector2(0, hr.position.y - (4.0 if helmet == "teapot" else 0.0)))
+		_helmet_front(ci, hc, hr)
 		_poly(ci, Art.rrect(Rect2(-15, -68, 30, 9), 4.5), scarf_col)
 	else:
 		ci.draw_colored_polygon(Art.rrect(scr, 9), Color(GLOW, 0.06))

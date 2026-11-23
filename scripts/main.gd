@@ -49,6 +49,19 @@ var font_body: Font  # Nunito ExtraBold: captions, tips, descriptions
 ## Player-facing names live here so a rename is one edit.
 const GAME_TITLE := "KAVI"
 const GAME_SUB := "Letters to Lia"
+## Kavi's name means "poet" (owner idea, 0.8.15): short original poems he
+## writes along the way. Shown under the title logo and in his notebook.
+const POEMS := [
+	"Every mile I walk is a line I write, and every line ends with you.",
+	"Stars are only stamps on the envelope of the night.",
+	"The road is long and my boots are small, but a letter is light, and I carry it all.",
+	"Wind, if you reach her first, tell her I am coming.",
+	"Mountains are only hills that dreamed a little bigger.",
+	"The sea writes waves. I write footsteps.",
+	"I have no wings, only somewhere to be.",
+	"A poem is a road you can fold into your pocket.",
+	"Rain on my screen, sun on my scarf: every weather walks me closer.",
+]
 const HERO := "Kavi"
 const FRIEND := "Lia"
 const SCENIC_SPEED := 430.0
@@ -86,6 +99,24 @@ func apply_look(preview_cat := "", preview_i := -1) -> void:
 		return
 	_look_key = key
 	kite.set_look(Looks.compose(save.data.wear, preview_cat, preview_i))
+	if garage_open:
+		kite_pop(0.6)
+
+## A springy squash when Kavi changes look in the Garage (0.8.15).
+var _pop_t := 9.0
+var _pop_k := 1.0
+
+func kite_pop(k := 1.0) -> void:
+	_pop_t = 0.0
+	_pop_k = k
+
+func _update_pop(dt: float) -> void:
+	if _pop_t > 0.7:
+		kite.scale = Vector2.ONE
+		return
+	_pop_t += dt
+	var w := sin(_pop_t * 22.0) * exp(-_pop_t * 7.0) * 0.09 * _pop_k
+	kite.scale = Vector2(1.0 - w, 1.0 + w)
 
 # ------------------------------------------------------------------ state
 var state = "title"     # title, run, recovery, junction, rescue, fail, results, finale, paused
@@ -250,7 +281,9 @@ func _build_scene() -> void:
 	fgl.layer = 3
 	add_child(fgl)
 	fg = Painter.new()
-	fg.fn = func(ci): world_view.draw_foreground(ci, 0.0)
+	fg.fn = func(ci):
+		world_view.draw_foreground(ci, 0.0)
+		world_view.draw_bokeh(ci)
 	fgl.add_child(fg)
 
 	var ul = CanvasLayer.new()
@@ -590,6 +623,10 @@ const ACTIVITIES := [
 	{"pose": "read", "npc": "", "text": "Message from Lia: \"The storks came back today. I saved you a sketch.\""},
 	{"pose": "read", "npc": "", "text": "Message from Lia: \"Grandma calls me Cornelia when I'm late for dinner. You can keep calling me Lia.\""},
 	{"pose": "read", "npc": "", "text": "Message from Lia: \"If you wanted to, you would. ...You did.\""},
+	{"pose": "read", "npc": "", "text": "Kavi writes in his notebook: \"Every mile I walk is a line I write, and every line ends with you.\""},
+	{"pose": "read", "npc": "", "text": "Kavi writes in his notebook: \"Stars are only stamps on the envelope of the night.\""},
+	{"pose": "read", "npc": "", "text": "Kavi writes in his notebook: \"Wind, if you reach her first, tell her I am coming.\""},
+	{"pose": "read", "npc": "", "text": "Kavi writes in his notebook: \"The sea writes waves. I write footsteps.\""},
 ]
 
 func _enter_recovery(then_junction: bool) -> void:
@@ -1200,6 +1237,7 @@ func _process(delta: float) -> void:
 	if state == "title" and not (garage_open or menu_dim or has_meta("keyart")):
 		_plane_update(real_dt)
 	_update_cursor_hover()
+	_update_pop(real_dt)
 	if slowmo_t > 0.0:
 		slowmo_t -= real_dt
 		Engine.time_scale = 0.45 if slowmo_t > 0.0 else 1.0
@@ -1881,6 +1919,15 @@ func _setup_capture() -> void:
 			cap_steps.append_array([{"do": "kpose", "pose": ps[0], "speed": ps[1], "expr": ps[2]}, {"do": "wait", "s": 0.55 if ps[0] == "run" else 1.0}, {"shot": ps[3]}])
 		cap_steps.append({"do": "quit"})
 		return
+	if "--suits" in OS.get_cmdline_user_args():
+		# New silhouette suits in the Garage close-up, then the tab keys.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "garage", "cat": "suit"}, {"do": "wait", "s": 1.5}]
+		for i in range(3, 8):
+			cap_steps.append_array([{"do": "try", "cat": "suit", "i": i}, {"do": "wait", "s": 1.0}, {"shot": "u%d-suit" % i}])
+		cap_steps.append_array([{"do": "garage", "cat": "scarf"}, {"do": "wait", "s": 0.8}, {"do": "key", "k": KEY_D}, {"do": "wait", "s": 0.12}, {"shot": "u8-tab-anim"},
+			{"do": "wait", "s": 0.6}, {"shot": "u9-tab-switched"}, {"do": "key", "k": KEY_S}, {"do": "wait", "s": 0.5}, {"shot": "u10-into-list"}, {"do": "quit"}])
+		return
 	if "--sky" in OS.get_cmdline_user_args():
 		# Clickable sky/sea on the title, plus keyboard menu focus.
 		save.data.tutorial_done = true
@@ -1917,7 +1964,7 @@ func _setup_capture() -> void:
 		# Title + Garage review: the logo reveal, then try-ons of several items.
 		save.data.tutorial_done = true
 		save.data.sparks = 60
-		cap_steps = [{"do": "wait", "s": 0.7}, {"shot": "m0-logo-reveal"}, {"do": "wait", "s": 3.0}, {"shot": "m1-title"},
+		cap_steps = [{"do": "wait", "s": 0.7}, {"shot": "m0-logo-reveal"}, {"do": "wait", "s": 4.5}, {"shot": "m1-title"},
 			{"do": "garage", "cat": "scarf"}, {"do": "wait", "s": 1.5}, {"shot": "m2-garage"}]
 		for tr in [["suit", 1, "m3-kitty"], ["suit", 2, "m4-explorer"], ["paint", 1, "m5-midnight"], ["scarf", 7, "m6-rainbow"], ["antenna", 1, "m7-star"], ["visor", 2, "m8-pink"]]:
 			cap_steps.append_array([{"do": "garage", "cat": tr[0]}, {"do": "try", "cat": tr[0], "i": tr[1]}, {"do": "wait", "s": 1.2}, {"shot": tr[2]}])
@@ -2369,6 +2416,7 @@ func _draw_plane_game(ci: Node2D) -> void:
 		var ha := clampf((state_t - 2.5) / 0.6, 0.0, 1.0) * (0.75 + 0.25 * sin(t * 3.0))
 		var hsz := get_viewport_rect().size
 		_text(ci, "Tip: click near the paper plane to steer it to %s" % HERO, Vector2(hsz.x * 0.29, hsz.y * 0.25 + 120.0), 26, Color(1, 0.95, 0.85, ha * appear), HORIZONTAL_ALIGNMENT_CENTER, 6)
+	_draw_title_poem(ci)
 	if plane_delivered > 0:
 		var sz := get_viewport_rect().size
 		_text(ci, "Letters delivered: %d" % plane_delivered, Vector2(sz.x * 0.29, sz.y * 0.25 + 120.0), 26, Color(1, 0.9, 0.7, 0.85), HORIZONTAL_ALIGNMENT_CENTER, 6)
@@ -2460,8 +2508,8 @@ func _setup_cursor() -> void:
 	var point: Texture2D = load("res://assets/cursor/point.png")
 	if arrow == null or point == null:
 		return
-	Input.set_custom_mouse_cursor(arrow, Input.CURSOR_ARROW, Vector2(3, 3))
-	Input.set_custom_mouse_cursor(point, Input.CURSOR_POINTING_HAND, Vector2(3, 3))
+	Input.set_custom_mouse_cursor(arrow, Input.CURSOR_ARROW, Vector2(4, 3))
+	Input.set_custom_mouse_cursor(point, Input.CURSOR_POINTING_HAND, Vector2(4, 3))
 
 ## Over something clickable in the scene (sky toys, the paper plane) the
 ## cursor shows the glowing pointer, like it does over menu items.
@@ -2476,3 +2524,19 @@ func _update_cursor_hover() -> void:
 	if want != _cursor_hand:
 		_cursor_hand = want
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if want else Input.CURSOR_ARROW)
+
+
+## A line from Kavi's notebook fades in under the logo, a new one every 12 s.
+func _draw_title_poem(ci: Node2D) -> void:
+	if state_t < 3.0:
+		return
+	var sz := get_viewport_rect().size
+	var k: float = (state_t - 3.0) / 12.0
+	var idx := int(k) % POEMS.size()
+	var f := fmod(k, 1.0)
+	var a := clampf(f / 0.1, 0.0, 1.0) * clampf((1.0 - f) / 0.12, 0.0, 1.0)
+	var y := sz.y * 0.25 + 168.0
+	var cx := sz.x * 0.29
+	var col := Color(1.0, 0.93, 0.85, 0.85 * a)
+	_text(ci, "\u201c%s\u201d" % POEMS[idx], Vector2(cx, y), 25, col, HORIZONTAL_ALIGNMENT_CENTER, 6)
+	_text(ci, "from Kavi's notebook", Vector2(cx, y + 30.0), 19, Color(pal.rim.lerp(Color(1, 1, 1), 0.4), 0.7 * a), HORIZONTAL_ALIGNMENT_CENTER, 4)

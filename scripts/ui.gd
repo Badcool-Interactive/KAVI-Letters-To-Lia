@@ -514,31 +514,42 @@ func _glide_and_stagger(v: VBoxContainer) -> void:
 ## Garage: Kavi in close-up on the left; categories and items on the right.
 ## Hovering an item tries it on; pressing buys (if affordable) or wears it.
 ## Switching tabs or buying rebuilds the list in place (no fade = no lag).
+## Garage (0.8.15): moving along the category tabs (arrows, A/D, or the mouse)
+## switches the list below straight away, no Enter needed. Only the item list
+## is rebuilt (with a quick staggered slide-in); tabs, wallet and focus stay.
+var _g_cat := "scarf"
+var _g_list: VBoxContainer
+var _g_tabs: Dictionary = {}
+var _g_wallet: Array = []
+
 func show_garage(cat := "scarf", animate := true) -> void:
 	main.garage_open = true
 	main.menu_dim = true
 	main.apply_look()
+	_g_cat = cat
 	var v := _column(0.08, animate)
-	var data: Dictionary = main.save.data
 	_heading(v, "Garage", 64)
 	# wallet + exchange
 	var wallet := HBoxContainer.new()
 	wallet.add_theme_constant_override("separation", 28)
 	v.add_child(wallet)
-	for w in [["%d Stamps" % int(data.stamps), Color(1.0, 0.86, 0.55)], ["%d Sparks" % int(data.sparks), Color(0.65, 0.95, 1.0)]]:
+	_g_wallet.clear()
+	for w in [Color(1.0, 0.86, 0.55), Color(0.65, 0.95, 1.0)]:
 		var l := Label.new()
-		l.text = w[0]
 		l.add_theme_font_size_override("font_size", 34)
-		l.add_theme_color_override("font_color", w[1])
+		l.add_theme_color_override("font_color", w)
 		l.add_theme_constant_override("outline_size", 10)
 		l.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.05, 0.85))
+		_shadow(l)
 		wallet.add_child(l)
+		_g_wallet.append(l)
+	_garage_wallet()
 	var ex := HBoxContainer.new()
 	ex.add_theme_constant_override("separation", 0)
 	v.add_child(ex)
-	var e1 := _item(ex, "Swap %d Stamps for 1 Spark" % Looks.STAMPS_PER_SPARK, _exchange.bind(cat, true), 24)
+	var e1 := _item(ex, "Swap %d Stamps for 1 Spark" % Looks.STAMPS_PER_SPARK, _exchange.bind(true), 24)
 	e1.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var e2 := _item(ex, "1 Spark for %d Stamps" % Looks.STAMPS_FOR_SPARK, _exchange.bind(cat, false), 24)
+	var e2 := _item(ex, "1 Spark for %d Stamps" % Looks.STAMPS_FOR_SPARK, _exchange.bind(false), 24)
 	e2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if Looks.DEV_FREE:
 		_small(v, "Preview build: everything is free to try while the game is in development.", 24, Color(0.6, 1.0, 0.85, 0.85))
@@ -546,20 +557,55 @@ func show_garage(cat := "scarf", animate := true) -> void:
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 0)
 	v.add_child(tabs)
-	var focus_btn: Control = null
+	_g_tabs.clear()
 	for c in Looks.CATS:
-		var tb := _item(tabs, Looks.CAT_NAMES[c], show_garage.bind(c, false), 27)
+		var tb := _item(tabs, Looks.CAT_NAMES[c], _garage_tab.bind(c), 27)
 		tb.selected = c == cat
 		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tb.get_theme_stylebox("normal").content_margin_left = 34
 		tb.get_theme_stylebox("normal").content_margin_right = 2
-		if c == cat:
-			focus_btn = tb
+		tb.on_focus = _garage_tab.bind(c)
+		_g_tabs[c] = tb
 	_gap(v, 4)
+	_g_list = VBoxContainer.new()
+	_g_list.add_theme_constant_override("separation", 6)
+	v.add_child(_g_list)
+	_gap(v, 8)
+	var back := _item(v, "Back", main.go_title, 34)
+	back.on_focus = main.apply_look
+	_garage_fill(_focus_text, false)
+	_focus_text = ""
+	var fb: Control = _g_tabs[cat]
+	fb.grab_focus.call_deferred()
+
+func _garage_wallet() -> void:
+	if _g_wallet.size() == 2:
+		_g_wallet[0].text = "%d Stamps" % int(main.save.data.stamps)
+		_g_wallet[1].text = "%d Sparks" % int(main.save.data.sparks)
+
+## Focusing a tab shows its items at once.
+func _garage_tab(c: String) -> void:
+	if c == _g_cat or not is_instance_valid(_g_list):
+		return
+	_g_cat = c
+	for k in _g_tabs:
+		_g_tabs[k].selected = k == c
+		_g_tabs[k].queue_redraw()
+	main.apply_look()
+	_garage_fill("", true)
+
+func _garage_fill(focus_name := "", animate := true) -> void:
+	var data: Dictionary = main.save.data
+	var cat := _g_cat
+	for ch in _g_list.get_children():
+		_g_list.remove_child(ch)
+		ch.queue_free()
 	var list: Array = Looks.ITEMS[cat]
+	var rows: Array = []
+	var focus_btn: Control = null
 	for i in list.size():
 		var it: Dictionary = list[i]
-		var b := _item(v, it.name, _garage_pick.bind(cat, i), 36)
+		var b := _item(_g_list, it.name, _garage_pick.bind(cat, i), 36)
 		var wearing := int(data.wear[cat]) == i
 		if wearing:
 			b.status = "Wearing"
@@ -573,16 +619,47 @@ func show_garage(cat := "scarf", animate := true) -> void:
 			var have := int(data[Looks.wallet_key(it)])
 			b.status_col = (Color(1.0, 0.86, 0.5) if Looks.wallet_key(it) == "stamps" else Color(0.65, 0.95, 1.0)) if have >= int(it.cost) else Color(1, 1, 1, 0.4)
 		b.on_focus = main.apply_look.bind(cat, i)
-		if _focus_text == it.name:
+		if focus_name == it.name:
 			focus_btn = b
-	_gap(v, 8)
-	var back := _item(v, "Back", main.go_title, 34)
-	back.on_focus = main.apply_look
-	_focus_text = ""
-	if focus_btn:
+		rows.append(b)
+	_garage_wire.call_deferred()
+	if focus_btn != null:
 		focus_btn.grab_focus.call_deferred()
+	if animate and not bool(main.save.data.settings.get("reduced_motion", false)):
+		_stagger_in(rows, 0.025, 36.0)
 
-func _exchange(cat: String, buy_spark: bool) -> void:
+## After the generic row wiring: Up from the first item returns to the
+## selected tab (not the first tab), and Down from any tab enters the list.
+func _garage_wire() -> void:
+	_auto_wire()
+	if not is_instance_valid(_g_list) or _g_list.get_child_count() == 0:
+		return
+	var first: Control = _g_list.get_child(0)
+	var tab: Control = _g_tabs.get(_g_cat)
+	if tab != null:
+		first.focus_neighbor_top = first.get_path_to(tab)
+		for k in _g_tabs:
+			var tb: Control = _g_tabs[k]
+			tb.focus_neighbor_bottom = tb.get_path_to(first)
+
+func _stagger_in(rows: Array, step: float, dx: float) -> void:
+	for n in rows:
+		n.modulate.a = 0.0
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var i := 0
+	for n in rows:
+		if not is_instance_valid(n):
+			continue
+		var c: Control = n
+		var base := c.position.x
+		c.position.x = base + dx
+		var tw := c.create_tween().set_parallel().set_trans(Tween.TRANS_QUINT).set_ease(Tween.EASE_OUT)
+		tw.tween_property(c, "modulate:a", 1.0, 0.28).set_delay(i * step)
+		tw.tween_property(c, "position:x", base, 0.36).set_delay(i * step)
+		i += 1
+
+func _exchange(buy_spark: bool) -> void:
 	var data: Dictionary = main.save.data
 	if buy_spark and int(data.stamps) >= Looks.STAMPS_PER_SPARK:
 		data.stamps = int(data.stamps) - Looks.STAMPS_PER_SPARK
@@ -594,12 +671,9 @@ func _exchange(cat: String, buy_spark: bool) -> void:
 		main._toast("Not enough yet", get_viewport_rect().size * Vector2(0.76, 0.92), Color(1.0, 0.85, 0.4), 34)
 		return
 	main.save.save()
-	var f := get_viewport().gui_get_focus_owner()
-	_focus_text = f.text if f is Button else ""
-	show_garage(cat, false)
-	for n in _box.find_children("*", "Button", true, false):
-		if n.text == _focus_text:
-			n.grab_focus.call_deferred()
+	main.synth.play("mote", 1.2)
+	_garage_wallet()
+	_garage_fill("", false)
 
 func _garage_pick(cat: String, i: int) -> void:
 	var data: Dictionary = main.save.data
@@ -617,8 +691,9 @@ func _garage_pick(cat: String, i: int) -> void:
 		return
 	main.save.save()
 	main.apply_look()
-	_focus_text = it.name
-	show_garage(cat, false)
+	main.kite_pop()
+	_garage_wallet()
+	_garage_fill(it.name, false)
 
 ## Settings live in the right-hand column like the Garage (Kavi stays in view).
 func show_settings(animate := true) -> void:

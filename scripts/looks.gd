@@ -51,6 +51,11 @@ const ITEMS := {
 		{"name": "Courier", "cost": 0, "helmet": "round"},
 		{"name": "Kitty", "cost": 8, "cur": "sparks", "helmet": "cat"},
 		{"name": "Explorer", "cost": 12, "cur": "sparks", "helmet": "explorer"},
+		{"name": "Astro Bubble", "cost": 12, "cur": "sparks", "helmet": "astro"},
+		{"name": "Teapot", "cost": 10, "cur": "sparks", "helmet": "teapot"},
+		{"name": "Bunny", "cost": 9, "cur": "sparks", "helmet": "bunny"},
+		{"name": "Blocky", "cost": 9, "cur": "sparks", "helmet": "block"},
+		{"name": "Sprout", "cost": 8, "cur": "sparks", "helmet": "sprout"},
 	],
 }
 

@@ -823,9 +823,13 @@ func _draw_motes(ci: Node2D) -> void:
 ## rather than black spikes.
 func draw_foreground(ci: Node2D, gy: float) -> void:
 	var off = cam_x * 1.55
-	var col: Color = pal.layers[2].darkened(0.62).lerp(pal.ground, 0.3)
+	# 0.8.15: the near plants carry the scene's colour (not near-black), with a
+	# stronger sunlit rim, little grass clumps between them, and soft
+	# out-of-focus light specks drifting in front of the lens.
+	var col: Color = pal.layers[2].darkened(0.35).lerp(pal.ground, 0.2).lerp(pal.sky[0], 0.15)
 	col.a = 0.97
-	var rim: Color = Color(pal.rim, 0.28)
+	var rim: Color = Color(pal.rim.lightened(0.15), 0.55)
+	_draw_fg_clumps(ci, off * 0.9, col.lightened(0.04))
 	var kind: String = pal.get("surface", "pavers")
 	var cw = 820.0
 	var c0 = int(floor((off - 400.0) / cw))
@@ -877,6 +881,43 @@ func draw_foreground(ci: Node2D, gy: float) -> void:
 					var f = (float(k) / float(nl - 1)) - 0.5
 					var tip = base + Vector2(f * 340.0, -(170.0 + Art.hash01(c, 530 + k) * 110.0) * tall * (1.0 - absf(f) * 0.4)).rotated(sway)
 					_leaf(ci, base + Vector2(f * 40.0, 0), tip, Vector2(f * 70.0, -20.0), 26.0, col, rim)
+
+func _draw_fg_clumps(ci: Node2D, off: float, col: Color) -> void:
+	var cw := 300.0
+	var c0 := int(floor((off - 200.0) / cw))
+	var c1 := int(floor((off + size.x + 200.0) / cw))
+	for c in range(c0, c1 + 1):
+		if Art.hash01(c, 541) > 0.55:
+			continue
+		var bx: float = c * cw + Art.hash01(c, 542) * 180.0 - off
+		var pts := PackedVector2Array([Vector2(bx - 60, size.y + 10)])
+		var n := 7
+		for k in n:
+			var u := float(k) / (n - 1)
+			var h := (50.0 + Art.hash01(c, 550 + k) * 70.0) * (1.0 - absf(u - 0.5) * 0.9)
+			var x := bx - 50.0 + u * 100.0
+			var lean := sin(t * 1.1 + c + k * 0.4) * 10.0 + (u - 0.5) * 30.0
+			pts.append(Vector2(x - 6.0, size.y))
+			pts.append(Vector2(x + lean, size.y - h))
+		pts.append(Vector2(bx + 60, size.y + 10))
+		ci.draw_colored_polygon(pts, col)
+
+## Out-of-focus light specks (bokeh) close to the camera: big, soft, slow.
+func draw_bokeh(ci: Node2D) -> void:
+	if Art.Q < 1:
+		return
+	var n: int = [0, 6, 10][Art.Q]
+	var warm: Color = pal.rim.lerp(pal.mote, 0.5)
+	for i in n:
+		var h1 := Art.hash01(i, 701)
+		var h2 := Art.hash01(i, 702)
+		var depth := 0.5 + Art.hash01(i, 703) * 0.5
+		var x: float = fposmod(h1 * size.x * 1.4 - cam_x * 1.2 * depth - t * 6.0, size.x * 1.4) - size.x * 0.2
+		var y: float = size.y * (0.15 + h2 * 0.8) + sin(t * 0.4 + i * 1.7) * 18.0
+		var r: float = 18.0 + depth * 34.0
+		var a: float = (0.035 + 0.05 * pal.stars) * (0.6 + 0.4 * sin(t * 0.7 + i * 2.3))
+		ci.draw_circle(Vector2(x, y), r, Color(warm, a * 1.6))
+		ci.draw_arc(Vector2(x, y), r * 0.92, 0.0, TAU, 20, Color(warm.lightened(0.3), a * 1.4), 2.0)
 
 ## A curved, tapering leaf from base to tip (bend pushes the middle sideways).
 func _leaf(ci: Node2D, base: Vector2, tip: Vector2, bend: Vector2, w: float, col: Color, rim: Color) -> void:

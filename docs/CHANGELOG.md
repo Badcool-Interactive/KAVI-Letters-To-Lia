@@ -1,4 +1,25 @@
 # Changelog
+## 0.8.15 (2026-11-23): new suits, a richer ground, a fluid Garage, Kavi's poems
+- **Five suits that change Kavi's silhouette** (his face screen and scarf always stay):
+  - Astro Bubble: a fishbowl dome with a collar.
+  - Teapot: wide head, spout, lid and handle.
+  - Bunny: tall ears, one floppy.
+  - Blocky: square head with bolts.
+  - Sprout: leaves and a little flower.
+- **Garage is fluid:**
+  - Moving along the category tabs with the arrows, A/D or the mouse switches the list straight away; no Enter needed.
+  - Only the list rebuilds, with a quick staggered slide-in, so the tabs, wallet and focus stay put.
+  - Down from a tab enters the list; Up from the first item goes back to the selected tab.
+  - Kavi does a springy squash each time his look changes.
+- **Ground and foreground** (owner: unchanged since the first version):
+  - The ground takes the world's colours: lit near the top with sunlight washing down its face, deepening below, with soft soil strata.
+  - Two-tone grass, sunlit at the front, plus wildflowers per country: Greek poppies, forest bluebells, Danube buttercups, and frost glints on the snow.
+  - Softer contact shadow under the path.
+  - Near-camera plants carry the scene's colour with a stronger sunlit rim, little grass clumps between them, and soft out-of-focus light specks drifting in front of the lens.
+- **Kavi's poems** (his name means "poet"): a line from Kavi's notebook fades in under the logo every 12 s (9 original lines), and four breathers show him writing in his notebook.
+- **Cursor:** a soft, rounded cream-to-peach arrow with a teal edge and a gentle shadow, in a modern desktop style. Hover adds the glowing kite diamond.
+- **Performance** (Medium, chapter 2 benchmark): 0.8.14 was 438 draws / 5.8 ms script; 0.8.15 is 467 / 6.3. The bigger jump since 0.8.8 (365) comes from going back to the code-drawn Kavi in 0.8.9.
+- Capture mode `--suits`.
 ## 0.8.14 (2026-11-23): tidy keyboard menus, lighter title, plane flies its heart
 - **Keyboard navigation is predictable** (owner: A/D and the arrows felt messy). Every screen's buttons are grouped into rows, where a horizontal box is one row. Up/Down (W/S) step between rows and wrap around; Left/Right (A/D) move along a row and wrap, and do nothing on single-item rows, so focus never jumps somewhere odd.
 - **Lighter title screen again** (owner: the 0.8.13 shade made the game feel dark). Menu text instead gets a soft drop shadow and a thin ink outline (custom drawn in `MenuItem`), and labels and headings get shadows too.

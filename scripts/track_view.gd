@@ -62,9 +62,11 @@ func _draw_base(ci: Node2D) -> void:
 			segs.append([cur, h[0]])
 		cur = maxf(cur, h[1])
 	segs.append([cur, view_r + 300.0])
-	var band_top: Color = pal.layers[1].lerp(pal.fog, 0.30)
-	var band_mid: Color = pal.layers[2].lerp(pal.layers[1], 0.35)
-	var body: Color = gcol.lerp(pal.layers[2], 0.75)
+	# 0.8.15: the ground is the nearest hill, so it takes the world's colours
+	# (lit near the top, deepening below) instead of a flat near-black slab
+	var band_top: Color = pal.layers[1].lerp(pal.rim, 0.16).lerp(pal.fog, 0.12)
+	var band_mid: Color = pal.layers[2].lerp(pal.layers[1], 0.55)
+	var body: Color = pal.layers[2].lerp(pal.layers[1], 0.12)
 	for s in segs:
 		var a: float = s[0]
 		var b: float = s[1]
@@ -75,12 +77,33 @@ func _draw_base(ci: Node2D) -> void:
 			PackedColorArray([band_top, band_top, band_mid, band_mid]))
 		ci.draw_polygon(PackedVector2Array([Vector2(a, 60), Vector2(b, 60), Vector2(b, 300), Vector2(a, 300)]),
 			PackedColorArray([band_mid, band_mid, body, body]))
+		# depth: the ground body darkens as it goes down (0.8.15)
+		var deep_c: Color = body.darkened(0.45)
+		ci.draw_polygon(PackedVector2Array([Vector2(a, 300), Vector2(b, 300), Vector2(b, 1000), Vector2(a, 1000)]),
+			PackedColorArray([body, body, deep_c, deep_c]))
+		if Art.Q >= 2:
+			# soft soil strata catching a little light
+			var lit: Color = band_top
+			for k in 2:
+				var yy := 96.0 + k * 74.0
+				var pts := PackedVector2Array()
+				var x := maxf(a, view_l - 60.0)
+				var xe := minf(b, view_r + 60.0)
+				while x <= xe:
+					pts.append(Vector2(x, yy + sin(x * 0.006 + k * 1.7) * 9.0 + sin(x * 0.017 + k) * 3.0))
+					x += 48.0
+				if pts.size() > 1:
+					ci.draw_polyline(pts, Color(lit, 0.10 - k * 0.025), 3.0 - k * 0.6, Art.AA)
 		if Art.Q >= 1:
 			_ground_detail(ci, a, b, body)
 		if Art.Q >= 2 and pal.get("surface", "") in ["moss", "pavers"]:
 			_strata(ci, a, b, gcol)
 		_surface(ci, a, b, band_top)
-		_tufts(ci, a, b, gcol)
+		# soft contact shadow under the walking surface
+		var cs := Color(0.0, 0.01, 0.03)
+		ci.draw_polygon(PackedVector2Array([Vector2(a, 12), Vector2(b, 12), Vector2(b, 74), Vector2(a, 74)]),
+			PackedColorArray([Color(cs, 0.28), Color(cs, 0.28), Color(cs, 0.0), Color(cs, 0.0)]))
+		_grass(ci, a, b, gcol)
 	# holes: dark depth
 	for h in holes:
 		var a: float = h[0]
@@ -315,6 +338,76 @@ func _surface_kind(ci: Node2D, a: float, b: float, band_top: Color, kind: String
 			pts.append(Vector2(x0, 10))
 			ci.draw_colored_polygon(pts, snow)
 
+## Layered grass (0.8.15): a darker back row and a sunlit front row, each ONE
+## polygon, leaning together in the breeze, plus small wildflowers that
+## belong to each country (Greek poppies, forest bluebells, Danube buttercups;
+## frost glints on the Carpathian snow).
+const FLOWERS := {"pavers": [Color(0.92, 0.26, 0.22), Color(1.0, 0.95, 0.88)], "moss": [Color(0.55, 0.62, 1.0), Color(0.95, 0.92, 1.0)],
+	"boards": [Color(1.0, 0.86, 0.30), Color(1.0, 1.0, 0.95)], "snow": []}
+
+func _grass_row(ci: Node2D, x0: float, x1: float, period: float, hmin: float, hmax: float, col: Color, seed: int) -> void:
+	var pts := PackedVector2Array([Vector2(x0, 5)])
+	var c0 := int(x0 / period) + 1
+	var c1 := int(x1 / period)
+	for c in range(c0, c1 + 1):
+		var x := c * period + Art.hash01(c, seed) * period * 0.4
+		if x <= pts[pts.size() - 1].x + 2.0 or x >= x1:
+			continue
+		var h := hmin + Art.hash01(c, seed + 1) * (hmax - hmin)
+		var lean := sin(t * 1.7 + x * 0.012) * h * 0.28 + (Art.hash01(c, seed + 2) - 0.5) * h * 0.4
+		pts.append(Vector2(x - period * 0.42, 2.0))
+		pts.append(Vector2(x + lean, -h))
+	pts.append(Vector2(x1, 2.0))
+	pts.append(Vector2(x1, 5.0))
+	ci.draw_colored_polygon(pts, col)
+
+func _grass(ci: Node2D, a: float, b: float, gcol: Color) -> void:
+	var x0 := maxf(a + 6.0, view_l - 50.0)
+	var x1 := minf(b - 6.0, view_r + 50.0)
+	if x1 - x0 < 20.0:
+		return
+	var kind: String = pal.get("surface", "")
+	var back_g: Color = pal.layers[2].lerp(pal.layers[1], 0.35)
+	var front_g: Color = pal.layers[1].lerp(pal.rim, 0.30)
+	if kind == "snow":
+		back_g = back_g.lerp(Color(0.85, 0.9, 1.0), 0.25)
+		front_g = front_g.lerp(Color(0.92, 0.95, 1.0), 0.35)
+	_grass_row(ci, x0, x1, 12.0, 7.0, 21.0, back_g, 4)
+	if Art.Q >= 1:
+		_grass_row(ci, x0, x1, 16.0, 4.0, 13.0, front_g, 14)
+	if Art.Q < 1:
+		return
+	var cols: Array = FLOWERS.get(kind, [])
+	var stems := PackedVector2Array()
+	var step := 84.0
+	var c0 := int(x0 / step) + 1
+	var c1 := int(x1 / step)
+	for c in range(c0, c1 + 1):
+		if Art.hash01(c, 91) > (0.22 if Art.Q == 1 else 0.34):
+			continue
+		var x := c * step + Art.hash01(c, 92) * step * 0.7
+		if x < x0 + 8.0 or x > x1 - 8.0:
+			continue
+		var h := 10.0 + Art.hash01(c, 93) * 12.0
+		var tip := Vector2(x + sin(t * 1.7 + x * 0.012) * h * 0.25, -h)
+		if cols.is_empty():
+			# frost glint on snow
+			var gl := 0.5 + 0.5 * sin(t * 3.0 + c * 1.7)
+			ci.draw_line(Vector2(x - 3, -4), Vector2(x + 3, -4), Color(1, 1, 1, 0.6 * gl), 1.5)
+			ci.draw_line(Vector2(x, -7), Vector2(x, -1), Color(1, 1, 1, 0.6 * gl), 1.5)
+			continue
+		stems.append(Vector2(x, 2))
+		stems.append(tip)
+		var fc: Color = cols[int(Art.hash01(c, 94) * cols.size()) % cols.size()]
+		var star := PackedVector2Array()
+		var r := 4.2 + Art.hash01(c, 95) * 1.6
+		for k in 10:
+			var ang := k * PI / 5.0 + c
+			star.append(tip + Vector2.from_angle(ang) * (r if k % 2 == 0 else r * 0.5))
+		ci.draw_colored_polygon(star, fc)
+	if stems.size() > 0:
+		ci.draw_multiline(stems, pal.layers[2].lerp(pal.layers[1], 0.5), 1.6)
+
 ## Grass along a ground segment as ONE zigzag polygon (was ~60 triangles).
 func _tufts(ci: Node2D, a: float, b: float, gcol: Color) -> void:
 	var x0 := maxf(a + 6.0, view_l - 50.0)
@@ -524,6 +617,9 @@ func _draw_add(ci: Node2D) -> void:
 		ci.draw_line(Vector2(e[0], 0), Vector2(e[1], 0), Art.hdr(Color(rim, 0.9), 1.25), 3.0)
 		ci.draw_polygon(PackedVector2Array([Vector2(e[0], -26), Vector2(e[1], -26), Vector2(e[1], 2), Vector2(e[0], 2)]),
 			PackedColorArray([Color(rim, 0.0), Color(rim, 0.0), Color(rim, 0.12), Color(rim, 0.12)]))
+		# sunlight washing down the front of the ground (0.8.15)
+		ci.draw_polygon(PackedVector2Array([Vector2(e[0], 6), Vector2(e[1], 6), Vector2(e[1], 170), Vector2(e[0], 170)]),
+			PackedColorArray([Color(rim, 0.16), Color(rim, 0.16), Color(rim, 0.0), Color(rim, 0.0)]))
 		# glow flowers
 		var c0 = int(maxf(e[0], view_l) / 90.0)
 		var c1 = int(minf(e[1], view_r) / 90.0)
