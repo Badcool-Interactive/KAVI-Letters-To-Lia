@@ -146,6 +146,14 @@ func _build_sfx() -> void:
 	sfx.ui = _wav(_bell_tone(880.0, 0.12, 0.25))
 	sfx.hover = _wav(_noise(0.4, 0.12, 0.05))
 	sfx.engine = _wav(_engine(1.6))
+	# 0.8.13 sky toys: a ship's horn and a little bird tweet
+	var toot := _chirp(0.55, 196.0, 188.0, 0.30, 0.0)
+	var toot2 := _chirp(0.55, 247.0, 238.0, 0.20, 0.0)
+	for i in toot.size():
+		toot[i] += toot2[i]
+	sfx.toot = _wav(toot)
+	sfx.tweet = _wav(_chirp(0.09, 2600.0, 3600.0, 0.16, 0.0))
+	sfx.whoosh = _wav(_noise(0.7, 0.20, 0.5))
 	var tier := PackedFloat32Array()
 	tier.resize(int(RATE * 0.9))
 	for n in 4:

@@ -1,4 +1,16 @@
 # Changelog
+## 0.8.13 (2026-11-23): sky toys, custom cursor, keyboard menus
+- **Clickable sky and sea on the title screen and in Scenic View** (classmates kept trying the balloons):
+  - Balloons: hop with a burner puff and a squash; a tiny passenger waves, a heart floats out and it calls "Hello!" or "Ahoy!". Three quick clicks send it whooshing up and away ("Wheeeee!"), then it floats back.
+  - The plane loops a smoke heart into the sky ("Sending love!").
+  - Ships: toot their horn and puff steam with a music note ("Toot toot!"); the ship bobs.
+  - Birds: scatter and tweet, then regroup.
+  - The paper plane bumps balloons and birds when it flies into them.
+- **Custom mouse cursor:** a cream paper-plane pointer, and a glowing kite-diamond version over anything clickable (menu items, sky toys, the paper plane). Desktop and web only. Made by `tools/art/make_cursor.py`.
+- **Keyboard menus:** WASD as well as the arrows, and E as well as Enter and Space to select. If nothing has focus (the mouse was used last), the first menu key focuses the first item.
+- **Easier to read:** a deeper, wider shade behind the menu column; unselected items are brighter with a stronger outline; soft hover ticks.
+- The title rows are only as wide as their words, so the sea and sky behind them stay clickable. Before, clicking a ship behind "Scenic View" would have started Scenic View.
+- The paper-plane tip now sits under the logo instead of following the plane. Capture mode `--sky`.
 ## 0.8.12 (2026-11-23): route choice countdown
 - **Route choice after a breather ("A fork in the road"):** now shows a big countdown and a draining bar (7 s). In the last seconds the number and bar turn orange, then red, pulse with each second, tick with rising pitch and shake, and the screen edges throb red (off with Reduced motion).
 - **Easy option (owner idea):** with about 2 seconds left, the Scenic route becomes a glowing "EASY ROUTE: tap anywhere!". Any key, click or tap (except on the Wild route or the pause button) takes it, and it is picked automatically at zero.

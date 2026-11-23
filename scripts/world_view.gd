@@ -190,6 +190,95 @@ func _draw_sky(ci: Node2D) -> void:
 func _sky_k() -> float:
 	return 1.0 if tr_from.is_empty() else clampf((t - tr_t0) / 7.0, 0.0, 1.0)
 
+## Clickable sky and sea (0.8.13): balloons hop and wave, the plane draws a
+## smoke heart, ships toot, birds scatter. Hit rects are rebuilt every draw in
+## screen space; reactions are keyed by object and read back while drawing.
+var interactive := false
+var _hits_air: Array = []
+var _hits_sea: Array = []
+var pokes: Dictionary = {}
+var sky_fx: Array = []   # {kind, p, v, t0, life, layer}
+
+func poke(pos: Vector2, quiet := false) -> String:
+	if not interactive:
+		return ""
+	for list in [_hits_air, _hits_sea]:
+		for i in range(list.size() - 1, -1, -1):
+			var h: Dictionary = list[i]
+			if not (h.rect as Rect2).grow(16.0).has_point(pos):
+				continue
+			var key: String = h.key
+			var pk: Dictionary = pokes.get(key, {})
+			if quiet and pk.has("t0") and t - float(pk.t0) < 1.6:
+				return ""
+			if h.kind == "plane" and pk.has("t0") and t - float(pk.t0) < 3.2:
+				return ""
+			var n := 1
+			if pk.has("last") and t - float(pk.last) < 1.2:
+				n = int(pk.n) + 1
+			pk = {"t0": t, "last": t, "n": n, "rocket": pk.get("rocket", -99.0)}
+			var kind: String = h.kind
+			if kind == "balloon":
+				var bot: Vector2 = h.basket
+				sky_fx.append({"kind": "heart", "p": bot + Vector2(0, -6), "v": Vector2(randf_range(-12, 12), -70), "t0": t, "life": 1.6, "layer": "air"})
+				if n >= 3 and t - float(pk.rocket) > 12.0:
+					pk.rocket = t
+					kind = "balloon_rocket"
+			elif kind == "ship":
+				var top: Vector2 = h.top
+				for q in 3:
+					sky_fx.append({"kind": "puff", "p": top + Vector2(0, -q * 6), "v": Vector2(-14, -34 - q * 12), "t0": t + q * 0.18, "life": 1.8, "layer": "sea"})
+				sky_fx.append({"kind": "note", "p": top + Vector2(14, -10), "v": Vector2(18, -46), "t0": t, "life": 2.0, "layer": "sea"})
+			elif kind == "plane":
+				pk.emit = 0.0
+			pokes[key] = pk
+			return kind
+	return ""
+
+func hover_hit(pos: Vector2) -> bool:
+	if not interactive:
+		return false
+	for list in [_hits_air, _hits_sea]:
+		for h in list:
+			if (h.rect as Rect2).grow(16.0).has_point(pos):
+				return true
+	return false
+
+func _age(key: String) -> float:
+	var pk: Dictionary = pokes.get(key, {})
+	return t - float(pk.t0) if pk.has("t0") else 999.0
+
+func _draw_sky_fx(ci: Node2D, layer: String) -> void:
+	var keep: Array = []
+	for f in sky_fx:
+		var a: float = t - float(f.t0)
+		if a > float(f.life):
+			continue
+		keep.append(f)
+		if f.layer != layer or a < 0.0:
+			continue
+		var k: float = a / float(f.life)
+		var p: Vector2 = f.p + f.v * a
+		match f.kind:
+			"heart":
+				p.x += sin(a * 5.0) * 6.0
+				var hc := Color(1.0, 0.55, 0.72, (1.0 - k) * 0.95)
+				var r := 6.0 + 3.0 * minf(a * 4.0, 1.0)
+				ci.draw_circle(p + Vector2(-r * 0.5, 0), r * 0.62, hc)
+				ci.draw_circle(p + Vector2(r * 0.5, 0), r * 0.62, hc)
+				ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-r * 1.08, r * 0.2), p + Vector2(r * 1.08, r * 0.2), p + Vector2(0, r * 1.3)]), hc)
+			"puff":
+				ci.draw_circle(p, 7.0 + 16.0 * k, Color(1, 1, 1, 0.42 * (1.0 - k)))
+			"smoke":
+				ci.draw_circle(p, 4.0 + 5.0 * k, Color(1, 0.97, 0.95, 0.75 * (1.0 - k * k)))
+			"note":
+				p.x += sin(a * 6.0) * 5.0
+				var nc := Color(1.0, 0.92, 0.7, 1.0 - k)
+				ci.draw_circle(p, 4.5, nc)
+				ci.draw_line(p + Vector2(4, 0), p + Vector2(4, -16), nc, 2.0)
+				ci.draw_line(p + Vector2(4, -16), p + Vector2(11, -11), nc, 2.0)
+	sky_fx = keep
+
 var sun_shift := 0.0 # title screen: the sun sets behind Kavi, away from the menu
 
 func _sun_at(P: Dictionary, sink: float) -> Vector2:
@@ -1049,6 +1138,7 @@ func _draw_life(ci: Node2D, off: float, col: Color) -> void:
 ## Ships on the Greek sea and the Danube: they drift slowly on their own and
 ## with the camera; lights reflect in the water.
 func _draw_ships(ci: Node2D, y0: float) -> void:
+	_hits_sea.clear()
 	var off = cam_x * 0.11 + t * 9.0
 	var c0 = int(floor((off - 500.0) / SHIP_CELL))
 	var c1 = int(floor((off + size.x + 500.0) / SHIP_CELL))
@@ -1065,6 +1155,16 @@ func _draw_ships(ci: Node2D, y0: float) -> void:
 		var s = 0.55 + Art.hash01(c, 803) * 0.35
 		var p = Vector2(c * SHIP_CELL + Art.hash01(c, 804) * 700.0 - off, y0 + 14.0 + Art.hash01(c, 805) * 22.0 * s)
 		p.y += sin(t * 1.2 + c) * 1.2
+		var skey := "ship:%d" % c
+		var sa := _age(skey)
+		if sa < 2.0:
+			p.y += sin(sa * 9.0) * 4.0 * exp(-sa * 2.0)
+		var top_h := {"sail": 80.0, "ferry": 62.0, "barge": 34.0, "steamer": 62.0}
+		var half_w := {"sail": 34.0, "ferry": 92.0, "barge": 110.0, "steamer": 72.0}
+		var hh: float = top_h.get(kind, 50.0) * s
+		var hw: float = half_w.get(kind, 60.0) * s
+		_hits_sea.append({"kind": "ship", "key": skey, "rect": Rect2(p.x - hw, p.y - hh, hw * 2.0, hh + 6.0),
+			"top": p + Vector2((10.0 * s) if kind == "steamer" else 0.0, -hh)})
 		var lights: Array = []
 		match kind:
 			"sail":
@@ -1102,16 +1202,19 @@ func _draw_ships(ci: Node2D, y0: float) -> void:
 			# reflection streak
 			var ry = p.y + (p.y - lp.y) * 0.25 + 4.0
 			ci.draw_line(Vector2(lp.x, ry), Vector2(lp.x, ry + 6.0 + sin(t * 3.0 + lp.x) * 2.0), Color(WARM, 0.35 * pal.water), 1.5)
+	_draw_sky_fx(ci, "sea")
 
 ## Sky traffic: one plane at a time with blinking lights, hot-air balloons
 ## drifting with the wind, or a flock of birds.
 func _draw_air(ci: Node2D) -> void:
+	_hits_air.clear()
 	if tr_from.is_empty():
 		_draw_air_set(ci, pal.get("air", []), 1.0)
-		return
-	var k := clampf((t - tr_t0) / 6.0, 0.0, 1.0)
-	_draw_air_set(ci, tr_from.get("air", []), 1.0 - k)
-	_draw_air_set(ci, tr_to.get("air", []), k)
+	else:
+		var k := clampf((t - tr_t0) / 6.0, 0.0, 1.0)
+		_draw_air_set(ci, tr_from.get("air", []), 1.0 - k)
+		_draw_air_set(ci, tr_to.get("air", []), k)
+	_draw_sky_fx(ci, "air")
 
 func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 	if air.is_empty() or alpha < 0.02:
@@ -1128,6 +1231,19 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 		var x = lerpf(-120.0, w + 120.0, ph) if dir > 0 else lerpf(w + 120.0, -120.0, ph)
 		var y = h * (0.08 + Art.hash01(n, 903) * 0.16) - ph * 30.0
 		var p = Vector2(x, y)
+		var pkey := "plane:%d" % n
+		var pa := _age(pkey)
+		if pa < 3.0:
+			# loop through a heart shape, leaving a smoke trail that drifts with it
+			var u := pa / 3.0 * TAU
+			var hv := Vector2(16.0 * pow(sin(u), 3.0), -(13.0 * cos(u) - 5.0 * cos(2.0 * u) - 2.0 * cos(3.0 * u) - cos(4.0 * u)))
+			p += (hv - Vector2(0, -5.0)) * 4.2
+			var pk: Dictionary = pokes[pkey]
+			if t - float(pk.get("emit", 0.0)) > 0.035:
+				pk.emit = t
+				sky_fx.append({"kind": "smoke", "p": p, "v": Vector2(dir * (w + 240.0) / P, -30.0 / P), "t0": t, "life": 3.6, "layer": "air"})
+		if alpha > 0.5:
+			_hits_air.append({"kind": "plane", "key": pkey, "rect": Rect2(p - Vector2(24, 14), Vector2(48, 28))})
 		ci.draw_line(p + Vector2(-16 * dir, 0), p + Vector2(16 * dir, 0), sil, 3.0)
 		ci.draw_line(p + Vector2(2 * dir, 0), p + Vector2(-6 * dir, 7), sil, 2.0)
 		ci.draw_line(p + Vector2(-14 * dir, 0), p + Vector2(-18 * dir, -6), sil, 2.0)
@@ -1146,8 +1262,18 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 			var hues := [Color(0.95, 0.42, 0.35), Color(1.0, 0.72, 0.30), Color(0.35, 0.75, 0.80)]
 			var bc: Color = hues[int(Art.hash01(b, 913) * 3.0) % 3].lerp(pal.sky[1], 0.35)
 			bc.a = alpha
+			var bkey := "balloon:%d" % b
+			var ba := _age(bkey)
+			if ba < 1.3:
+				by -= sin(ba / 1.3 * PI) * 46.0
+			var rk: float = t - float(pokes.get(bkey, {}).get("rocket", -99.0))
+			if rk < 13.0:
+				# whoosh! up and away, then a slow float back down
+				by -= 620.0 * smoothstep(0.0, 2.2, rk) * (1.0 - smoothstep(6.0, 13.0, rk))
 			var bp = Vector2(bx, by)
 			var r = 24.0 + Art.hash01(b, 914) * 10.0
+			var squash: float = exp(-ba * 4.0) * sin(ba * 22.0) * 0.12 if ba < 1.5 else 0.0
+			r *= 1.0 + squash
 			# teardrop envelope: round crown narrowing to the throat
 			var env := PackedVector2Array()
 			for k in 17:
@@ -1163,14 +1289,30 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 			var bk = thr + Vector2(0, 14)
 			ci.draw_line(thr + Vector2(-r * 0.26, 0), bk + Vector2(-5, 0), sil, 1.0)
 			ci.draw_line(thr + Vector2(r * 0.26, 0), bk + Vector2(5, 0), sil, 1.0)
+			# a tiny passenger peeking over the basket; waves when poked
+			var head: Vector2 = bk + Vector2(2, -3)
+			ci.draw_circle(head, 3.2, sil)
+			if ba < 2.4 or rk < 13.0:
+				var wv := sin(t * 14.0) * 0.6
+				ci.draw_line(head + Vector2(2, 1), head + Vector2(2, 1) + Vector2.from_angle(-PI * 0.5 + wv) * 7.0, sil, 1.6)
 			ci.draw_rect(Rect2(bk.x - 6, bk.y, 12, 9), sil)
-			if fmod(t * 0.7 + b, 3.0) < 0.6:
-				ci.draw_circle(thr + Vector2(0, 3), 3.5, Color(_warm(1.8), alpha))
+			if fmod(t * 0.7 + b, 3.0) < 0.6 or ba < 0.6 or rk < 2.5:
+				var fl: float = 3.5 + (6.0 if (ba < 0.6 or rk < 2.5) else 0.0) * (0.7 + 0.3 * sin(t * 30.0))
+				ci.draw_circle(thr + Vector2(0, 3), fl, Color(_warm(1.8), alpha))
+			if alpha > 0.5:
+				_hits_air.append({"kind": "balloon", "key": bkey, "rect": Rect2(bp - Vector2(r, r), Vector2(r * 2.0, r * 2.35 + 23.0)), "basket": bk})
 	if air.has("birds"):
 		var fx = fposmod(-t * 40.0 + 300.0, w + 600.0) - 300.0
 		var fy = h * 0.22 + sin(t * 0.3) * 20.0
+		var sa := _age("birds")
+		var scat := sin(clampf(sa / 3.2, 0.0, 1.0) * PI) if sa < 3.2 else 0.0
+		if alpha > 0.5:
+			_hits_air.append({"kind": "birds", "key": "birds", "rect": Rect2(Vector2(w - fx - 12.0, fy - 14.0), Vector2(90, 56))})
 		for k in 7:
 			var row = absi(k - 3)
 			var bp = Vector2(w - fx + row * 22.0, fy + row * 12.0 + (k - 3) * 2.0)
-			var flap = sin(t * 8.0 + k) * 5.0
+			if scat > 0.0:
+				var ang := -PI * 0.5 + (k - 3) * 0.42 + sin(k * 3.1) * 0.2
+				bp += Vector2.from_angle(ang) * 240.0 * scat
+			var flap = sin(t * (8.0 + 14.0 * scat) + k) * 5.0
 			ci.draw_polyline(PackedVector2Array([bp + Vector2(-8, -flap), bp, bp + Vector2(8, -flap)]), sil, 2.0, Art.AA)

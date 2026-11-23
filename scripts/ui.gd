@@ -36,6 +36,7 @@ static func _sb(bg: Color, border: Color, bw: int, radius: int, shadow := 0, sh_
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_add_menu_keys()
 	_theme = Theme.new()
 	_theme.default_font = font
 	_theme.default_font_size = 38
@@ -154,6 +155,43 @@ func _label(v: Container, text: String, size := 36, col := Color(1, 0.98, 0.94))
 	v.add_child(l)
 	return l
 
+# ------------------------------------------------------------------ keyboard (0.8.13)
+## Menus work with WASD as well as arrows; Enter, Space and E select.
+func _add_menu_keys() -> void:
+	var extra := {"ui_up": [KEY_W], "ui_down": [KEY_S], "ui_left": [KEY_A], "ui_right": [KEY_D], "ui_accept": [KEY_E]}
+	for act in extra:
+		for kc in extra[act]:
+			var ev := InputEventKey.new()
+			ev.physical_keycode = kc
+			if not InputMap.action_has_event(act, ev):
+				InputMap.action_add_event(act, ev)
+
+## If a menu is open but nothing has focus (the mouse was used last), the first
+## menu key focuses the first item instead of doing nothing.
+func _input(event: InputEvent) -> void:
+	if not is_instance_valid(_box) or not _box.is_visible_in_tree():
+		return
+	if not (event.is_action_pressed("ui_up") or event.is_action_pressed("ui_down") or event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right") or event.is_action_pressed("ui_accept")):
+		return
+	var f := get_viewport().gui_get_focus_owner()
+	if f != null and _box.is_ancestor_of(f):
+		return
+	var first := _first_focusable(_box)
+	if first != null:
+		first.grab_focus()
+		get_viewport().set_input_as_handled()
+
+func _first_focusable(n: Node) -> Control:
+	for ch in n.get_children():
+		if ch is BaseButton and ch.is_visible_in_tree() and not ch.disabled and ch.focus_mode != Control.FOCUS_NONE:
+			return ch
+		var deeper := _first_focusable(ch)
+		if deeper != null:
+			return deeper
+	return null
+
+var _opened_ms := 0
+
 # ------------------------------------------------------------------ screens
 func show_none() -> void:
 	_clear()
@@ -186,8 +224,9 @@ class MenuItem extends Button:
 			add_theme_stylebox_override(st, e)
 		for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 			add_theme_color_override(k, Color(1.0, 0.96, 0.90))
-		add_theme_constant_override("outline_size", 10)
-		add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.05, 0.6))
+		add_theme_constant_override("outline_size", 12)
+		add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.05, 0.78))
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		mouse_entered.connect(grab_focus)
 		focus_entered.connect(func():
 			if on_focus.is_valid():
@@ -198,7 +237,7 @@ class MenuItem extends Button:
 		if absf(hot - target) > 0.001:
 			hot = move_toward(hot, target, dt * 7.0)
 			queue_redraw()
-		self_modulate.a = 0.58 + 0.42 * maxf(hot, 1.0 if selected else 0.0)
+		self_modulate.a = 0.82 + 0.18 * maxf(hot, 1.0 if selected else 0.0)
 		# the focused item swells a little from its left edge (eased)
 		var e := hot * hot * (3.0 - 2.0 * hot)
 		pivot_offset = Vector2(0, size.y * 0.5)
@@ -229,12 +268,16 @@ func _item(v: Container, text: String, cb: Callable, size := 40) -> MenuItem:
 	b.pressed.connect(func():
 		main.synth.play("ui")
 		cb.call())
+	b.focus_entered.connect(func():
+		if Time.get_ticks_msec() - _opened_ms > 300:
+			main.synth.play("ui", 1.9, -16.0))
 	v.add_child(b)
 	return b
 
 ## Right-hand column used by the title and Garage screens.
 func _column(top := 0.24, animate := true) -> VBoxContainer:
 	_clear()
+	_opened_ms = Time.get_ticks_msec()
 	var c := Control.new()
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(c)
@@ -281,22 +324,26 @@ func show_title() -> void:
 	var sub := _small(v, ("Chapter %d  ·  %s" % [ch + 1, Art.biome(ch).name]) if cont else ("Carry the letters all the way to %s" % main.FRIEND), 24, Color(1.0, 0.86, 0.62, 0.75))
 	sub.add_theme_constant_override("line_spacing", 0)
 	_gap(v, 14)
-	_item(v, "Endless Road", main.menu_endless, 40)
-	_item(v, "Daily Relay", main.menu_daily, 40)
-	_item(v, "Scenic View", main.menu_scenic, 40)
+	var rows: Array = [first]
+	rows.append(_item(v, "Endless Road", main.menu_endless, 40))
+	rows.append(_item(v, "Daily Relay", main.menu_daily, 40))
+	rows.append(_item(v, "Scenic View", main.menu_scenic, 40))
+	# rows only as wide as their words, so the sky and sea behind stay clickable
+	for r in rows:
+		r.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_gap(v, 10)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 0)
+	row.add_theme_constant_override("separation", 26)
 	v.add_child(row)
 	var row_items := [["Garage", show_garage.bind("scarf")], ["Settings", show_settings], ["Tutorial", confirm_tutorial]]
 	if main.can_quit():
 		row_items.append(["Quit", confirm_quit])
 	for it in row_items:
 		var b := _item(row, it[0], it[1], 30)
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	# Portal builds (CrazyGames etc.) must not show their own ad prompts.
 	if main.ads.can_show() and not OS.has_feature("portal"):
-		_item(v, "Free gift: a short ad for +1 Spark (%d left)" % main.ads.remaining_today(), main.watch_ad_for_spark, 24)
+		_item(v, "Free gift: a short ad for +1 Spark (%d left)" % main.ads.remaining_today(), main.watch_ad_for_spark, 24).size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_gap(v, 18)
 	# wallet + best score: bigger, outlined, so it reads over the bright ground
 	var stats := HBoxContainer.new()
@@ -580,6 +627,7 @@ func _heading(v: Container, text: String, size := 64, col := Color(1, 0.96, 0.9)
 ## Centred in-world column over a soft dim (pause, results, story screens).
 func _center(width := 640.0, dim := 0.55) -> VBoxContainer:
 	_clear()
+	_opened_ms = Time.get_ticks_msec()
 	var c := Control.new()
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(c)

@@ -169,6 +169,7 @@ func _ready() -> void:
 	# Display title (window / browser tab). project config/name stays "VOLT/RUN"
 	# because it names the save folder on desktop.
 	get_window().title = "%s: %s" % [HERO, GAME_SUB]
+	_setup_cursor()
 	input_mode = "touch" if DisplayServer.is_touchscreen_available() else "keys"
 	if OS.has_feature("web") or OS.has_feature("mobile"):
 		Engine.max_fps = 60
@@ -1198,6 +1199,7 @@ func _process(delta: float) -> void:
 	state_t += real_dt
 	if state == "title" and not (garage_open or menu_dim or has_meta("keyart")):
 		_plane_update(real_dt)
+	_update_cursor_hover()
 	if slowmo_t > 0.0:
 		slowmo_t -= real_dt
 		Engine.time_scale = 0.45 if slowmo_t > 0.0 else 1.0
@@ -1361,6 +1363,7 @@ func _update_views(dt: float) -> void:
 	world_view.cam_y = cam.position.y + size.y * (0.80 - 0.5) / zoom
 	world_view.t = t
 	world_view.hero_x = _kite_screen().x
+	world_view.interactive = (state == "title" and not (garage_open or menu_dim)) or state == "scenic"
 	world_view.sun_shift = -0.30 * get_viewport_rect().size.x if state == "title" else 0.0
 	world_view.calm = move_toward(world_view.calm, 1.0 if state in ["recovery", "finale", "title", "scenic"] else 0.0, dt)
 	world_view.refresh()
@@ -1538,8 +1541,11 @@ func _draw_hud(ci: Node2D) -> void:
 func _draw_title(ci: Node2D, sz: Vector2) -> void:
 	# soft darkening behind the menu column for readability (no box)
 	var shade := Color(0.01, 0.02, 0.05)
-	ci.draw_polygon(PackedVector2Array([Vector2(sz.x * 0.52, 0), Vector2(sz.x, 0), Vector2(sz.x, sz.y), Vector2(sz.x * 0.52, sz.y)]),
-		PackedColorArray([Color(shade, 0.0), Color(shade, 0.78 if menu_dim else 0.55), Color(shade, 0.78 if menu_dim else 0.55), Color(shade, 0.0)]))
+	# readability (0.8.13): a deeper, wider shade with a soft shoulder
+	var sa := 0.82 if menu_dim else 0.70
+	ci.draw_polygon(PackedVector2Array([Vector2(sz.x * 0.44, 0), Vector2(sz.x * 0.62, 0), Vector2(sz.x * 0.62, sz.y), Vector2(sz.x * 0.44, sz.y)]),
+		PackedColorArray([Color(shade, 0.0), Color(shade, sa), Color(shade, sa), Color(shade, 0.0)]))
+	ci.draw_rect(Rect2(sz.x * 0.62, 0, sz.x * 0.38, sz.y), Color(shade, sa))
 	if garage_open or menu_dim:
 		return
 	_draw_motes(ci, sz)
@@ -1748,6 +1754,11 @@ func _set_input_mode(m: String) -> void:
 		touch.visible_controls = _want_touch()
 
 func _input(event: InputEvent) -> void:
+	if state in ["title", "scenic"] and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var hc0 := get_viewport().gui_get_hovered_control()
+		if not (hc0 is BaseButton) and _sky_poke(event.position):
+			get_viewport().set_input_as_handled()
+			return
 	if state == "title" and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if _plane_push(event.position):
 			get_viewport().set_input_as_handled()
@@ -1870,6 +1881,17 @@ func _setup_capture() -> void:
 				["wave", 0.0, "heart", "k9-wave"], ["fall", 0.0, "scared", "k10-fall"], ["gust", 0.0, "focus", "k11-gust"]]:
 			cap_steps.append_array([{"do": "kpose", "pose": ps[0], "speed": ps[1], "expr": ps[2]}, {"do": "wait", "s": 0.55 if ps[0] == "run" else 1.0}, {"shot": ps[3]}])
 		cap_steps.append({"do": "quit"})
+		return
+	if "--sky" in OS.get_cmdline_user_args():
+		# Clickable sky/sea on the title, plus keyboard menu focus.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 3.0}, {"shot": "s0-title"},
+			{"do": "poke_kind", "kind": "balloon"}, {"do": "wait", "s": 0.45}, {"shot": "s1-balloon"},
+			{"do": "poke_kind", "kind": "balloon"}, {"do": "poke_kind", "kind": "balloon"}, {"do": "wait", "s": 1.2}, {"shot": "s2-rocket"},
+			{"do": "poke_kind", "kind": "ship"}, {"do": "wait", "s": 0.6}, {"shot": "s3-ship"},
+			{"do": "poke_kind", "kind": "plane"}, {"do": "wait", "s": 1.6}, {"shot": "s4-plane-heart"}, {"do": "wait", "s": 1.5}, {"shot": "s5-plane-heart-b"},
+			{"do": "unfocus"}, {"do": "key", "k": KEY_S}, {"do": "wait", "s": 0.3}, {"do": "key", "k": KEY_S}, {"do": "wait", "s": 0.3}, {"do": "key", "k": KEY_S}, {"do": "wait", "s": 0.5}, {"shot": "s6-keys"},
+			{"do": "key", "k": KEY_ENTER}, {"do": "wait", "s": 1.0}, {"shot": "s7-enter"}, {"do": "quit"}]
 		return
 	if "--junction" in OS.get_cmdline_user_args():
 		# Route choice countdown: calm, urgent, easy option.
@@ -2039,6 +2061,34 @@ func _capture_tick(dt: float) -> void:
 			cap_wait = 0.0
 		return
 	match st.do:
+		"poke_kind":
+			# wait (up to 30 s) until one of these is on screen, then click its middle
+			var found := false
+			for list in [world_view._hits_air, world_view._hits_sea]:
+				for h in list:
+					var hr: Rect2 = h.rect
+					if h.kind == st.kind and hr.position.x > 40.0 and hr.end.x < get_viewport_rect().size.x - 40.0:
+						var ev := InputEventMouseButton.new()
+						ev.button_index = MOUSE_BUTTON_LEFT
+						ev.pressed = true
+						ev.position = hr.get_center()
+						ev.global_position = ev.position
+						Input.parse_input_event(ev)
+						found = true
+						break
+				if found:
+					break
+			if not found and cap_wait < 30.0:
+				return
+		"unfocus":
+			get_viewport().gui_release_focus()
+		"key":
+			for pressed in [true, false]:
+				var kev := InputEventKey.new()
+				kev.keycode = st.k
+				kev.physical_keycode = st.k
+				kev.pressed = pressed
+				Input.parse_input_event(kev)
 		"steer":
 			if not ((plane.size() > 0 and plane.state == "orbit") or cap_wait > 30.0):
 				if plane.size() > 0 and plane.state == "fly" and fmod(cap_wait, 0.55) < dt:
@@ -2215,6 +2265,10 @@ func _plane_update(dt: float) -> void:
 				plane.vel.y *= -0.6
 				plane.pos.y = clampf(plane.pos.y, 20.0, sz.y * 0.8)
 			plane.ang = lerp_angle(plane.ang, plane.vel.angle(), 1.0 - exp(-dt * 8.0))
+			# the paper plane bumps into balloons and birds on its way
+			var bump: String = world_view.poke(plane.pos, true)
+			if bump != "":
+				_sky_react(bump, plane.pos, true)
 			# delivered: it reached Kavi
 			var tg := _plane_target()
 			if plane.pos.distance_to(tg) < 95.0:
@@ -2310,7 +2364,8 @@ func _draw_plane_game(ci: Node2D) -> void:
 	# first-time hint
 	if plane_hint and plane.state == "fly" and state_t > 2.5:
 		var ha := clampf((state_t - 2.5) / 0.6, 0.0, 1.0) * (0.75 + 0.25 * sin(t * 3.0))
-		_text(ci, "click near the plane to steer it to %s" % HERO, plane.pos + Vector2(0, 56), 24, Color(1, 0.95, 0.85, ha * appear), HORIZONTAL_ALIGNMENT_CENTER, 6)
+		var hsz := get_viewport_rect().size
+		_text(ci, "Tip: click near the paper plane to steer it to %s" % HERO, Vector2(hsz.x * 0.29, hsz.y * 0.25 + 120.0), 26, Color(1, 0.95, 0.85, ha * appear), HORIZONTAL_ALIGNMENT_CENTER, 6)
 	if plane_delivered > 0:
 		var sz := get_viewport_rect().size
 		_text(ci, "Letters delivered: %d" % plane_delivered, Vector2(sz.x * 0.29, sz.y * 0.25 + 120.0), 26, Color(1, 0.9, 0.7, 0.85), HORIZONTAL_ALIGNMENT_CENTER, 6)
@@ -2359,3 +2414,62 @@ func _draw_junction_pressure(ci: Node2D, sz: Vector2) -> void:
 	ci.draw_polygon(PackedVector2Array([Vector2(0, sz.y - e), Vector2(sz.x, sz.y - e), Vector2(sz.x, sz.y), Vector2(0, sz.y)]), PackedColorArray([c1, c1, c0, c0]))
 	ci.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(e, 0), Vector2(e, sz.y), Vector2(0, sz.y)]), PackedColorArray([c0, c1, c1, c0]))
 	ci.draw_polygon(PackedVector2Array([Vector2(sz.x - e, 0), Vector2(sz.x, 0), Vector2(sz.x, sz.y), Vector2(sz.x - e, sz.y)]), PackedColorArray([c1, c0, c0, c1]))
+
+# ------------------------------------------------------------------ sky toys + cursor (0.8.13)
+func _sky_poke(pos: Vector2) -> bool:
+	var kind: String = world_view.poke(pos)
+	if kind == "":
+		return false
+	_sky_react(kind, pos, false)
+	return true
+
+## Sounds and a little speech pop for each thing in the sky or on the sea.
+func _sky_react(kind: String, pos: Vector2, quiet: bool) -> void:
+	var vol := -8.0 if quiet else 0.0
+	match kind:
+		"balloon":
+			synth.play("mote", 0.9 + randf() * 0.2, vol)
+			if not quiet:
+				_toast(["Hello!", "Hi there!", "Wheee", "Ahoy!"][randi() % 4], pos + Vector2(0, -70), Color(1, 0.9, 0.95), 28)
+		"balloon_rocket":
+			synth.play("whoosh", 0.9, vol)
+			synth.play("jump", 0.7, vol)
+			_toast("Wheeeee!", pos + Vector2(0, -80), Color(1, 0.85, 0.6), 36)
+		"plane":
+			synth.play("letter", 0.8, vol)
+			_toast("Sending love!", pos + Vector2(0, 60), Color(1, 0.75, 0.85), 26)
+		"ship":
+			synth.play("toot", 1.0, vol)
+			if not quiet:
+				_toast("Toot toot!", pos + Vector2(0, -60), Color(0.85, 0.95, 1.0), 28)
+		"birds":
+			for k in 3:
+				synth.play("tweet", 0.9 + k * 0.15 + randf() * 0.1, vol - 3.0)
+			if not quiet:
+				_toast("Tweet!", pos + Vector2(0, -50), Color(1, 1, 0.9), 26)
+
+var _cursor_hand := false
+
+func _setup_cursor() -> void:
+	if OS.has_feature("mobile"):
+		return
+	var arrow: Texture2D = load("res://assets/cursor/arrow.png")
+	var point: Texture2D = load("res://assets/cursor/point.png")
+	if arrow == null or point == null:
+		return
+	Input.set_custom_mouse_cursor(arrow, Input.CURSOR_ARROW, Vector2(3, 3))
+	Input.set_custom_mouse_cursor(point, Input.CURSOR_POINTING_HAND, Vector2(3, 3))
+
+## Over something clickable in the scene (sky toys, the paper plane) the
+## cursor shows the glowing pointer, like it does over menu items.
+func _update_cursor_hover() -> void:
+	var want := false
+	if state in ["title", "scenic"] and not (garage_open or menu_dim):
+		var m := get_viewport().get_mouse_position()
+		if world_view.hover_hit(m):
+			want = true
+		elif state == "title" and not plane.is_empty() and plane.state == "fly" and m.distance_to(plane.pos) < 70.0:
+			want = true
+	if want != _cursor_hand:
+		_cursor_hand = want
+		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if want else Input.CURSOR_ARROW)
