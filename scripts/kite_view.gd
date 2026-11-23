@@ -82,9 +82,11 @@ var _last_pose = ""
 
 func _ready() -> void:
 	_base = Painter.new()
+	_base.tag = "kavi"
 	_base.fn = _paint.bind(false)
 	add_child(_base)
 	_add = Painter.new()
+	_add.tag = "kavi_add"
 	_add.fn = _paint.bind(true)
 	var m = CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD

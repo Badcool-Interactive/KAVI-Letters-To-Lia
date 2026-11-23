@@ -29,14 +29,15 @@ var _painters: Array = []
 
 func _ready() -> void:
 	var order = [
-		[_draw_sky, false], [_draw_sky_light, true],
-		[_draw_layer.bind(0), false], [_draw_lights.bind(0), true], [_draw_haze.bind(0), false],
-		[_draw_layer.bind(1), false], [_draw_lights.bind(1), true], [_draw_shafts, true], [_draw_haze.bind(1), false],
-		[_draw_layer.bind(2), false], [_draw_lights.bind(2), true], [_draw_motes, true],
+		[_draw_sky, false, "sky"], [_draw_sky_light, true, "sky_light"],
+		[_draw_layer.bind(0), false, "layer0"], [_draw_lights.bind(0), true, "lights0"], [_draw_haze.bind(0), false, "haze0"],
+		[_draw_layer.bind(1), false, "layer1"], [_draw_lights.bind(1), true, "lights1"], [_draw_shafts, true, "shafts"], [_draw_haze.bind(1), false, "haze1"],
+		[_draw_layer.bind(2), false, "layer2"], [_draw_lights.bind(2), true, "lights2"], [_draw_motes, true, "motes"],
 	]
 	for o in order:
 		var p = Painter.new()
 		p.fn = o[0]
+		p.tag = o[2]
 		if o[1]:
 			var m = CanvasItemMaterial.new()
 			m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -829,7 +830,8 @@ func draw_foreground(ci: Node2D, gy: float) -> void:
 	var col: Color = pal.layers[2].darkened(0.35).lerp(pal.ground, 0.2).lerp(pal.sky[0], 0.15)
 	col.a = 0.97
 	var rim: Color = Color(pal.rim.lightened(0.15), 0.55)
-	_draw_fg_clumps(ci, off * 0.9, col.lightened(0.04))
+	if Art.Q >= 1:
+		_draw_fg_clumps(ci, off * 0.9, col.lightened(0.04))
 	var kind: String = pal.get("surface", "pavers")
 	var cw = 820.0
 	var c0 = int(floor((off - 400.0) / cw))
@@ -845,8 +847,9 @@ func draw_foreground(ci: Node2D, gy: float) -> void:
 		match kind:
 			"moss":
 				# a big fern: arching fronds with leaflets
-				for k in 6:
-					var f = k / 5.0 - 0.5
+				var nf: int = 6 if Art.Q >= 1 else 4
+				for k in nf:
+					var f = k / float(nf - 1) - 0.5
 					var tip = base + Vector2(f * 300.0, -230.0 * tall * (1.0 - absf(f) * 0.5)).rotated(sway)
 					_frond(ci, base, tip, Vector2(f * 120.0, 60.0), 14.0, col, rim)
 				_b_flush(ci, col)

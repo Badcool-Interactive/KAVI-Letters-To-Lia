@@ -1,4 +1,18 @@
 # Changelog
+## 0.8.17 (2026-11-23): smoother country changes, lighter everywhere, current Kavi on the loading screen
+- **Fixed: hitch when the country changes** (owner felt it going from Greece to Bulgaria). Measured with the new `tools/bench.sh … --bench-transition`, where the run starts in Greece and switches to Bulgaria at 5 s:
+  - Cause: the chapter card and popping texts drew letters at font sizes not yet rasterised, so one HUD frame took 6.7 ms.
+  - Fix: every letter is rasterised up front, a few font sizes per frame while the title is up. Toast pops and the route countdown now scale the drawing instead of changing the font size. The worst HUD frame during the switch is now 1.8 ms.
+  - Each country's music is now loaded at start instead of at the switch.
+  - Overall, the worst frame during the switch fell from 17.7 to 9.2 ms of draw-generation time.
+- **Lighter everywhere, same look:**
+  - Rounded rectangles and ellipses (Kavi's parts, ground stones and more) are cached instead of rebuilt every frame; a cache hit is about 12× cheaper.
+  - Medium benchmark: draw generation 6.3 → 5.45 ms, draw calls 467 → 460.
+- **Low quality is lighter for low-end devices:** fewer fern fronds and no extra grass clumps in the foreground. Low benchmark: 4.35 ms, 278 draw calls.
+- MSDF fonts were tried and rejected: they removed the hitch too, but cost about 48 draw calls because text stops batching.
+- **Loading screen:** new key art with the current (original) Kavi waving at Lia; it was still the 0.8.8 sprite Kavi.
+- **Title quotes** change every 30 s (was 12 s) and on every return to the title.
+- Benchmark output now has a per-layer cost breakdown (`tags`, `tags_tr`).
 ## 0.8.16 (2026-11-23): love lines on the title, shuffled
 - **Title quotes:** Kavi's 9 notebook lines are now mixed with 24 short public-domain love lines, each credited:
   - Shakespeare, Elizabeth Barrett Browning, Burns, Christina Rossetti, Byron, Robert Browning, Yeats, Shelley, Sara Teasdale, Emily Dickinson, Marlowe, Tagore, Emily Brontë and Keats.

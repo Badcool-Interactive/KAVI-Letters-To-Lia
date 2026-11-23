@@ -24,9 +24,11 @@ const GOLD := Color(1.0, 0.85, 0.35)
 
 func _ready() -> void:
 	_base = Painter.new()
+	_base.tag = "track"
 	_base.fn = _draw_base
 	add_child(_base)
 	_add = Painter.new()
+	_add.tag = "track_add"
 	_add.fn = _draw_add
 	var m = CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD

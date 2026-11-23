@@ -927,12 +927,16 @@ class JunctionTimer extends Control:
 		var f := get_theme_default_font()
 		if main.font != null:
 			f = main.font
-		var fs := int(84.0 * (1.0 + 0.35 * pop))
+		# fixed font size, popped by scaling (no new glyph sizes mid-run)
+		var fs := 84
+		var sc := 1.0 + 0.35 * pop
 		var num := str(int(ceil(rem)))
 		var nw := f.get_string_size(num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-		var np := Vector2(cx - nw * 0.5, 74.0 + fs * 0.12) + shake
+		draw_set_transform(Vector2(cx, 74.0 - fs * 0.3) + shake, 0.0, Vector2(sc, sc))
+		var np := Vector2(-nw * 0.5, fs * 0.42)
 		draw_string_outline(f, np, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 14, Color(0.01, 0.02, 0.05, 0.8))
 		draw_string(f, np, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		# draining bar
 		var bw := w * 0.8
 		var by := 104.0

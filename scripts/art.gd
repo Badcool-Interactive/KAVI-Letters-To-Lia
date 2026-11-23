@@ -2,7 +2,27 @@ extends RefCounted
 ## Procedural drawing helpers and biome palettes. All art is code-drawn
 ## (original, no external assets). HDR colours (>1) feed the bloom pass.
 
+## Shape caches (0.8.17): the same ellipses and rounded rects are rebuilt every
+## frame (Kavi's parts use fixed local coordinates; ground stones repeat while
+## on screen). A hit is ~12x cheaper than rebuilding. Packed arrays are
+## copy-on-write, so callers can still modify what they get back.
+static var _shape_cache := {}
+
+static func _cache_put(key: Array, v: PackedVector2Array) -> void:
+	if _shape_cache.size() > 6000:
+		_shape_cache.clear()
+	_shape_cache[key] = v
+
 static func ellipse(c: Vector2, r: Vector2, n := 28, rot := 0.0) -> PackedVector2Array:
+	var key := [0, c, r, n, rot]
+	var hit = _shape_cache.get(key)
+	if hit != null:
+		return hit
+	var v := _ellipse_raw(c, r, n, rot)
+	_cache_put(key, v)
+	return v
+
+static func _ellipse_raw(c: Vector2, r: Vector2, n: int, rot: float) -> PackedVector2Array:
 	var p := PackedVector2Array()
 	p.resize(n)
 	for i in n:
@@ -11,6 +31,15 @@ static func ellipse(c: Vector2, r: Vector2, n := 28, rot := 0.0) -> PackedVector
 	return p
 
 static func rrect(r: Rect2, rad: float, seg := 5) -> PackedVector2Array:
+	var key := [1, r, rad, seg]
+	var hit = _shape_cache.get(key)
+	if hit != null:
+		return hit
+	var v := _rrect_raw(r, rad, seg)
+	_cache_put(key, v)
+	return v
+
+static func _rrect_raw(r: Rect2, rad: float, seg: int) -> PackedVector2Array:
 	rad = minf(rad, minf(r.size.x, r.size.y) * 0.5 - 0.5)
 	if rad < 1.0:
 		return PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)])

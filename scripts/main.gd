@@ -200,6 +200,7 @@ func _ready() -> void:
 	# Display title (window / browser tab). project config/name stays "VOLT/RUN"
 	# because it names the save folder on desktop.
 	get_window().title = "%s: %s" % [HERO, GAME_SUB]
+	synth.preload_all.call_deferred()
 	_setup_cursor()
 	input_mode = "touch" if DisplayServer.is_touchscreen_available() else "keys"
 	if OS.has_feature("web") or OS.has_feature("mobile"):
@@ -229,7 +230,10 @@ func _ready() -> void:
 	if bench.size() > 0:
 		autopilot = true
 		save.data.tutorial_done = true
-		start_story(1)
+		# --bench-transition: start in Greece and switch to Bulgaria at 5 s,
+		# to measure the country-change hitch (owner report, 0.8.17)
+		bench.transition = "--bench-transition" in OS.get_cmdline_user_args()
+		start_story(0 if bench.transition else 1)
 		card = {}
 	elif capture_dir == "" and not save.data.tutorial_done:
 		start_tutorial()
@@ -264,9 +268,11 @@ func _build_scene() -> void:
 	track_view = TrackView.new()
 	add_child(track_view)
 	cast_base = Painter.new()
+	cast_base.tag = "cast"
 	cast_base.fn = _draw_cast.bind(false)
 	add_child(cast_base)
 	cast_add = Painter.new()
+	cast_add.tag = "cast_add"
 	cast_add.fn = _draw_cast.bind(true)
 	var m = CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
@@ -281,6 +287,7 @@ func _build_scene() -> void:
 	fgl.layer = 3
 	add_child(fgl)
 	fg = Painter.new()
+	fg.tag = "fg"
 	fg.fn = func(ci):
 		world_view.draw_foreground(ci, 0.0)
 		world_view.draw_bokeh(ci)
@@ -307,6 +314,7 @@ func _build_scene() -> void:
 	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ul.add_child(vignette)
 	hud = Painter.new()
+	hud.tag = "hud"
 	hud.fn = _draw_hud
 	ul.add_child(hud)
 	touch = Touch.new()
@@ -1504,7 +1512,29 @@ func _text(ci: Node2D, s: String, p: Vector2, size: int, col: Color, align := HO
 		ci.draw_string_outline(font, Vector2(x, p.y), s, align, w, size, outline, Color(0, 0, 0, col.a * 0.55))
 	ci.draw_string(font, Vector2(x, p.y), s, align, w, size, col)
 
+## Glyph warm-up (0.8.17): every letter is rasterised once per font size the
+## game uses, a few sizes per frame while the title is up, so a chapter card,
+## toast or countdown never stalls a frame mid-run building its letters (the
+## country-change hitch the owner felt).
+const WARM_CHARS := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;!?'\"()+-x%/·\u201c\u201d\u2014\u00eb"
+const WARM_SIZES := [96, 84, 76, 72, 64, 40, 38, 36, 34, 32, 30, 28, 26, 25, 24, 22, 20, 19]
+var _warm_i := 0
+
+func _warm_glyphs(ci: Node2D) -> void:
+	for step in 2:
+		if _warm_i >= WARM_SIZES.size():
+			return
+		var fs: int = WARM_SIZES[_warm_i]
+		_warm_i += 1
+		for f in [font, font_body]:
+			if f != null:
+				ci.draw_string(f, Vector2(-4000, -4000), WARM_CHARS, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.01))
+				for ow in [4, 6, 8, 12, 14]:
+					ci.draw_string_outline(f, Vector2(-4000, -4000), WARM_CHARS, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ow, Color(1, 1, 1, 0.01))
+
 func _draw_hud(ci: Node2D) -> void:
+	if _warm_i < WARM_SIZES.size():
+		_warm_glyphs(ci)
 	var sz = get_viewport_rect().size
 	if has_meta("keyart"):
 		_draw_logo(ci, Vector2(sz.x * 0.74, sz.y * 0.44), 10.0, 1.1)
@@ -1529,7 +1559,11 @@ func _draw_hud(ci: Node2D) -> void:
 		var sc = 1.0 + (0.25 * (1.0 - minf(ts.t / 0.12, 1.0)))
 		var col: Color = ts.col
 		col.a = a
-		_text(ci, ts.text, ts.pos, int(ts.size * sc), col, HORIZONTAL_ALIGNMENT_CENTER, 8)
+		# pop by scaling the drawing, not the font size: a new font size means
+		# new glyphs to rasterise mid-run (a hitch); 0.8.17
+		ci.draw_set_transform(ts.pos, 0.0, Vector2(sc, sc))
+		_text(ci, ts.text, Vector2.ZERO, int(ts.size), col, HORIZONTAL_ALIGNMENT_CENTER, 8)
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# caption (story text)
 	if caption_t > 0.0 and caption != "":
 		var a2 = minf(caption_t / 0.4, 1.0) * minf(1.0, 1.0)
@@ -2067,8 +2101,28 @@ func _bench_tick(dt: float) -> void:
 	bench.t += dt
 	var script_ms: float = Painter.cost_usec / 1000.0
 	Painter.cost_usec = 0
+	if not bench.has("tags"):
+		bench.tags = {}
+		bench.tags_tr = {}
+	if bench.t >= 3.0:
+		var tr_on: bool = bench.has("switched") and not world_view.tr_from.is_empty()
+		for tg in Painter.costs:
+			var dst: Dictionary = bench.tags_tr if tr_on else bench.tags
+			if not dst.has(tg):
+				dst[tg] = [0, 0, 0]
+			dst[tg][0] += Painter.costs[tg]
+			dst[tg][1] += 1
+			dst[tg][2] = maxi(dst[tg][2], Painter.costs[tg])
+	Painter.costs.clear()
 	if bench.t < 3.0:
 		return
+	if bench.get("transition", false) and not bench.has("switched") and bench.t >= 5.0:
+		bench.switched = bench.frames.size()
+		set_biome(1)
+	if bench.get("transition", false):
+		if not bench.has("proc"):
+			bench.proc = []
+		bench.proc.append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
 	bench.frames.append(dt * 1000.0)
 	bench.script.append(script_ms)
 	bench.draws.append(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
@@ -2083,7 +2137,25 @@ func _bench_tick(dt: float) -> void:
 				sum += v
 			res[k] = {"avg": snappedf(sum / a.size(), 0.01), "p95": snappedf(a[int(a.size() * 0.95)], 0.01)}
 		res["n"] = bench.frames.size()
+		for nm in ["tags", "tags_tr"]:
+			var out := {}
+			for tg in bench[nm]:
+				var v: Array = bench[nm][tg]
+				out[tg] = [snappedf(v[0] / 1000.0 / maxf(v[1], 1.0), 0.01), snappedf(v[2] / 1000.0, 0.01)]
+			res[nm] = out
 		res["quality"] = str(get_meta("quality_name", "baseline"))
+		if bench.get("transition", false):
+			# worst frames around the switch: [frame index from switch, frame ms, draw ms, process ms]
+			var worst: Array = []
+			for i in bench.frames.size():
+				worst.append([bench.frames[i], i - int(bench.get("switched", 0)), bench.script[i], bench.proc[i]])
+			worst.sort_custom(func(x, y): return x[0] > y[0])
+			res["worst"] = worst.slice(0, 12)
+			for k2 in ["script", "proc"]:
+				var mx := 0.0
+				for v in bench[k2]:
+					mx = maxf(mx, v)
+				res[k2 + "_max"] = snappedf(mx, 0.01)
 		var f := FileAccess.open(bench.out, FileAccess.WRITE)
 		f.store_string(JSON.stringify(res, "  "))
 		f.close()
@@ -2588,12 +2660,13 @@ func reset_title_quotes() -> void:
 	_quote_bag.clear()
 	_quote_slot = -1
 
-## A quote fades in under the logo, a new random one every 12 s.
+## A quote fades in under the logo; a new random one every 30 s and on every
+## return to the title (owner: 12 s was too fast to read).
 func _draw_title_poem(ci: Node2D) -> void:
 	if state_t < 3.0:
 		return
 	var sz := get_viewport_rect().size
-	var k: float = (state_t - 3.0) / 12.0
+	var k: float = (state_t - 3.0) / 30.0
 	var slot := int(k)
 	if slot != _quote_slot or _quote_cur < 0:
 		_quote_slot = slot
