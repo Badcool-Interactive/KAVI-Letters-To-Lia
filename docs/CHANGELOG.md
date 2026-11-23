@@ -1,4 +1,9 @@
 # Changelog
+## 0.8.14 (2026-11-23): tidy keyboard menus, lighter title, plane flies its heart
+- **Keyboard navigation is predictable** (owner: A/D and the arrows felt messy). Every screen's buttons are grouped into rows, where a horizontal box is one row. Up/Down (W/S) step between rows and wrap around; Left/Right (A/D) move along a row and wrap, and do nothing on single-item rows, so focus never jumps somewhere odd.
+- **Lighter title screen again** (owner: the 0.8.13 shade made the game feel dark). Menu text instead gets a soft drop shadow and a thin ink outline (custom drawn in `MenuItem`), and labels and headings get shadows too.
+- **The plane flies its smoke heart:** its nose follows its path through the heart, rolling through the loop, and the smoke comes out of its tail, so the heart is drawn behind it.
+- **New cursor:** a chunky cream arrow with an ink outline and a teal edge, replacing the paper plane (owner: too many paper planes). The hover version still adds the glowing kite diamond.
 ## 0.8.13 (2026-11-23): sky toys, custom cursor, keyboard menus
 - **Clickable sky and sea on the title screen and in Scenic View** (classmates kept trying the balloons):
   - Balloons: hop with a burner puff and a squash; a tiny passenger waves, a heart floats out and it calls "Hello!" or "Ahoy!". Three quick clicks send it whooshing up and away ("Wheeeee!"), then it floats back.

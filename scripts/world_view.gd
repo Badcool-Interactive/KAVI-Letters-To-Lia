@@ -235,6 +235,9 @@ func poke(pos: Vector2, quiet := false) -> String:
 			return kind
 	return ""
 
+static func _heart(u: float) -> Vector2:
+	return Vector2(16.0 * pow(sin(u), 3.0), -(13.0 * cos(u) - 5.0 * cos(2.0 * u) - 2.0 * cos(3.0 * u) - cos(4.0 * u)))
+
 func hover_hit(pos: Vector2) -> bool:
 	if not interactive:
 		return false
@@ -1233,26 +1236,36 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 		var p = Vector2(x, y)
 		var pkey := "plane:%d" % n
 		var pa := _age(pkey)
+		var vb := Vector2(dir * (w + 240.0) / P, -30.0 / P)   # cruise velocity
+		var vel := vb
 		if pa < 3.0:
-			# loop through a heart shape, leaving a smoke trail that drifts with it
+			# fly a heart: the plane's own path, nose along its velocity, and the
+			# smoke comes out of its tail (so the heart is drawn behind it)
 			var u := pa / 3.0 * TAU
-			var hv := Vector2(16.0 * pow(sin(u), 3.0), -(13.0 * cos(u) - 5.0 * cos(2.0 * u) - 2.0 * cos(3.0 * u) - cos(4.0 * u)))
-			p += (hv - Vector2(0, -5.0)) * 4.2
+			p += (_heart(u) - _heart(0.0)) * 4.2
+			vel = vb + (_heart(u + 0.01) - _heart(u)) / 0.01 * (TAU / 3.0) * 4.2
+		var ang := vel.angle()
+		var fwd := Vector2.from_angle(ang)
+		if pa < 3.0:
 			var pk: Dictionary = pokes[pkey]
-			if t - float(pk.get("emit", 0.0)) > 0.035:
+			if t - float(pk.get("emit", 0.0)) > 0.03:
 				pk.emit = t
-				sky_fx.append({"kind": "smoke", "p": p, "v": Vector2(dir * (w + 240.0) / P, -30.0 / P), "t0": t, "life": 3.6, "layer": "air"})
+				sky_fx.append({"kind": "smoke", "p": p - fwd * 18.0, "v": vb, "t0": t, "life": 3.6, "layer": "air"})
 		if alpha > 0.5:
-			_hits_air.append({"kind": "plane", "key": pkey, "rect": Rect2(p - Vector2(24, 14), Vector2(48, 28))})
-		ci.draw_line(p + Vector2(-16 * dir, 0), p + Vector2(16 * dir, 0), sil, 3.0)
-		ci.draw_line(p + Vector2(2 * dir, 0), p + Vector2(-6 * dir, 7), sil, 2.0)
-		ci.draw_line(p + Vector2(-14 * dir, 0), p + Vector2(-18 * dir, -6), sil, 2.0)
-		if pal.stars < 0.35:
-			ci.draw_line(p + Vector2(-18 * dir, 0), p + Vector2(-260 * dir, 6), Color(1, 1, 1, 0.10 * alpha), 2.0)
-		var blink = fmod(t, 1.1) < 0.12
-		ci.draw_rect(Rect2(p.x - 7 * dir - 1.5, p.y + 6, 3, 3), Color(Art.hdr(Color(1.0, 0.3, 0.3), 1.5), alpha))
-		if blink:
-			ci.draw_rect(Rect2(p.x + 15 * dir - 2, p.y - 2, 4, 4), Color(Art.hdr(Color(1, 1, 1), 2.0), alpha))
+			_hits_air.append({"kind": "plane", "key": pkey, "rect": Rect2(p - Vector2(24, 18), Vector2(48, 36))})
+		if pal.stars < 0.35 and pa >= 3.0:
+			ci.draw_line(p - fwd * 18.0, p - fwd * 260.0 + Vector2(0, 6), Color(1, 1, 1, 0.10 * alpha), 2.0)
+		# draw in the plane's own frame: +x is the nose. Planes flying left are
+		# mirrored once (not per frame), so they roll through the loop properly.
+		var rot := vb.angle() if pa >= 3.0 else ang
+		ci.draw_set_transform(p, rot, Vector2(1, -1) if dir < 0 else Vector2.ONE)
+		ci.draw_line(Vector2(-16, 0), Vector2(16, 0), sil, 3.0)
+		ci.draw_line(Vector2(2, 0), Vector2(-6, 7), sil, 2.0)
+		ci.draw_line(Vector2(-14, 0), Vector2(-18, -6), sil, 2.0)
+		ci.draw_rect(Rect2(-8.5, 6, 3, 3), Color(Art.hdr(Color(1.0, 0.3, 0.3), 1.5), alpha))
+		if fmod(t, 1.1) < 0.12:
+			ci.draw_rect(Rect2(13, -2, 4, 4), Color(Art.hdr(Color(1, 1, 1), 2.0), alpha))
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if air.has("balloon") and Art.Q >= 1:
 		for b in 2:
 			if Art.hash01(b, 910 + int(n / 3.0)) > 0.55:

@@ -192,6 +192,59 @@ func _first_focusable(n: Node) -> Control:
 
 var _opened_ms := 0
 
+func _shadow(l: Label) -> void:
+	l.add_theme_color_override("font_shadow_color", Color(0, 0.01, 0.03, 0.55))
+	l.add_theme_constant_override("shadow_offset_x", 1)
+	l.add_theme_constant_override("shadow_offset_y", 3)
+	l.add_theme_constant_override("shadow_outline_size", 6)
+
+## Predictable keyboard focus (0.8.14): every screen's buttons are grouped into
+## rows (a horizontal box is one row, anything else is a row of its own).
+## Up/Down step between rows and wrap; Left/Right step along a row and wrap,
+## and do nothing on single-item rows.
+func _auto_wire() -> void:
+	if not is_instance_valid(_box):
+		return
+	var rows: Array = []
+	var row_of := {}
+	_collect_rows(_box, rows, row_of)
+	var R := rows.size()
+	if R == 0:
+		return
+	for r in R:
+		var row: Array = rows[r]
+		var n := row.size()
+		for i in n:
+			var b: Control = row[i]
+			var left: Control = row[(i - 1 + n) % n]
+			var right: Control = row[(i + 1) % n]
+			var up_row: Array = rows[(r - 1 + R) % R]
+			var dn_row: Array = rows[(r + 1) % R]
+			var up: Control = up_row[mini(i, up_row.size() - 1)] if up_row.size() > 1 and n > 1 else up_row[0]
+			var dn: Control = dn_row[mini(i, dn_row.size() - 1)] if dn_row.size() > 1 and n > 1 else dn_row[0]
+			b.focus_neighbor_left = b.get_path_to(left)
+			b.focus_neighbor_right = b.get_path_to(right)
+			b.focus_neighbor_top = b.get_path_to(up)
+			b.focus_neighbor_bottom = b.get_path_to(dn)
+			b.focus_previous = b.get_path_to(left if n > 1 else up)
+			b.focus_next = b.get_path_to(right if n > 1 else dn)
+
+func _collect_rows(n: Node, rows: Array, row_of: Dictionary) -> void:
+	for ch in n.get_children():
+		if ch is BaseButton and ch.visible and ch.focus_mode != Control.FOCUS_NONE:
+			var par := ch.get_parent()
+			if par is HBoxContainer:
+				var key := par.get_instance_id()
+				if row_of.has(key):
+					rows[row_of[key]].append(ch)
+				else:
+					row_of[key] = rows.size()
+					rows.append([ch])
+			else:
+				rows.append([ch])
+		elif ch is Control or ch is Node:
+			_collect_rows(ch, rows, row_of)
+
 # ------------------------------------------------------------------ screens
 func show_none() -> void:
 	_clear()
@@ -207,6 +260,7 @@ class MenuItem extends Button:
 	var accent := Color(1.0, 0.82, 0.55)
 	var status := ""
 	var status_col := Color(1, 1, 1, 0.6)
+	var fill := Color(1.0, 0.96, 0.90)
 	var selected := false
 	var hot := 0.0
 	var on_focus: Callable
@@ -222,10 +276,11 @@ class MenuItem extends Button:
 		e.content_margin_bottom = 8
 		for st in ["normal", "hover", "pressed", "focus", "disabled", "hover_pressed"]:
 			add_theme_stylebox_override(st, e)
-		for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
-			add_theme_color_override(k, Color(1.0, 0.96, 0.90))
-		add_theme_constant_override("outline_size", 12)
-		add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.05, 0.78))
+		# the text is drawn by _draw (with a soft drop shadow), so the
+		# button's own text is invisible but still sizes the item
+		for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color", "font_disabled_color"]:
+			add_theme_color_override(k, Color(0, 0, 0, 0))
+		add_theme_constant_override("outline_size", 0)
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		mouse_entered.connect(grab_focus)
 		focus_entered.connect(func():
@@ -248,6 +303,14 @@ class MenuItem extends Button:
 		var f := get_theme_font("font")
 		var fs := get_theme_font_size("font_size")
 		var tw := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		# text: soft two-step drop shadow, a thin ink outline, then the fill
+		var ch := size.y - 12.0
+		var base := Vector2(46.0, 4.0 + (ch - (f.get_ascent(fs) + f.get_descent(fs))) * 0.5 + f.get_ascent(fs))
+		var sh := maxf(2.0, fs * 0.06)
+		draw_string_outline(f, base + Vector2(sh * 0.6, sh * 1.6), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, int(fs * 0.22), Color(0, 0, 0, 0.16))
+		draw_string(f, base + Vector2(sh * 0.6, sh * 1.2), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.0, 0.01, 0.03, 0.55))
+		draw_string_outline(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, maxi(4, int(fs * 0.14)), Color(0.02, 0.03, 0.07, 0.55))
+		draw_string(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, fill)
 		if selected:
 			draw_circle(Vector2(22, y), 4.0, Color(accent, 0.9))
 		if hot > 0.01:
@@ -278,6 +341,7 @@ func _item(v: Container, text: String, cb: Callable, size := 40) -> MenuItem:
 func _column(top := 0.24, animate := true) -> VBoxContainer:
 	_clear()
 	_opened_ms = Time.get_ticks_msec()
+	_auto_wire.call_deferred()
 	var c := Control.new()
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(c)
@@ -302,6 +366,7 @@ func _small(v: Container, text: String, size := 24, col := Color(1, 1, 1, 0.55))
 	l.add_theme_color_override("font_color", col)
 	l.add_theme_constant_override("outline_size", 8)
 	l.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.05, 0.75))
+	_shadow(l)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size.x = 200
 	if font_body != null:
@@ -356,6 +421,7 @@ func show_title() -> void:
 		l.add_theme_color_override("font_color", it[1])
 		l.add_theme_constant_override("outline_size", 10)
 		l.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.05, 0.85))
+		_shadow(l)
 		stats.add_child(l)
 	first.grab_focus.call_deferred()
 	_glide_and_stagger(v)
@@ -621,6 +687,7 @@ func _heading(v: Container, text: String, size := 64, col := Color(1, 0.96, 0.9)
 	l.text = text
 	l.add_theme_font_size_override("font_size", size)
 	l.add_theme_color_override("font_color", col)
+	_shadow(l)
 	v.add_child(l)
 	return l
 
@@ -628,6 +695,7 @@ func _heading(v: Container, text: String, size := 64, col := Color(1, 0.96, 0.9)
 func _center(width := 640.0, dim := 0.55) -> VBoxContainer:
 	_clear()
 	_opened_ms = Time.get_ticks_msec()
+	_auto_wire.call_deferred()
 	var c := Control.new()
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(c)
@@ -814,12 +882,12 @@ func show_junction(story: bool) -> void:
 	_gap(v, 6)
 	junction_wild = _item(v, "Wild route  (Up)", main.choose_route.bind("wild"), 46)
 	junction_wild.accent = Color(1.0, 0.6, 0.4)
-	junction_wild.add_theme_color_override("font_color", Color(1.0, 0.78, 0.62))
+	junction_wild.fill = Color(1.0, 0.78, 0.62)
 	_small(v, "shorter and faster to Lia, but much harder" if story else "harder, faster, score x1.5", 26, Color(1.0, 0.75, 0.6, 0.8))
 	_gap(v, 12)
 	junction_scenic = _item(v, "Scenic route  (Down)", main.choose_route.bind("scenic"), 46)
 	junction_scenic.accent = Color(0.5, 1.0, 0.8)
-	junction_scenic.add_theme_color_override("font_color", Color(0.72, 1.0, 0.86))
+	junction_scenic.fill = Color(0.72, 1.0, 0.86)
 	junction_scenic_sub = _small(v, "longer and gentler, with more kind strangers" if story else "calmer stretch, steady score", 26, Color(0.6, 1.0, 0.8, 0.8))
 	if main.junction_easy:
 		junction_go_easy(false)

@@ -1541,11 +1541,10 @@ func _draw_hud(ci: Node2D) -> void:
 func _draw_title(ci: Node2D, sz: Vector2) -> void:
 	# soft darkening behind the menu column for readability (no box)
 	var shade := Color(0.01, 0.02, 0.05)
-	# readability (0.8.13): a deeper, wider shade with a soft shoulder
-	var sa := 0.82 if menu_dim else 0.70
-	ci.draw_polygon(PackedVector2Array([Vector2(sz.x * 0.44, 0), Vector2(sz.x * 0.62, 0), Vector2(sz.x * 0.62, sz.y), Vector2(sz.x * 0.44, sz.y)]),
-		PackedColorArray([Color(shade, 0.0), Color(shade, sa), Color(shade, sa), Color(shade, 0.0)]))
-	ci.draw_rect(Rect2(sz.x * 0.62, 0, sz.x * 0.38, sz.y), Color(shade, sa))
+	# back to the lighter 0.8.12 shade (owner: the darker one made the game feel
+	# dark); readability now comes from drop shadows on the menu text instead
+	ci.draw_polygon(PackedVector2Array([Vector2(sz.x * 0.52, 0), Vector2(sz.x, 0), Vector2(sz.x, sz.y), Vector2(sz.x * 0.52, sz.y)]),
+		PackedColorArray([Color(shade, 0.0), Color(shade, 0.78 if menu_dim else 0.55), Color(shade, 0.78 if menu_dim else 0.55), Color(shade, 0.0)]))
 	if garage_open or menu_dim:
 		return
 	_draw_motes(ci, sz)
@@ -1890,8 +1889,12 @@ func _setup_capture() -> void:
 			{"do": "poke_kind", "kind": "balloon"}, {"do": "poke_kind", "kind": "balloon"}, {"do": "wait", "s": 1.2}, {"shot": "s2-rocket"},
 			{"do": "poke_kind", "kind": "ship"}, {"do": "wait", "s": 0.6}, {"shot": "s3-ship"},
 			{"do": "poke_kind", "kind": "plane"}, {"do": "wait", "s": 1.6}, {"shot": "s4-plane-heart"}, {"do": "wait", "s": 1.5}, {"shot": "s5-plane-heart-b"},
-			{"do": "unfocus"}, {"do": "key", "k": KEY_S}, {"do": "wait", "s": 0.3}, {"do": "key", "k": KEY_S}, {"do": "wait", "s": 0.3}, {"do": "key", "k": KEY_S}, {"do": "wait", "s": 0.5}, {"shot": "s6-keys"},
-			{"do": "key", "k": KEY_ENTER}, {"do": "wait", "s": 1.0}, {"shot": "s7-enter"}, {"do": "quit"}]
+			{"do": "unfocus"}]
+		# focus Play, then down x4 to the Garage row, right to Settings, Enter
+		for kk in [KEY_S, KEY_S, KEY_DOWN, KEY_S, KEY_S, KEY_D]:
+			cap_steps.append_array([{"do": "key", "k": kk}, {"do": "wait", "s": 0.25}])
+		cap_steps.append_array([{"do": "wait", "s": 0.3}, {"shot": "s6-keys"},
+			{"do": "key", "k": KEY_ENTER}, {"do": "wait", "s": 1.0}, {"shot": "s7-enter"}, {"do": "quit"}])
 		return
 	if "--junction" in OS.get_cmdline_user_args():
 		# Route choice countdown: calm, urgent, easy option.
