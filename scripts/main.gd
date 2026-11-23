@@ -132,6 +132,10 @@ var autopilot = false
 var paused_from = ""
 var rescue_planned = {}   # {"chapter": c} or {"seg": n}
 var junction_choice = ""
+const JUNCTION_TIME := 7.0
+var junction_t := 0.0     # own timer, so pausing doesn't eat the countdown
+var junction_easy := false
+var _junction_tick := -1
 var cam_pos = Vector2.ZERO
 var title_x = 0.0
 var fail_t = 0.0
@@ -658,6 +662,9 @@ func _enter_junction() -> void:
 	state = "junction"
 	state_t = 0.0
 	junction_choice = ""
+	junction_t = 0.0
+	junction_easy = false
+	_junction_tick = -1
 	sim.frozen = true
 	lb_target = 0.6
 	zoom_target = 1.15
@@ -680,7 +687,18 @@ func choose_route(r: String) -> void:
 
 func _update_junction(dt: float) -> void:
 	sim.x += 160.0 * dt
-	if state_t > 6.0 and junction_choice == "":
+	junction_t += dt
+	var rem := JUNCTION_TIME - junction_t
+	# ticks in the last seconds, rising in pitch
+	var sec := int(ceil(rem))
+	if sec != _junction_tick and sec <= 4 and sec > 0:
+		synth.play("ui", 1.0 + (4 - sec) * 0.18, -2.0 + (4 - sec) * 1.5)
+	_junction_tick = sec
+	if rem < 2.3 and not junction_easy:
+		junction_easy = true
+		synth.play("mote", 0.8)
+		ui.junction_go_easy()
+	if rem <= 0.0 and junction_choice == "":
 		choose_route("scenic")
 
 # ------------------------------------------------------------------ rescue
@@ -965,11 +983,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if state == "recovery" and _is_press(event, ["jump"]):
 		skip_recovery()
-	if state == "junction":
-		if _key_dir(event) < 0:
-			choose_route("wild")
-		elif _key_dir(event) > 0:
-			choose_route("scenic")
 
 func _is_press(event: InputEvent, names: Array) -> bool:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -1466,6 +1479,8 @@ func _draw_hud(ci: Node2D) -> void:
 		return
 	if state in ["run", "fail", "recovery", "junction", "tut_done"]:
 		_draw_run_hud(ci, sz)
+	if state == "junction":
+		_draw_junction_pressure(ci, sz)
 	# toasts
 	for ts in toasts:
 		var a = 1.0 - pow(ts.t / ts.life, 3.0)
@@ -1744,6 +1759,9 @@ func _input(event: InputEvent) -> void:
 	if state in ["run", "recovery", "junction"] and event is InputEventScreenTouch and event.pressed and pause_hit(event.position):
 		toggle_pause()
 		get_viewport().set_input_as_handled()
+	if state == "junction" and _junction_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	# Mouse click on the pause button (desktop/web). Touch screens send an
 	# emulated mouse click too; that one is skipped so a tap pauses only once.
 	if state in ["run", "recovery", "junction"] and event is InputEventMouseButton and event.pressed \
@@ -1852,6 +1870,13 @@ func _setup_capture() -> void:
 				["wave", 0.0, "heart", "k9-wave"], ["fall", 0.0, "scared", "k10-fall"], ["gust", 0.0, "focus", "k11-gust"]]:
 			cap_steps.append_array([{"do": "kpose", "pose": ps[0], "speed": ps[1], "expr": ps[2]}, {"do": "wait", "s": 0.55 if ps[0] == "run" else 1.0}, {"shot": ps[3]}])
 		cap_steps.append({"do": "quit"})
+		return
+	if "--junction" in OS.get_cmdline_user_args():
+		# Route choice countdown: calm, urgent, easy option.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "endless"}, {"do": "wait", "s": 3.0}, {"do": "force_junction"}, {"do": "wait", "s": 1.0}, {"shot": "j0-start"},
+			{"do": "wait", "s": 3.1}, {"shot": "j1-urgent"}, {"do": "wait", "s": 1.4}, {"shot": "j2-easy"}, {"do": "wait", "s": 0.9}, {"shot": "j3-last"},
+			{"do": "wait", "s": 1.5}, {"shot": "j4-after"}, {"do": "quit"}]
 		return
 	if "--plane" in OS.get_cmdline_user_args():
 		# Title paper-plane mini-game: hint, steer to Kavi, orbit, over-click stall; quit dialog.
@@ -2289,3 +2314,48 @@ func _draw_plane_game(ci: Node2D) -> void:
 	if plane_delivered > 0:
 		var sz := get_viewport_rect().size
 		_text(ci, "Letters delivered: %d" % plane_delivered, Vector2(sz.x * 0.29, sz.y * 0.25 + 120.0), 26, Color(1, 0.9, 0.7, 0.85), HORIZONTAL_ALIGNMENT_CENTER, 6)
+
+## Route choice keys: Up = wild, Down = scenic. Once the easy option shows,
+## any key, click or tap (except on the wild route or the pause button) picks it.
+func _junction_input(event: InputEvent) -> bool:
+	var d := _key_dir(event)
+	if d < 0:
+		choose_route("wild")
+		return true
+	if d > 0:
+		choose_route("scenic")
+		return true
+	if not junction_easy:
+		return false
+	var press := false
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode != KEY_ESCAPE:
+		press = true
+	elif event is InputEventJoypadButton and event.pressed and event.button_index != JOY_BUTTON_START:
+		press = true
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if pause_hit(event.position):
+			return false
+		var hc := get_viewport().gui_get_hovered_control()
+		if hc != null and is_instance_valid(ui.junction_wild) and (hc == ui.junction_wild):
+			return false
+		press = true
+	if press:
+		choose_route("scenic")
+	return press
+
+## Last seconds of the route choice: the screen edges throb red with each tick.
+func _draw_junction_pressure(ci: Node2D, sz: Vector2) -> void:
+	var rem := JUNCTION_TIME - junction_t
+	var urgent := clampf((3.5 - rem) / 3.5, 0.0, 1.0)
+	if urgent <= 0.0 or save.data.settings.reduced_motion:
+		return
+	var beat := exp(-(1.0 - fmod(maxf(rem, 0.0), 1.0)) * 5.0)
+	var a := urgent * (0.18 + 0.32 * beat)
+	var red := Color(0.85, 0.08, 0.06)
+	var e := 150.0 + 60.0 * beat
+	var c0 := Color(red, a)
+	var c1 := Color(red, 0.0)
+	ci.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(sz.x, 0), Vector2(sz.x, e), Vector2(0, e)]), PackedColorArray([c0, c0, c1, c1]))
+	ci.draw_polygon(PackedVector2Array([Vector2(0, sz.y - e), Vector2(sz.x, sz.y - e), Vector2(sz.x, sz.y), Vector2(0, sz.y)]), PackedColorArray([c1, c1, c0, c0]))
+	ci.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(e, 0), Vector2(e, sz.y), Vector2(0, sz.y)]), PackedColorArray([c0, c1, c1, c0]))
+	ci.draw_polygon(PackedVector2Array([Vector2(sz.x - e, 0), Vector2(sz.x, 0), Vector2(sz.x, sz.y), Vector2(sz.x - e, sz.y)]), PackedColorArray([c1, c0, c0, c1]))

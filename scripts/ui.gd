@@ -707,29 +707,94 @@ func show_skip() -> void:
 	c.add_child(b)
 	_box = c
 
+## Route choice after a breather (0.8.12): a visible countdown that gets more
+## intense (orange, then red, pulsing ticks, shaking bar). In the last seconds
+## the gentle route turns into a big "EASY ROUTE: tap anywhere" option.
+var junction_wild: MenuItem
+var junction_scenic: MenuItem
+var junction_scenic_sub: Label
+
+class JunctionTimer extends Control:
+	var main: Node
+
+	func _process(_dt: float) -> void:
+		queue_redraw()
+
+	func _draw() -> void:
+		var total: float = main.JUNCTION_TIME
+		var rem: float = clampf(total - main.junction_t, 0.0, total)
+		var k: float = rem / total
+		var urgent: float = clampf((3.5 - rem) / 3.5, 0.0, 1.0)
+		var col: Color = Color(1.0, 0.97, 0.9).lerp(Color(1.0, 0.62, 0.25), clampf(urgent * 2.0, 0.0, 1.0)).lerp(Color(1.0, 0.25, 0.22), clampf(urgent * 2.0 - 1.0, 0.0, 1.0))
+		var frac: float = fmod(rem, 1.0)
+		var pop: float = exp(-(1.0 - frac) * 7.0) * urgent
+		var t: float = Time.get_ticks_msec() * 0.001
+		var shake := Vector2(sin(t * 47.0), cos(t * 41.0)) * 4.0 * urgent * urgent
+		var w := size.x
+		var cx := w * 0.5
+		# big seconds number
+		var f := get_theme_default_font()
+		if main.font != null:
+			f = main.font
+		var fs := int(84.0 * (1.0 + 0.35 * pop))
+		var num := str(int(ceil(rem)))
+		var nw := f.get_string_size(num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		var np := Vector2(cx - nw * 0.5, 74.0 + fs * 0.12) + shake
+		draw_string_outline(f, np, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 14, Color(0.01, 0.02, 0.05, 0.8))
+		draw_string(f, np, num, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+		# draining bar
+		var bw := w * 0.8
+		var by := 104.0
+		var r := Rect2(Vector2(cx - bw * 0.5, by) + shake, Vector2(bw, 14))
+		draw_rect(r, Color(0.01, 0.02, 0.05, 0.65))
+		var fr := Rect2(r.position + Vector2(2, 2), Vector2((bw - 4) * k, 10))
+		draw_rect(fr, col)
+		if urgent > 0.0:
+			draw_rect(fr.grow(3.0 + 6.0 * pop), Color(col, 0.25 * urgent), false, 3.0)
+
 func show_junction(story: bool) -> void:
-	_clear()
-	var c = Control.new()
-	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(c)
-	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var v = VBoxContainer.new()
-	v.anchor_left = 0.5
-	v.anchor_right = 0.5
-	v.anchor_top = 0.5
-	v.anchor_bottom = 0.5
-	v.offset_left = -520
-	v.offset_right = 520
-	v.offset_top = -260
-	v.offset_bottom = 200
-	v.add_theme_constant_override("separation", 22)
-	c.add_child(v)
-	_label(v, "A fork in the road", 60)
-	var w = _btn(v, "WILD ROUTE  (Up)\nshorter and faster to Lia, but much harder" if story else "WILD ROUTE  (Up)\nharder, faster, score x1.5", main.choose_route.bind("wild"), 34)
-	w.add_theme_color_override("font_color", Color(1.0, 0.7, 0.5))
-	var s = _btn(v, "SCENIC ROUTE  (Down)\nlonger and gentler, with more kind strangers" if story else "SCENIC ROUTE  (Down)\ncalmer stretch, steady score", main.choose_route.bind("scenic"), 34)
-	s.add_theme_color_override("font_color", Color(0.6, 1.0, 0.8))
-	_box = c
+	var v := _center(900, 0.5)
+	# sit right of Kavi so the words never cover him
+	v.anchor_left = 0.64
+	v.anchor_right = 0.64
+	_heading(v, "A fork in the road", 60)
+	var tm := JunctionTimer.new()
+	tm.main = main
+	tm.custom_minimum_size = Vector2(0, 130)
+	tm.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(tm)
+	_gap(v, 6)
+	junction_wild = _item(v, "Wild route  (Up)", main.choose_route.bind("wild"), 46)
+	junction_wild.accent = Color(1.0, 0.6, 0.4)
+	junction_wild.add_theme_color_override("font_color", Color(1.0, 0.78, 0.62))
+	_small(v, "shorter and faster to Lia, but much harder" if story else "harder, faster, score x1.5", 26, Color(1.0, 0.75, 0.6, 0.8))
+	_gap(v, 12)
+	junction_scenic = _item(v, "Scenic route  (Down)", main.choose_route.bind("scenic"), 46)
+	junction_scenic.accent = Color(0.5, 1.0, 0.8)
+	junction_scenic.add_theme_color_override("font_color", Color(0.72, 1.0, 0.86))
+	junction_scenic_sub = _small(v, "longer and gentler, with more kind strangers" if story else "calmer stretch, steady score", 26, Color(0.6, 1.0, 0.8, 0.8))
+	if main.junction_easy:
+		junction_go_easy(false)
+
+## Last seconds: the gentle route becomes the easy, glowing default.
+func junction_go_easy(animate := true) -> void:
+	if not is_instance_valid(junction_scenic):
+		return
+	junction_scenic.text = "EASY ROUTE: tap anywhere!"
+	junction_scenic.selected = true
+	junction_scenic.add_theme_font_size_override("font_size", 56)
+	junction_scenic_sub.text = "no rush, the calm road is fine too"
+	junction_scenic.grab_focus()
+	if is_instance_valid(junction_wild):
+		junction_wild.modulate.a = 0.45
+	if animate:
+		junction_scenic.pivot_offset = Vector2(0, 30)
+		var tw := junction_scenic.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		junction_scenic.modulate = Color(1.6, 1.6, 1.6)
+		tw.tween_property(junction_scenic, "modulate", Color.WHITE, 0.5)
+	var glow := junction_scenic.create_tween().set_loops()
+	glow.tween_property(junction_scenic_sub, "modulate:a", 0.45, 0.35)
+	glow.tween_property(junction_scenic_sub, "modulate:a", 1.0, 0.35)
 
 func show_finale_end() -> void:
 	var v := _center(760, 0.25)

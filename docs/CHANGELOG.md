@@ -1,4 +1,10 @@
 # Changelog
+## 0.8.12 (2026-11-23): route choice countdown
+- **Route choice after a breather ("A fork in the road"):** now shows a big countdown and a draining bar (7 s). In the last seconds the number and bar turn orange, then red, pulse with each second, tick with rising pitch and shake, and the screen edges throb red (off with Reduced motion).
+- **Easy option (owner idea):** with about 2 seconds left, the Scenic route becomes a glowing "EASY ROUTE: tap anywhere!". Any key, click or tap (except on the Wild route or the pause button) takes it, and it is picked automatically at zero.
+- The choice panel uses the new menu style and sits right of Kavi so it never covers him.
+- **Fixed:** pausing during the choice no longer eats the countdown. It has its own timer, which used to be the global state timer.
+- Up/Down still pick Wild/Scenic directly; that handling moved to `_input` so menu focus can't swallow the arrow keys. Capture mode `--junction`.
 ## 0.8.11 (2026-11-23): paper-plane mini-game and Quit
 - **Title mini-game (owner idea):** click or tap near the paper plane to push it away from where you clicked (click above it and it dips, click below and it climbs). Steer it to Kavi: he waves with heart eyes, the plane circles him and you get "Letter delivered!" plus a counter. Click too many times too fast and it stalls, tumbles and falls, and a new plane glides in from an edge. A hint shows until the first push.
 - **Quit:** a Quit item with a "Leave the game?" confirmation on Linux, Windows and Android. Hidden on the web build, where closing the tab is how you leave.
