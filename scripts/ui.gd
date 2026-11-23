@@ -288,7 +288,10 @@ func show_title() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 0)
 	v.add_child(row)
-	for it in [["Garage", show_garage.bind("scarf")], ["Settings", show_settings], ["Tutorial", confirm_tutorial]]:
+	var row_items := [["Garage", show_garage.bind("scarf")], ["Settings", show_settings], ["Tutorial", confirm_tutorial]]
+	if main.can_quit():
+		row_items.append(["Quit", confirm_quit])
+	for it in row_items:
 		var b := _item(row, it[0], it[1], 30)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# Portal builds (CrazyGames etc.) must not show their own ad prompts.
@@ -649,6 +652,16 @@ func confirm_tutorial() -> void:
 	_gap(v, 16)
 	var yes := _item(v, "Yes, start the tutorial", main.menu_tutorial, 40)
 	var no := _item(v, "No, back to the menu", show_title, 40)
+	no.grab_focus.call_deferred()
+
+func confirm_quit() -> void:
+	main.menu_dim = true
+	var v := _column(0.38)
+	_heading(v, "Leave the game?", 56)
+	_small(v, "Your stamps, sparks and story progress are saved.", 26, Color(1, 1, 1, 0.75))
+	_gap(v, 16)
+	_item(v, "Yes, quit", main.quit_game, 40)
+	var no := _item(v, "No, keep playing", show_title, 40)
 	no.grab_focus.call_deferred()
 
 func show_tutorial_skip() -> void:

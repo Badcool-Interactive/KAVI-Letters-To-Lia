@@ -59,6 +59,15 @@ var debug_pose := ""     # capture director: show Kavi in a given pose on the ti
 var debug_speed := 0.0
 var debug_expr := ""
 var menu_dim := false  # stronger shade behind the menu column (Garage, Settings)
+## Title mini-game (0.8.11): click near the paper plane to push it away from
+## the click; steer it to Kavi and it circles him. Too many clicks too fast and
+## it stalls and falls; a new plane glides in.
+var plane := {}
+var plane_fx: Array = []
+var plane_trail: Array = []
+var plane_delivered := 0
+var plane_hint := true
+var plane_happy_t := 0.0
 var logo_lift: Array = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # per-letter mouse hop (title logo)
 var _look_key := ""
 
@@ -951,10 +960,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE):
-		if state == "scenic":
-			go_title()
-			return
-		toggle_pause()
+		_back_pressed()
+		get_viewport().set_input_as_handled()
+		return
 	if state == "recovery" and _is_press(event, ["jump"]):
 		skip_recovery()
 	if state == "junction":
@@ -997,6 +1005,31 @@ func _read_input() -> Dictionary:
 	}
 	input_latch = {"jump": held_jump, "down": held_down, "gust": gust, "letter": letter}
 	return inp
+
+## Esc on desktop and the Back button on Android (0.8.11): leave Scenic View,
+## pause a run, step back out of a menu, or ask before quitting from the title.
+func _back_pressed() -> void:
+	if state == "scenic":
+		go_title()
+	elif state == "title":
+		if garage_open or menu_dim:
+			ui.show_title()
+		elif can_quit():
+			ui.confirm_quit()
+	else:
+		toggle_pause()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_back_pressed()
+
+## The web build has no Quit (closing the tab is how you leave a web page).
+func can_quit() -> bool:
+	return not OS.has_feature("web")
+
+func quit_game() -> void:
+	save.save()
+	get_tree().quit()
 
 func toggle_pause() -> void:
 	if state in ["run", "recovery", "junction"]:
@@ -1150,6 +1183,8 @@ func _process(delta: float) -> void:
 	_adapt_quality(real_dt)
 	t += real_dt
 	state_t += real_dt
+	if state == "title" and not (garage_open or menu_dim or has_meta("keyart")):
+		_plane_update(real_dt)
 	if slowmo_t > 0.0:
 		slowmo_t -= real_dt
 		Engine.time_scale = 0.45 if slowmo_t > 0.0 else 1.0
@@ -1161,6 +1196,11 @@ func _process(delta: float) -> void:
 			sim.x = title_x
 			kite.pose = debug_pose if debug_pose != "" else "idle"
 			kite.expr = debug_expr if debug_expr != "" else ("normal" if fmod(t, 6.0) < 5.0 else "happy")
+			# title mini-game: Kavi waves and makes heart eyes when a plane reaches him
+			if plane_happy_t > 0.0 and debug_pose == "" and not garage_open:
+				kite.expr = "heart"
+				if plane_happy_t > 0.8:
+					kite.pose = "wave"
 		"recovery":
 			_update_recovery(real_dt)
 		"junction":
@@ -1488,6 +1528,7 @@ func _draw_title(ci: Node2D, sz: Vector2) -> void:
 	if garage_open or menu_dim:
 		return
 	_draw_motes(ci, sz)
+	_draw_plane_game(ci)
 	_draw_logo(ci, Vector2(sz.x * 0.29, sz.y * 0.25), state_t, 1.0)
 
 ## Title ambience (0.8.10): warm motes of light drifting up through the scene,
@@ -1537,7 +1578,7 @@ func _draw_logo(ci: Node2D, c: Vector2, time: float, scale_k: float) -> void:
 	var sweep_k := fmod(maxf(time - 1.2, 0.0), 5.5) / 1.1
 	var sweep_x := lerpf(c.x - total * 0.7, c.x + total * 0.7, sweep_k) if sweep_k < 1.0 else -99999.0
 	var mouse := get_viewport().get_mouse_position()
-	var live := not has_meta("keyart") and not DisplayServer.get_name().begins_with("headless")
+	var live := not (has_meta("keyart") or DisplayServer.get_name().begins_with("headless"))
 	for i in letters.length():
 		var k := clampf((time - 0.25 - i * 0.12) / 0.55, 0.0, 1.0)
 		var e := 1.0 - pow(1.0 - k, 3.0)
@@ -1583,7 +1624,7 @@ func _draw_logo(ci: Node2D, c: Vector2, time: float, scale_k: float) -> void:
 	ci.draw_line(Vector2(c.x + sw * 0.5 + 18, ly), Vector2(c.x + sw * 0.5 + 18 + lw, ly), Color(rim, 0.7 * ks), 2.0, true)
 	# paper plane looping around the logo with a dotted trail
 	var kp := clampf((time - 1.4) / 1.0, 0.0, 1.0)
-	if kp > 0.0:
+	if kp > 0.0 and has_meta("keyart"):
 		# an orbit around the whole logo, passing behind the subtitle
 		var R := Vector2(total * 0.72, 150.0 * scale_k)
 		var oc := c + Vector2(0, -30.0 * scale_k)
@@ -1692,6 +1733,10 @@ func _set_input_mode(m: String) -> void:
 		touch.visible_controls = _want_touch()
 
 func _input(event: InputEvent) -> void:
+	if state == "title" and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		if _plane_push(event.position):
+			get_viewport().set_input_as_handled()
+			return
 	if event is InputEventScreenTouch and event.pressed:
 		_set_input_mode("touch")
 	elif (event is InputEventKey and event.pressed) or (event is InputEventJoypadButton and event.pressed):
@@ -1806,6 +1851,16 @@ func _setup_capture() -> void:
 				["jump", 0.0, "wow", "k6-jump"], ["hover", 0.0, "", "k7-hover"], ["slide", 0.0, "", "k8-scoot"],
 				["wave", 0.0, "heart", "k9-wave"], ["fall", 0.0, "scared", "k10-fall"], ["gust", 0.0, "focus", "k11-gust"]]:
 			cap_steps.append_array([{"do": "kpose", "pose": ps[0], "speed": ps[1], "expr": ps[2]}, {"do": "wait", "s": 0.55 if ps[0] == "run" else 1.0}, {"shot": ps[3]}])
+		cap_steps.append({"do": "quit"})
+		return
+	if "--plane" in OS.get_cmdline_user_args():
+		# Title paper-plane mini-game: hint, steer to Kavi, orbit, over-click stall; quit dialog.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 3.2}, {"shot": "p0-hint"}, {"do": "steer"}, {"do": "wait", "s": 0.25}, {"shot": "p1-delivered"},
+			{"do": "wait", "s": 1.4}, {"shot": "p2-orbit"}, {"do": "wait", "s": 7.5}, {"do": "spam"}, {"do": "wait", "s": 0.15}, {"shot": "p3-stall"},
+			{"do": "wait", "s": 0.5}, {"shot": "p4-fall"}, {"do": "quitmenu"}, {"do": "wait", "s": 1.0}, {"shot": "p5-quit"}]
+		for k in 6:
+			cap_steps.append_array([{"do": "wait", "s": 0.12}, {"shot": "p6-fly-%d" % k}])
 		cap_steps.append({"do": "quit"})
 		return
 	if "--menus" in OS.get_cmdline_user_args():
@@ -1959,6 +2014,19 @@ func _capture_tick(dt: float) -> void:
 			cap_wait = 0.0
 		return
 	match st.do:
+		"steer":
+			if not ((plane.size() > 0 and plane.state == "orbit") or cap_wait > 30.0):
+				if plane.size() > 0 and plane.state == "fly" and fmod(cap_wait, 0.55) < dt:
+					var away: Vector2 = (_plane_target() - plane.pos).normalized()
+					_plane_push(plane.pos - away * 110.0)
+				return
+		"spam":
+			if (plane.is_empty() or plane.state != "fly") and cap_wait < 15.0:
+				return
+			for k in 8:
+				_plane_push(plane.pos + Vector2(0, -60))
+		"quitmenu":
+			ui.confirm_quit()
 		"wait":
 			if cap_wait >= st.s:
 				cap_i += 1
@@ -2034,3 +2102,190 @@ func note_capture_event(e: String) -> void:
 	if capture_dir != "":
 		cap_events[e] = true
 
+# ------------------------------------------------------------------ title plane mini-game
+const PLANE_REACH := 240.0     # clicks closer than this push the plane
+const PLANE_CRUISE := 150.0
+const PLANE_HEAT_MAX := 6.0    # this many quick clicks and it stalls
+
+func _plane_spawn(first := false) -> void:
+	var sz := get_viewport_rect().size
+	var pos: Vector2
+	var vel: Vector2
+	if first:
+		pos = Vector2(sz.x * 0.47, sz.y * 0.12)
+		vel = Vector2(-1, 0.35).normalized() * PLANE_CRUISE
+	else:
+		match randi() % 3:
+			0:
+				pos = Vector2(-40, randf_range(0.12, 0.5) * sz.y)
+				vel = Vector2(1, randf_range(-0.2, 0.3)).normalized() * PLANE_CRUISE * 1.4
+			1:
+				pos = Vector2(sz.x * randf_range(0.1, 0.5), -40)
+				vel = Vector2(randf_range(-0.4, 0.6), 1).normalized() * PLANE_CRUISE * 1.4
+			_:
+				pos = Vector2(sz.x * 0.56, randf_range(0.1, 0.3) * sz.y)
+				vel = Vector2(-1, randf_range(-0.1, 0.3)).normalized() * PLANE_CRUISE * 1.4
+	plane = {"pos": pos, "vel": vel, "ang": vel.angle(), "state": "fly", "t": 0.0, "heat": 0.0,
+		"wander": vel.angle(), "orbit_a": 0.0, "spin": 0.0, "wait": 0.0}
+	plane_trail.clear()
+
+func _plane_target() -> Vector2:
+	return _world_to_screen(Vector2(sim.x, sim.y - 125.0))
+
+func _plane_push(click: Vector2) -> bool:
+	if plane.is_empty() or plane.state != "fly" or garage_open or menu_dim:
+		return false
+	var hc := get_viewport().gui_get_hovered_control()
+	if hc is BaseButton:
+		return false
+	var d: Vector2 = plane.pos - click
+	var dist := d.length()
+	if dist > PLANE_REACH:
+		return false
+	var dir := d.normalized() if dist > 1.0 else Vector2.UP
+	var strength := lerpf(430.0, 170.0, dist / PLANE_REACH)
+	plane.vel += dir * strength
+	plane.heat += 1.0
+	plane_hint = false
+	plane_fx.append({"kind": "ring", "p": click, "t": 0.0, "life": 0.35})
+	synth.play("hover", 1.3 + randf() * 0.3, -6.0)
+	if plane.heat > PLANE_HEAT_MAX:
+		plane.state = "stall"
+		plane.spin = (1.0 if plane.vel.x >= 0.0 else -1.0) * 7.0
+		var vs := get_viewport_rect().size
+		_toast("Whoa, too many pushes!", Vector2(clampf(plane.pos.x, 230.0, vs.x - 230.0), clampf(plane.pos.y - 50.0, 60.0, vs.y - 60.0)), Color(1, 0.8, 0.6), 30)
+		synth.play("dive", 0.8)
+	return true
+
+func _plane_update(dt: float) -> void:
+	if plane.is_empty():
+		if state_t > 1.4:
+			_plane_spawn(true)
+		return
+	var sz := get_viewport_rect().size
+	plane.t += dt
+	plane.heat = maxf(plane.heat - dt * 1.3, 0.0)
+	plane_happy_t = maxf(plane_happy_t - dt, 0.0)
+	match plane.state:
+		"fly":
+			# gentle wandering cruise; pushes decay back into it
+			plane.wander += sin(t * 0.7 + plane.t * 0.3) * dt * 0.9
+			var c := Vector2(sz.x * 0.38, sz.y * 0.36)
+			var p: Vector2 = plane.pos
+			var edge := 0.0
+			if p.x < 80 or p.x > sz.x * 0.58 or p.y < 70 or p.y > sz.y * 0.72:
+				edge = 1.0
+			var wish := Vector2.from_angle(plane.wander)
+			if edge > 0.0:
+				wish = wish.lerp((c - p).normalized(), 0.08).normalized()
+				plane.wander = lerp_angle(plane.wander, (c - p).angle(), dt * 1.5)
+			plane.vel = plane.vel.lerp(wish * PLANE_CRUISE, 1.0 - exp(-dt * 0.9))
+			plane.vel.y += sin(t * 2.3 + plane.t) * 18.0 * dt
+			plane.pos += plane.vel * dt
+			# soft walls
+			if plane.pos.x < 20.0 or plane.pos.x > sz.x - 20.0:
+				plane.vel.x *= -0.6
+				plane.pos.x = clampf(plane.pos.x, 20.0, sz.x - 20.0)
+			if plane.pos.y < 20.0 or plane.pos.y > sz.y * 0.8:
+				plane.vel.y *= -0.6
+				plane.pos.y = clampf(plane.pos.y, 20.0, sz.y * 0.8)
+			plane.ang = lerp_angle(plane.ang, plane.vel.angle(), 1.0 - exp(-dt * 8.0))
+			# delivered: it reached Kavi
+			var tg := _plane_target()
+			if plane.pos.distance_to(tg) < 95.0:
+				plane.state = "orbit"
+				plane.t = 0.0
+				plane.orbit_a = (plane.pos - tg).angle()
+				plane_delivered += 1
+				plane_happy_t = 3.0
+				synth.play("letter")
+				synth.play("bell", 1.5, -4.0)
+				_toast("Letter delivered!", tg + Vector2(0, -110), Color(1, 0.9, 0.6), 38)
+				for i in 18:
+					var a := TAU * i / 18.0
+					plane_fx.append({"kind": "spark", "p": tg, "v": Vector2.from_angle(a) * randf_range(120, 260), "t": 0.0, "life": 0.8})
+		"orbit":
+			var tg2 := _plane_target()
+			plane.orbit_a += dt * 2.8
+			var r := Vector2(105.0, 60.0)
+			var np := tg2 + Vector2(cos(plane.orbit_a) * r.x, sin(plane.orbit_a) * r.y)
+			plane.vel = (np - plane.pos) / maxf(dt, 0.001)
+			plane.pos = np
+			plane.ang = lerp_angle(plane.ang, plane.vel.angle(), 1.0 - exp(-dt * 12.0))
+			if plane.t > 7.0:
+				plane.state = "leave"
+				plane.vel = Vector2(260, -380)
+		"leave":
+			plane.vel = plane.vel * (1.0 + dt * 0.5)
+			plane.pos += plane.vel * dt
+			plane.ang = lerp_angle(plane.ang, plane.vel.angle(), 1.0 - exp(-dt * 6.0))
+			if plane.pos.y < -60 or plane.pos.x > sz.x + 60:
+				plane.state = "gone"
+				plane.wait = 1.0
+		"stall":
+			plane.vel.y += 900.0 * dt
+			plane.vel.x *= 1.0 - dt * 0.6
+			plane.pos += plane.vel * dt
+			plane.ang += plane.spin * dt
+			if randf() < dt * 14.0:
+				plane_fx.append({"kind": "puff", "p": plane.pos, "v": Vector2(randf_range(-20, 20), -30), "t": 0.0, "life": 0.7})
+			if plane.pos.y > sz.y + 60:
+				plane.state = "gone"
+				plane.wait = 1.5
+		"gone":
+			plane.wait -= dt
+			if plane.wait <= 0.0:
+				_plane_spawn()
+	if plane.state in ["fly", "orbit", "leave"]:
+		plane_trail.push_front(plane.pos)
+		if plane_trail.size() > 14:
+			plane_trail.pop_back()
+	elif plane_trail.size() > 0:
+		plane_trail.pop_back()
+	for f in plane_fx:
+		f.t += dt
+		if f.has("v"):
+			f.p += f.v * dt
+			f.v *= 1.0 - dt * 2.5
+	plane_fx = plane_fx.filter(func(f): return f.t < f.life)
+
+func _draw_plane_game(ci: Node2D) -> void:
+	if plane.is_empty():
+		return
+	var cream := Color(1.0, 0.96, 0.90)
+	var appear := clampf(state_t / 1.5, 0.0, 1.0)
+	for i in plane_trail.size():
+		if i % 2 == 1:
+			continue
+		ci.draw_circle(plane_trail[i], 2.6, Color(cream, appear * 0.5 * (1.0 - float(i) / plane_trail.size())))
+	for f in plane_fx:
+		var k: float = f.t / f.life
+		match f.kind:
+			"ring":
+				ci.draw_arc(f.p, 18.0 + 40.0 * k, 0.0, TAU, 32, Color(1, 0.92, 0.75, 0.6 * (1.0 - k)), 3.0, true)
+			"spark":
+				ci.draw_circle(f.p, 4.0 * (1.0 - k) + 1.0, Color(1.0, 0.85 - 0.3 * k, 0.5, 1.0 - k))
+			"puff":
+				ci.draw_circle(f.p, 6.0 + 14.0 * k, Color(0.85, 0.85, 0.9, 0.35 * (1.0 - k)))
+	if plane.state == "gone":
+		return
+	var q0: Vector2 = plane.pos
+	var dir := Vector2.from_angle(plane.ang)
+	var nrm := dir.orthogonal()
+	var L := 26.0
+	# warning wobble when the plane is getting overheated by clicks
+	var heat_k := clampf((plane.heat - 3.0) / (PLANE_HEAT_MAX - 3.0), 0.0, 1.0) if plane.state == "fly" else 0.0
+	if heat_k > 0.0:
+		q0 += Vector2(sin(t * 40.0), cos(t * 37.0)) * 3.0 * heat_k
+	var body := cream.lerp(Color(1.0, 0.62, 0.5), heat_k * 0.6)
+	ci.draw_colored_polygon(PackedVector2Array([q0 + dir * L + Vector2(0, 5), q0 - dir * L * 0.6 + nrm * L * 0.55 + Vector2(0, 5), q0 - dir * L * 0.3 + Vector2(0, 5)]), Color(0, 0, 0, 0.18 * appear))
+	ci.draw_colored_polygon(PackedVector2Array([q0 + dir * L, q0 - dir * L * 0.6 + nrm * L * 0.55, q0 - dir * L * 0.3]), Color(body, appear))
+	ci.draw_colored_polygon(PackedVector2Array([q0 + dir * L, q0 - dir * L * 0.3, q0 - dir * L * 0.6 - nrm * L * 0.35]), Color(body.darkened(0.18), appear))
+	ci.draw_polyline(PackedVector2Array([q0 + dir * L, q0 - dir * L * 0.6 + nrm * L * 0.55, q0 - dir * L * 0.3, q0 - dir * L * 0.6 - nrm * L * 0.35, q0 + dir * L]), Color(0.03, 0.04, 0.09, 0.55 * appear), 1.6, true)
+	# first-time hint
+	if plane_hint and plane.state == "fly" and state_t > 2.5:
+		var ha := clampf((state_t - 2.5) / 0.6, 0.0, 1.0) * (0.75 + 0.25 * sin(t * 3.0))
+		_text(ci, "click near the plane to steer it to %s" % HERO, plane.pos + Vector2(0, 56), 24, Color(1, 0.95, 0.85, ha * appear), HORIZONTAL_ALIGNMENT_CENTER, 6)
+	if plane_delivered > 0:
+		var sz := get_viewport_rect().size
+		_text(ci, "Letters delivered: %d" % plane_delivered, Vector2(sz.x * 0.29, sz.y * 0.25 + 120.0), 26, Color(1, 0.9, 0.7, 0.85), HORIZONTAL_ALIGNMENT_CENTER, 6)

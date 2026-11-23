@@ -1,4 +1,9 @@
 # Changelog
+## 0.8.11 (2026-11-23): paper-plane mini-game and Quit
+- **Title mini-game (owner idea):** click or tap near the paper plane to push it away from where you clicked (click above it and it dips, click below and it climbs). Steer it to Kavi: he waves with heart eyes, the plane circles him and you get "Letter delivered!" plus a counter. Click too many times too fast and it stalls, tumbles and falls, and a new plane glides in from an edge. A hint shows until the first push.
+- **Quit:** a Quit item with a "Leave the game?" confirmation on Linux, Windows and Android. Hidden on the web build, where closing the tab is how you leave.
+- **Esc / Android Back:** leaves Scenic View, pauses a run, steps back out of a menu, or asks before quitting from the title. Before, Android's Back quit the app instantly, even mid-run (`quit_on_go_back` is now off).
+- Capture mode `--plane` (steer, deliver, stall, quit dialog). `tools/capture.sh` takes `VOLT_TAIL` for longer logs.
 ## 0.8.10 (2026-11-23): a more fluid title screen
 - **Menu:** the rows slide in one after another, and a soft warm light band glides to whichever item you hover or select, sized to the words. The focused item swells slightly. Reduced motion turns off the slide-in.
 - **Logo:** a sheen sweeps across KAVI every few seconds, and letters hop up and glow when the mouse passes over them.
