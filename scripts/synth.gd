@@ -66,11 +66,28 @@ var _threaded: Array = []   # paths requested with ResourceLoader.load_threaded_
 
 func preload_all() -> void:
 	for b in KEYS.size():
+		if _cache.has(b):
+			continue   # already loaded (requesting it again left an unused load token)
 		for kind in ["pad", "drive"]:
 			var path := "res://assets/music/b%d_%s.wav" % [b, kind]
 			if ResourceLoader.exists(path) and not _threaded.has(path):
 				ResourceLoader.load_threaded_request(path)
 				_threaded.append(path)
+
+## Clean shutdown (0.8.22): stop every player, drop the streams and finish any
+## background loads, so nothing is left for Godot to report at exit.
+func shutdown() -> void:
+	if _task != -1:
+		WorkerThreadPool.wait_for_task_completion(_task)
+		_task = -1
+	for p in [_pad, _drv] + _pool:
+		if is_instance_valid(p):
+			p.stop()
+			p.stream = null
+	for path in _threaded.duplicate():
+		ResourceLoader.load_threaded_get(path)
+	_threaded.clear()
+	_cache.clear()
 
 ## True once every threaded music load has finished (used by the loading screen).
 func preload_done() -> bool:

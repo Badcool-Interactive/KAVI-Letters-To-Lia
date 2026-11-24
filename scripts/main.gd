@@ -189,8 +189,32 @@ var cap_events = {}
 var cap_shots: Array = []
 
 # ------------------------------------------------------------------ setup
+## Device benchmark (0.8.22). Android launchers drop command-line arguments, so
+## test (debug) builds also read them from user://bench_request.txt, one per
+## line, pushed over USB. The file is deleted at once. Release builds ignore it.
+var _dev_args: PackedStringArray = []
+
+func _args() -> PackedStringArray:
+	return OS.get_cmdline_user_args() + _dev_args
+
+func _read_device_request() -> void:
+	var path := "user://bench_request.txt"
+	if not (OS.is_debug_build() and FileAccess.file_exists(path)):
+		return
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f != null:
+		for line in f.get_as_text().split("\n"):
+			if line.strip_edges() != "":
+				_dev_args.append(line.strip_edges())
+		f.close()
+	DirAccess.remove_absolute(path)
+
 func _ready() -> void:
 	randomize()
+	_read_device_request()
+	for a0 in _args():
+		if a0.begins_with("--bench=") or a0 == "--device-test":
+			save.isolated = true
 	save.load_data()
 	Looks.ensure(save.data)
 	ads.save = save
@@ -201,11 +225,12 @@ func _ready() -> void:
 	# because it names the save folder on desktop.
 	get_window().title = "%s: %s" % [HERO, GAME_SUB]
 	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
+	get_tree().auto_accept_quit = false   # window close goes through _quit_cleanly
 	_setup_cursor()
 	input_mode = "touch" if DisplayServer.is_touchscreen_available() else "keys"
 	if OS.has_feature("web") or OS.has_feature("mobile"):
 		Engine.max_fps = 60
-	for a in OS.get_cmdline_user_args():
+	for a in _args():
 		if a.begins_with("--capture="):
 			capture_dir = a.substr(10)
 		if a.begins_with("--hide="):
@@ -233,7 +258,7 @@ func _ready() -> void:
 		save.data.tutorial_done = true
 		# --bench-transition: start in Greece and switch to Bulgaria at 5 s,
 		# to measure the country-change hitch (owner report, 0.8.17)
-		bench.transition = "--bench-transition" in OS.get_cmdline_user_args()
+		bench.transition = "--bench-transition" in _args()
 		start_story(0 if bench.transition else 1)
 		card = {}
 	elif capture_dir == "" and not save.data.tutorial_done:
@@ -1152,8 +1177,15 @@ func _back_pressed() -> void:
 	else:
 		toggle_pause()
 
+## Android Back (0.8.22, owner): does nothing during the intro or on the main
+## title, so it never closes the game (only Home or the swipe does). In menus
+## it still steps back, and in a run it still pauses.
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_quit_cleanly()
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		if loading or (state == "title" and not (garage_open or menu_dim)):
+			return
 		_back_pressed()
 
 ## The web build has no Quit (closing the tab is how you leave a web page).
@@ -1162,7 +1194,34 @@ func can_quit() -> bool:
 
 func quit_game() -> void:
 	save.save()
+	_quit_cleanly()
+
+## Close the game without leftovers: stop everything, give the audio thread a
+## few frames to release its buffers, then quit (0.8.22: zero exit warnings).
+func _quit_cleanly() -> void:
+	_shutdown()
+	for i in 4:
+		await get_tree().process_frame
 	get_tree().quit()
+
+## Everything that would otherwise still be alive when the engine exits:
+## playing music, background loads, the custom cursor images, shared statics.
+var _shut_down := false
+
+func _shutdown() -> void:
+	if _shut_down:
+		return
+	_shut_down = true
+	if is_instance_valid(_intro_video):
+		_intro_video.stop()
+		_intro_video.stream = null
+	synth.shutdown()
+	Input.set_custom_mouse_cursor(null, Input.CURSOR_ARROW)
+	Input.set_custom_mouse_cursor(null, Input.CURSOR_POINTING_HAND)
+	Art.release_statics()
+
+func _exit_tree() -> void:
+	_shutdown()
 
 func toggle_pause() -> void:
 	if state in ["run", "recovery", "junction"]:
@@ -1323,6 +1382,11 @@ func _process(delta: float) -> void:
 	_adapt_quality(real_dt)
 	if loading:
 		_update_loading(real_dt)
+	_update_audio_in(real_dt)
+	if _clean_quit_frames > 0:
+		_clean_quit_frames -= 1
+		if _clean_quit_frames == 0:
+			_quit_cleanly()
 	t += real_dt
 	state_t += real_dt
 	if state == "title" and not (garage_open or menu_dim or has_meta("keyart")):
@@ -1915,12 +1979,7 @@ func _set_input_mode(m: String) -> void:
 
 func _input(event: InputEvent) -> void:
 	if loading:
-		# after the first full viewing, any tap/click/key skips the studio intro
-		if save.data.get("intro_seen", false) and not _intro_done and event.is_pressed() and not event.is_echo() \
-				and (event is InputEventKey or event is InputEventMouseButton or event is InputEventScreenTouch or event is InputEventJoypadButton):
-			_intro_skip = true
-			if is_instance_valid(_intro_video):
-				_intro_video.stop()
+		# the studio intro always plays in full (owner, 0.8.22)
 		get_viewport().set_input_as_handled()
 		return
 	if state in ["title", "scenic"] and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -2057,6 +2116,12 @@ func _setup_capture() -> void:
 		cap_steps = [{"do": "wait", "s": 1.0}, {"shot": "i1"}, {"do": "wait", "s": 1.5}, {"shot": "i2"}, {"do": "wait", "s": 2.2}, {"shot": "i3"},
 			{"do": "wait", "s": 1.6}, {"shot": "i4"}, {"do": "wait", "s": 1.3}, {"shot": "i5"},
 			{"until_loaded": true, "max": 30.0}, {"shot": "i6-reveal"}, {"do": "wait", "s": 0.3}, {"shot": "i7"}, {"do": "wait", "s": 1.2}, {"shot": "i8-title"}, {"do": "quit"}]
+		return
+	if "--bridge" in OS.get_cmdline_user_args():
+		# The Danube landmark bridge, forced into every far-hill slot.
+		save.data.tutorial_done = true
+		world_view.debug_kind = "bridge"
+		cap_steps = [{"do": "scenic"}, {"do": "wait", "s": 3.0}, {"do": "scenic_next"}, {"do": "wait", "s": 4.0}, {"do": "scenic_next"}, {"do": "wait", "s": 9.0}, {"shot": "bridge-a"}, {"do": "wait", "s": 4.0}, {"shot": "bridge-b"}, {"do": "quit"}]
 		return
 	if "--obs" in OS.get_cmdline_user_args():
 		# Obstacle review: autopilot through chapters 1 and 3, a frame every 0.3 s.
@@ -2238,13 +2303,16 @@ func _bench_tick(dt: float) -> void:
 		if not bench.has("proc"):
 			bench.proc = []
 		bench.proc.append(Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0)
+	if not bench.has("gpu"):
+		bench.gpu = []
+	bench.gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid()))
 	bench.frames.append(dt * 1000.0)
 	bench.script.append(script_ms)
 	bench.draws.append(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
 	bench.prims.append(RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME))
 	if bench.t >= 18.0:
 		var res := {}
-		for k in ["frames", "script", "draws", "prims"]:
+		for k in ["frames", "script", "draws", "prims", "gpu"]:
 			var a: Array = bench[k].duplicate()
 			a.sort()
 			var sum := 0.0
@@ -2252,6 +2320,22 @@ func _bench_tick(dt: float) -> void:
 				sum += v
 			res[k] = {"avg": snappedf(sum / a.size(), 0.01), "p95": snappedf(a[int(a.size() * 0.95)], 0.01)}
 		res["n"] = bench.frames.size()
+		# fps the way performance tests show it: average, 1% low, 0.1% low
+		var fr: Array = bench.frames.duplicate()
+		fr.sort()
+		fr.reverse()
+		var tot := 0.0
+		for v in fr:
+			tot += v
+		var n1 := maxi(1, int(fr.size() * 0.01))
+		var n01 := maxi(1, int(fr.size() * 0.001))
+		var w1 := 0.0
+		for i in n1:
+			w1 += fr[i]
+		res["fps_avg"] = snappedf(1000.0 / (tot / fr.size()), 0.1)
+		res["fps_1pct_low"] = snappedf(1000.0 / (w1 / n1), 0.1)
+		res["fps_01pct_low"] = snappedf(1000.0 / fr[n01 - 1], 0.1)
+		res["device"] = "%s / %s" % [OS.get_model_name(), RenderingServer.get_video_adapter_name()]
 		for nm in ["tags", "tags_tr"]:
 			var out := {}
 			for tg in bench[nm]:
@@ -2530,6 +2614,7 @@ func _plane_update(dt: float) -> void:
 				plane.t = 0.0
 				plane.orbit_a = (plane.pos - tg).angle()
 				plane_delivered += 1
+				plane_hint = false
 				plane_happy_t = 3.0
 				synth.play("letter")
 				synth.play("bell", 1.5, -4.0)
@@ -2803,7 +2888,7 @@ func _draw_title_poem(ci: Node2D) -> void:
 		by = "\u2014 " + q[1]
 	var f := fmod(k, 1.0)
 	var a := clampf(f / 0.1, 0.0, 1.0) * clampf((1.0 - f) / 0.12, 0.0, 1.0)
-	var y := sz.y * 0.25 + 168.0
+	var y := sz.y * 0.25 + 178.0
 	var cx := sz.x * 0.29
 	var col := Color(1.0, 0.93, 0.85, 0.85 * a)
 	var parts := text.split(" / ")
@@ -2845,6 +2930,18 @@ var _hold_t := 0.0           # time spent breathing after the video
 var _est_gpu: Array = []
 var _est_dt: Array = []
 var _slow_load := 0.0        # capture testing: pretend loading takes this long
+var _clean_quit_frames := -1   # test: quit through the real clean path after N frames
+var _audio_in_t := 99.0      # < 0: muted under the intro; 0..2.5: fading in
+
+## After the intro the whole game's sound rises over 2.5 s with a soft curve,
+## instead of starting at full volume all at once (owner, 0.8.22).
+func _update_audio_in(dt: float) -> void:
+	if _audio_in_t < 0.0 or _audio_in_t > 2.5:
+		return
+	_audio_in_t += dt
+	var k := clampf(_audio_in_t / 2.5, 0.0, 1.0)
+	k = k * k * (3.0 - 2.0 * k)
+	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(k, 0.0001)))
 
 ## Slim silver-platinum bar with a soft moving sheen.
 class SilverBar extends Control:
@@ -2878,8 +2975,13 @@ func _intro_fit(c: Control) -> void:
 func _start_loading() -> void:
 	loading = true
 	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--clean-quit-after="):
+			_clean_quit_frames = int(a.substr(19))
 		if a.begins_with("--slow-load="):
 			_slow_load = float(a.substr(12))
+	# game sound stays silent under the intro, then rises gently (see _update_audio_in)
+	AudioServer.set_bus_volume_db(0, -80.0)
+	_audio_in_t = -1.0
 	_load_layer = CanvasLayer.new()
 	_load_layer.layer = 128
 	add_child(_load_layer)
@@ -3011,6 +3113,7 @@ func _finish_intro() -> void:
 		save.data.intro_seen = true
 		save.save()
 	_load_fade = 0.0
+	_audio_in_t = 0.0
 	print("intro: game ready after %.2f s (video %s)" % [_load_t, "skipped" if _intro_skip else "watched"])
 	if _after_load == "tutorial":
 		start_tutorial()

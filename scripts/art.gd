@@ -72,6 +72,14 @@ void fragment() {
 	COLOR.rgb += (n - 0.5) / 255.0;
 }
 """
+## Clean shutdown: release the shared textures, materials and shape cache that
+## live in static variables (otherwise Godot reports them at exit).
+static func release_statics() -> void:
+	_dot = null
+	_grade_mix = null
+	_grade_add = null
+	_shape_cache.clear()
+
 static var _grade_mix: ShaderMaterial
 static var _grade_add: ShaderMaterial
 

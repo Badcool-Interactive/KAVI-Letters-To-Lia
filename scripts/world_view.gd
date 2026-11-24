@@ -193,6 +193,7 @@ func _sky_k() -> float:
 ## smoke heart, ships toot, birds scatter. Hit rects are rebuilt every draw in
 ## screen space; reactions are keyed by object and read back while drawing.
 var interactive := false
+var debug_kind := ""   # capture/testing only (e.g. "bridge")
 var _hits_air: Array = []
 var _hits_sea: Array = []
 var pokes: Dictionary = {}
@@ -393,6 +394,8 @@ func _draw_layer(ci: Node2D, i: int) -> void:
 			if alt.is_empty():
 				continue
 			kind = alt[int(Art.hash01(c, 223 + i) * alt.size()) % alt.size()]
+		if debug_kind != "" and i == 0:
+			kind = debug_kind   # capture/testing only: show one feature kind everywhere
 		# small groves: trees and props often come in twos and threes
 		var n := 1
 		if CLUSTER.has(kind) and Art.Q >= 1:
@@ -668,6 +671,16 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			for ex in [x0, x0 + bl]:
 				ci.draw_rect(Rect2(ex - 15.0 * s, deck - 70.0 * s, 30.0 * s, 70.0 * s), col)
 				L.append([Vector2(ex, deck - 78.0 * s), 4.0 * s, acc])
+			# 0.8.22: approach roads on embankments slope down from both ends into
+			# the hills (their feet are hidden by the ridge fill), so the bridge
+			# connects land to land instead of ending in mid-air
+			for side in [[x0, -1.0], [x0 + bl, 1.0]]:
+				var ex2: float = side[0]
+				var dx: float = side[1]
+				var run := 330.0 * s
+				ci.draw_colored_polygon(PackedVector2Array([Vector2(ex2, deck - 3.0 * s), Vector2(ex2 + dx * run, deck + 200.0 * s),
+					Vector2(ex2 + dx * run, deck + 480.0 * s), Vector2(ex2, deck + 480.0 * s)]), col)
+				ci.draw_line(Vector2(ex2, deck - 1.0 * s), Vector2(ex2 + dx * run, deck + 202.0 * s), col, 10.0 * s)
 			ci.draw_line(Vector2(x0 - 30.0 * s, deck), Vector2(x0 + bl + 30.0 * s, deck), col, 14.0 * s)
 			ci.draw_polyline(arc, col, 9.0 * s, Art.AA)
 			for k in range(2, 23, 2):
@@ -1277,19 +1290,26 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 		var pa := _age(pkey)
 		var vb := Vector2(dir * (w + 240.0) / P, -30.0 / P)   # cruise velocity
 		var vel := vb
+		var hmir := Vector2(dir, 1.0)   # planes flying left draw the heart mirrored
 		if pa < 3.0:
-			# fly a heart: the plane's own path, nose along its velocity, and the
-			# smoke comes out of its tail (so the heart is drawn behind it)
+			# fly a heart; the smoke is laid along the plane's own path every few
+			# pixels (0.8.22: it came from a point behind the tail at fixed time
+			# steps, which kinked and gapped at the heart's sharp turns)
 			var u := pa / 3.0 * TAU
-			p += (_heart(u) - _heart(0.0)) * 4.2
-			vel = vb + (_heart(u + 0.01) - _heart(u)) / 0.01 * (TAU / 3.0) * 4.2
+			var ho: Vector2 = (_heart(u) - _heart(0.0)) * 4.2 * hmir
+			p += ho
+			vel = vb + (_heart(u + 0.01) - _heart(u)) / 0.01 * (TAU / 3.0) * 4.2 * hmir
+			var pk: Dictionary = pokes[pkey]
+			var last: Vector2 = pk.get("last_ho", Vector2.ZERO)
+			var dist := last.distance_to(ho)
+			if dist > 5.0:
+				var n_puffs := int(ceil(dist / 5.0))
+				for k in n_puffs:
+					var q: Vector2 = (p - ho) + last.lerp(ho, float(k + 1) / n_puffs)
+					sky_fx.append({"kind": "smoke", "p": q, "v": vb, "t0": t, "life": 3.6, "layer": "air"})
+				pk.last_ho = ho
 		var ang := vel.angle()
 		var fwd := Vector2.from_angle(ang)
-		if pa < 3.0:
-			var pk: Dictionary = pokes[pkey]
-			if t - float(pk.get("emit", 0.0)) > 0.03:
-				pk.emit = t
-				sky_fx.append({"kind": "smoke", "p": p - fwd * 18.0, "v": vb, "t0": t, "life": 3.6, "layer": "air"})
 		if alpha > 0.5:
 			_hits_air.append({"kind": "plane", "key": pkey, "rect": Rect2(p - Vector2(24, 18), Vector2(48, 36))})
 		if pal.stars < 0.35 and pa >= 3.0:
@@ -1307,12 +1327,17 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if air.has("balloon"):
 		for b in 2:
-			if Art.hash01(b, 910 + int(n / 3.0)) > 0.55:
+			# 0.8.22: a balloon's look and whether it flies are decided once per
+			# lap across the sky, and a lap only changes while it is off-screen
+			# (it used to switch every 72 s, popping balloons in mid-air)
+			var raw: float = Art.hash01(b, 911) * w * 1.6 - cam_x * 0.025 - t * 7.0
+			var lap := int(floor(raw / (w * 1.6)))
+			if Art.hash01(b, 910 + lap * 7) > 0.62:
 				continue
-			var bx = fposmod(Art.hash01(b, 911) * w * 1.6 - cam_x * 0.025 - t * 7.0, w * 1.6) - w * 0.3
+			var bx = raw - lap * w * 1.6 - w * 0.3
 			var by = h * (0.18 + Art.hash01(b, 912) * 0.14) + sin(t * 0.5 + b * 2.0) * 8.0
 			var hues := [Color(0.95, 0.42, 0.35), Color(1.0, 0.72, 0.30), Color(0.35, 0.75, 0.80)]
-			var bc: Color = hues[int(Art.hash01(b, 913) * 3.0) % 3].lerp(pal.sky[1], 0.35)
+			var bc: Color = hues[int(Art.hash01(b, 913 + lap) * 3.0) % 3].lerp(pal.sky[1], 0.35)
 			bc.a = alpha
 			var bkey := "balloon:%d" % b
 			var ba := _age(bkey)

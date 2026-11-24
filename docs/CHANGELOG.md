@@ -1,4 +1,28 @@
 # Changelog
+## 0.8.22 (2026-11-24): fixes, zero exit warnings, first real phone benchmark
+- **Fixes:**
+  - The Danube landmark bridge now has sloped approach embankments at both ends, running down into the hills; it used to end in mid-air.
+  - Title: the paper-plane tip hides after the first delivery (it overlapped "Letters delivered"), and the quote sits lower with more space.
+  - Balloons no longer pop into view: their look and presence are decided once per lap across the sky, and a lap only changes while they're off-screen. They used to switch every 72 s.
+  - Plane smoke hearts are one clean line: smoke is laid every few pixels along the plane's path (it came from a point behind the tail and kinked at the sharp turns), and planes flying left draw the heart mirrored.
+- **Intro:**
+  - It always plays in full (no skip).
+  - The game's sound is muted under the intro, then rises over 2.5 s with a soft curve.
+  - Android Back does nothing during the intro or on the main title, so only Home or the swipe gesture leaves the game. It still steps back out of menus and pauses a run.
+- **Zero warnings at exit.** Closing now stops the music, finishes background loads, releases the cursor images and shared statics, waits a few frames for the audio thread, then quits. The two intro images are saved as RGBA (no format-conversion warning). A verbose run reports no leaks, errors or warnings.
+- **Device benchmark:**
+  - Debug builds read benchmark arguments from `user://bench_request.txt`, pushed over USB, because Android launchers drop command-line arguments. The run is save-isolated: the player's save is never read or written.
+  - New `tools/phone-bench.sh`. The benchmark now reports fps average, 1% and 0.1% lows, GPU time and the device name.
+- **Honor Magic 7 Pro (Snapdragon 8 Elite, Adreno 830, screen capped at 60 Hz)** — evidence in `studio/docs/evidence/2026-11-24-phone-bench/`:
+
+  | Setting | fps avg | 1% low | GPU ms | Draw-building ms |
+  |---|---|---|---|---|
+  | High | 42.7 | 38 | 3.9 | 16.4 |
+  | Medium | 55.7 | 46 | 4.2 | 12.9 |
+  | Low | 60.0 (cap) | 60 | 5.1 | 9.1 |
+  | High, country change | 39.8 | 32.5 | 4.5 | 17.1 (max 24.4) |
+
+  The phone is limited by the CPU rebuilding the drawings every frame, not by the GPU. Heaviest parts on High: near hills 4.0 ms, ground 2.7, foreground 2.0, far hills 1.9, Kavi 1.7. Next: cache the still scenery.
 ## 0.8.21 (2026-11-24): BADCOOL INTERACTIVE studio intro
 - **Studio intro:** the game now opens on the owner's 5 s BADCOOL INTERACTIVE ident.
   - Converted to Ogg Theora, 1920x1080 at 60 fps (531 KB), and letterboxed to 16:9 on any screen.

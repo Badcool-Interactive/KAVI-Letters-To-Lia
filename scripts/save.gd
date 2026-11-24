@@ -36,8 +36,12 @@ var data := {
 	},
 }
 
+## Device tests (benchmarks run on a real phone) set this: the player's save
+## is never read or written, so a test can't touch real progress (studio rule 2).
+var isolated := false
+
 func load_data() -> void:
-	if not FileAccess.file_exists(PATH):
+	if isolated or not FileAccess.file_exists(PATH):
 		return
 	var f := FileAccess.open(PATH, FileAccess.READ)
 	if f == null:
@@ -54,6 +58,8 @@ func _merge(into: Dictionary, src: Dictionary) -> void:
 			into[k] = src[k]
 
 func save() -> void:
+	if isolated:
+		return
 	var f := FileAccess.open(PATH, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(data, "\t"))
