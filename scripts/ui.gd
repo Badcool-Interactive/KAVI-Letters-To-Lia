@@ -717,6 +717,7 @@ func show_settings(animate := true) -> void:
 		st["graphics"] = opts[(opts.find(gq) + 1) % opts.size()]
 		_settings_changed(), 32)
 	g.status = gq.capitalize()
+	_item(v, "About KAVI", show_about, 32)
 	_gap(v, 10)
 	var back := _item(v, "Back", main.go_title, 34)
 	if animate:
@@ -1005,3 +1006,28 @@ func show_ad_placeholder() -> void:
 	var v := _center(800)
 	_heading(v, "Ad placeholder", 56)
 	_small(v, "No ad network is connected yet (pending the legal and Families Policy review). The reward is granted for testing.", 26, Color(1, 1, 1, 0.75))
+
+
+## About (0.8.24, owner): version, where to get updates, and who made it.
+const LINK_PLAY := "https://singh679.github.io/volt-run-luminous/"
+const LINK_DOWNLOADS := "https://github.com/singh679/volt-run-luminous/releases/latest"
+const LINK_SOURCE := "https://github.com/singh679/volt-run-luminous"
+
+func show_about() -> void:
+	main.garage_open = false
+	main.menu_dim = true
+	var v := _column(0.12)
+	_heading(v, "About", 64)
+	_small(v, "KAVI: Letters to Lia", 34, Color(1.0, 0.92, 0.78))
+	_small(v, "Version %s  ·  made with Godot %s" % [str(ProjectSettings.get_setting("application/config/version", "?")), Engine.get_version_info().string.get_slice("-", 0)], 26, Color(1, 1, 1, 0.8))
+	_gap(v, 6)
+	_small(v, "Made by Baljeet Singh", 28, Color(0.85, 0.88, 0.95))
+	_small(v, "BADCOOL INTERACTIVE", 22, Color(0.75, 0.78, 0.84))
+	_gap(v, 12)
+	var first := _item(v, "Play in your browser", func(): OS.shell_open(LINK_PLAY), 32)
+	_item(v, "Downloads and updates", func(): OS.shell_open(LINK_DOWNLOADS), 32)
+	_item(v, "Source on GitHub", func(): OS.shell_open(LINK_SOURCE), 32)
+	_small(v, "github.com/singh679/volt-run-luminous", 22, Color(1, 1, 1, 0.55))
+	_gap(v, 10)
+	_item(v, "Back", show_settings, 34)
+	first.grab_focus.call_deferred()

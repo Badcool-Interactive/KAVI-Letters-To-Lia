@@ -833,7 +833,10 @@ func _draw_motes(ci: Node2D) -> void:
 ## gameplay, below the ground line). Each country has its own plants, tinted
 ## with its colours and caught by a thin rim of light, so they read as plants
 ## rather than black spikes.
+var fg_plants := 0   # debug: plants drawn in the last foreground pass
+
 func draw_foreground(ci: Node2D, gy: float) -> void:
+	fg_plants = 0
 	var off = cam_x * 1.55
 	# 0.8.15: the near plants carry the scene's colour (not near-black), with a
 	# stronger sunlit rim, little grass clumps between them, and soft
@@ -851,6 +854,8 @@ func draw_foreground(ci: Node2D, gy: float) -> void:
 		if r > 0.6:
 			continue
 		var sx = c * cw + r * 420.0 - off
+		if sx > -500.0 and sx < size.x + 500.0:
+			fg_plants += 1
 		var base = Vector2(sx, size.y + 30.0)
 		var sway = sin(t * 0.8 + c) * 0.04
 		var tall = 0.75 + Art.hash01(c, 504) * 0.5

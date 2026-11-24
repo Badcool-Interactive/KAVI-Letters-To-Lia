@@ -1,4 +1,9 @@
 # Changelog
+## 0.8.24 (2026-11-25): About screen, likely fix for vanishing front plants on phones
+- **About screen** (Settings → About KAVI): game name, version, Godot version, "Made by Baljeet Singh · BADCOOL INTERACTIVE", and buttons to play in the browser, get downloads and updates, and view the source on GitHub. For a store release to children, external links will need a parental gate.
+- **Front plants vanishing on phones:** the owner's phone recording showed the whole front-row agave missing for seconds at a time, while on PC (including the phone's 2800×1280 shape and its 1080p scaling) it never happens. Likely cause: the mobile renderer culling a painter with a wrong automatic bounding rect. Every painter now sets a custom, all-covering rect, so Godot never culls it. Not yet confirmed on the phone: the USB debugging link kept dropping.
+- **Debug builds only:** a foreground recorder writes `user://fg_debug.json` (25 s after the intro) for phone diagnosis. New capture modes: `--titlefg`, `--about`; new test flag `--phone-scale`.
+- **PC setup for phone testing:** the owner added `/etc/modprobe.d/honor-adb.conf` (`usb-storage quirks=339b:107d:i`), so Linux ignores the Honor's virtual CD drive; the drive was making the USB link reset over and over.
 ## 0.8.23 (2026-11-24): the flicker found, a smoother intro on phones
 - **Fixed the flicker** (the owner's phone recording): the front-row leaves blinked between solid and outline-only from frame to frame. Each leaf was one outline polygon; as it swayed, the pointed tip sometimes made a shape the engine couldn't triangulate, so the fill was silently skipped for that frame. Leaves are now built from triangles between their two edges, which can't fail. The same fix applies to the ground grass rows and the foreground grass clumps, which were long zigzag outlines.
 - **Smoother intro on phones** (measured on the Honor Magic 7 Pro with the new debug-only `user://intro_timing.json`):

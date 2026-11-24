@@ -388,8 +388,8 @@ func apply_quality(q: int) -> void:
 	# Phones with screens above 1080p: High draws at the screen's full
 	# resolution; Medium and Low draw at 1080p and scale up (about 30% fewer
 	# pixels on a 1280p screen, looks the same at phone pixel density).
-	if OS.has_feature("mobile"):
-		var scr := DisplayServer.screen_get_size()
+	if OS.has_feature("mobile") or "--phone-scale" in _args():
+		var scr := DisplayServer.screen_get_size() if OS.has_feature("mobile") else Vector2i(2800, 1280)
 		if mini(scr.x, scr.y) > 1180:
 			get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS if Art.Q == 2 else Window.CONTENT_SCALE_MODE_VIEWPORT
 	q_frames.clear()
@@ -1383,6 +1383,7 @@ func _process(delta: float) -> void:
 	if loading:
 		_update_loading(real_dt)
 	_update_audio_in(real_dt)
+	_fg_debug_tick(real_dt)
 	if _clean_quit_frames > 0:
 		_clean_quit_frames -= 1
 		if _clean_quit_frames == 0:
@@ -2117,6 +2118,18 @@ func _setup_capture() -> void:
 			{"do": "wait", "s": 1.6}, {"shot": "i4"}, {"do": "wait", "s": 1.3}, {"shot": "i5"},
 			{"until_loaded": true, "max": 30.0}, {"shot": "i6-reveal"}, {"do": "wait", "s": 0.2}, {"shot": "i7a"}, {"do": "wait", "s": 0.2}, {"shot": "i7b"}, {"do": "wait", "s": 0.2}, {"shot": "i7c"}, {"do": "wait", "s": 1.2}, {"shot": "i8-title"}, {"do": "quit"}]
 		return
+	if "--about" in OS.get_cmdline_user_args():
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 2.0}, {"do": "about"}, {"do": "wait", "s": 1.2}, {"shot": "about"}, {"do": "quit"}]
+		return
+	if "--titlefg" in OS.get_cmdline_user_args():
+		# Title foreground over time (phone flicker hunt): a shot every 0.15 s.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 2.0}]
+		for k in 40:
+			cap_steps.append_array([{"do": "wait", "s": 0.15}, {"shot": "fg%02d" % k}])
+		cap_steps.append({"do": "quit"})
+		return
 	if "--bridge" in OS.get_cmdline_user_args():
 		# The Danube landmark bridge, forced into every far-hill slot.
 		save.data.tutorial_done = true
@@ -2418,6 +2431,8 @@ func _capture_tick(dt: float) -> void:
 				return
 		"skip_t":
 			state_t += st.s
+		"about":
+			ui.show_about()
 		"unfocus":
 			get_viewport().gui_release_focus()
 		"key":
@@ -3198,3 +3213,26 @@ func _estimate_quality() -> void:
 		apply_quality(q)
 	save.data.settings.auto_q = Art.Q
 	save.save()
+
+
+# ------------------------------------------------------------------ phone flicker recorder (debug builds)
+## Owner report: on the phone the front-row plants vanish for seconds and come
+## back; it doesn't happen on PC. Debug builds log every frame for 25 s after
+## the intro (foreground drawn?, plants, camera, quality, scaling) to
+## user://fg_debug.json so the cause can be read off the phone.
+var _fgd: Array = []
+var _fgd_t := 0.0
+var _fgd_done := false
+
+func _fg_debug_tick(dt: float) -> void:
+	if _fgd_done or loading or not OS.is_debug_build() or capture_dir != "" or bench.size() > 0:
+		return
+	_fgd_t += dt
+	_fgd.append([snappedf(_fgd_t, 0.01), Art.Q, int(fg.visible), int(fg.is_visible_in_tree()), world_view.fg_plants,
+		int(world_view.cam_x), int(world_view.size.x), int(get_viewport_rect().size.x), int(get_window().content_scale_mode), state])
+	if _fgd_t > 25.0:
+		_fgd_done = true
+		var f := FileAccess.open("user://fg_debug.json", FileAccess.WRITE)
+		if f != null:
+			f.store_string(JSON.stringify({"cols": ["t", "Q", "fg_vis", "fg_in_tree", "plants", "cam_x", "wv_w", "vp_w", "scale_mode", "state"], "rows": _fgd}))
+			f.close()
