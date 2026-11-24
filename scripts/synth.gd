@@ -17,6 +17,12 @@ var sfx := {}
 var music_vol := 0.8
 var sfx_vol := 0.9
 var world_vol := 0.7   # ambient world sounds (0.8.25)
+var world_level := 0.6 # how present the world sounds are in the current scene (main sets it)
+var _amb: Array = []   # two players for crossfading between countries
+var _amb_cur := 0
+var _amb_b := -1
+var _amb_mix := 1.0
+var _amb_streams := {}
 var biome := -1
 var drive := 1.0
 var _drive_target := 1.0
@@ -38,6 +44,11 @@ func _ready() -> void:
 		add_child(p)
 		_pool.append(p)
 	_build_sfx()
+	for i in 2:
+		var a := AudioStreamPlayer.new()
+		a.volume_db = -80.0
+		add_child(a)
+		_amb.append(a)
 
 # ------------------------------------------------------------------ playback
 func play(name: String, pitch := 1.0, vol_db := 0.0) -> void:
@@ -65,12 +76,47 @@ func perfect_note(tier: int) -> void:
 ## stuttered on phones). A country change then never touches the disk.
 var _threaded: Array = []   # paths requested with ResourceLoader.load_threaded_request
 
+## World sounds: each country's loop (waves, forest birds, river, mountain
+## wind) crossfades in over 2.5 s when the country changes.
+func set_world(b: int) -> void:
+	b = b % KEYS.size()
+	if b == _amb_b:
+		return
+	var path := "res://assets/ambience/b%d_world.ogg" % b
+	if not _amb_streams.has(b):
+		if not ResourceLoader.exists(path):
+			return
+		var st: AudioStream = ResourceLoader.load_threaded_get(path) if _threaded.has(path) else load(path)
+		_threaded.erase(path)
+		if st is AudioStreamOggVorbis:
+			st.loop = true
+		_amb_streams[b] = st
+	_amb_b = b
+	_amb_cur = 1 - _amb_cur
+	var p: AudioStreamPlayer = _amb[_amb_cur]
+	p.stream = _amb_streams[b]
+	p.volume_db = -80.0
+	p.play(randf() * 20.0)
+	_amb_mix = 0.0
+
+func _update_world(dt: float) -> void:
+	if _amb.is_empty():
+		return
+	_amb_mix = minf(_amb_mix + dt / 2.5, 1.0)
+	var base := maxf(world_vol * world_level, 0.0)
+	var cur: AudioStreamPlayer = _amb[_amb_cur]
+	var old: AudioStreamPlayer = _amb[1 - _amb_cur]
+	cur.volume_db = linear_to_db(maxf(base * sin(_amb_mix * PI * 0.5), 0.0001))
+	old.volume_db = linear_to_db(maxf(base * cos(_amb_mix * PI * 0.5), 0.0001))
+	if _amb_mix >= 1.0 and old.playing:
+		old.stop()
+
 func preload_all() -> void:
 	for b in KEYS.size():
-		if _cache.has(b):
-			continue   # already loaded (requesting it again left an unused load token)
-		for kind in ["pad", "drive"]:
-			var path := "res://assets/music/b%d_%s.wav" % [b, kind]
+		for kind in ["pad", "drive", "world"]:
+			if kind != "world" and _cache.has(b):
+				continue   # music already loaded (requesting it again left an unused token)
+			var path := ("res://assets/ambience/b%d_world.ogg" % b) if kind == "world" else ("res://assets/music/b%d_%s.wav" % [b, kind])
 			if ResourceLoader.exists(path) and not _threaded.has(path):
 				ResourceLoader.load_threaded_request(path)
 				_threaded.append(path)
@@ -81,7 +127,7 @@ func shutdown() -> void:
 	if _task != -1:
 		WorkerThreadPool.wait_for_task_completion(_task)
 		_task = -1
-	for p in [_pad, _drv] + _pool:
+	for p in [_pad, _drv] + _pool + _amb:
 		if is_instance_valid(p):
 			p.stop()
 			p.stream = null
@@ -89,6 +135,7 @@ func shutdown() -> void:
 		ResourceLoader.load_threaded_get(path)
 	_threaded.clear()
 	_cache.clear()
+	_amb_streams.clear()
 
 ## True once every threaded music load has finished (used by the loading screen).
 func preload_done() -> bool:
@@ -124,6 +171,7 @@ func _process(dt: float) -> void:
 		elif _cache.has(biome):
 			_start_music(biome)
 	drive = move_toward(drive, _drive_target, dt * 0.7)
+	_update_world(dt)
 	var mv := maxf(music_vol, 0.0001)
 	_pad.volume_db = linear_to_db(mv * 0.85)
 	_drv.volume_db = linear_to_db(maxf(mv * drive * 0.9, 0.0001))

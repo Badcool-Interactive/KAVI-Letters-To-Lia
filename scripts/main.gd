@@ -563,6 +563,7 @@ func set_biome(b: int, instant := false) -> void:
 	if instant:
 		pal = Art.biome(b)
 	synth.set_biome(b % 4)
+	synth.set_world(b % 4)
 
 func run_zoom() -> float:
 	return clampf(1.24 - (sim.v - 500.0) / 460.0 * 0.14, 1.06, 1.24) if sim != null else 1.2
@@ -1403,6 +1404,7 @@ func _process(delta: float) -> void:
 	if loading:
 		_update_loading(real_dt)
 	_update_audio_in(real_dt)
+	synth.world_level = {"scenic": 1.0, "title": 0.55, "recovery": 0.9, "finale": 0.7, "paused": 0.25}.get(state, 0.6)
 	_fg_debug_tick(real_dt)
 	_perf_tick(real_dt)
 	_quick_bench_tick(real_dt)
