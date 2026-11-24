@@ -12,6 +12,7 @@ var t = 0.0
 var view_l = 0.0
 var view_r = 1920.0
 var kind_mode = false
+var letter_col := Color(0.96, 0.97, 1.0)   # Garage letter colour (0.8.25)
 var sun_world_x := 1.0e9   # set by main each frame: obstacles light the side facing the sun
 var sun_k := 0.5
 
@@ -488,8 +489,22 @@ const INK := Color(0.04, 0.05, 0.09)
 func _mat() -> Color:
 	return pal.get("obstacle", Color(0.85, 0.82, 0.76))
 
-func _solid(ci: Node2D, pts: PackedVector2Array, fill: Color, ink_w := 3.0) -> void:
-	ci.draw_colored_polygon(pts, fill)
+func _solid(ci: Node2D, pts: PackedVector2Array, fill: Color, ink_w := 3.0, sunlit := false) -> void:
+	if sunlit and sun_k > 0.01:
+		var left := INF
+		var right := -INF
+		for pt in pts:
+			left = minf(left, pt.x)
+			right = maxf(right, pt.x)
+		var sun_right := sun_world_x > (left + right) * 0.5
+		var shine: Color = fill.lightened(0.25).lerp(pal.rim, 0.35)
+		var colors := PackedColorArray()
+		for pt in pts:
+			var side := inverse_lerp(left, right, pt.x)
+			colors.append(fill.lerp(shine, (side if sun_right else 1.0 - side) * sun_k))
+		ci.draw_polygon(pts, colors)
+	else:
+		ci.draw_colored_polygon(pts, fill)
 	var c := pts.duplicate()
 	c.append(pts[0])
 	ci.draw_polyline(c, INK, ink_w, Art.AA)
@@ -506,7 +521,7 @@ func _kraft() -> Color:
 
 func _parcel(ci: Node2D, r: Rect2, seed: int) -> void:
 	var kc := _kraft().darkened(Art.hash01(seed, 1) * 0.08)
-	_solid(ci, Art.rrect(r, 6.0), kc)
+	_solid(ci, Art.rrect(r, 6.0), kc, 3.0, true)
 	# shading on the lower part and the flap line
 	ci.draw_colored_polygon(Art.rrect(Rect2(r.position.x + 3, r.end.y - r.size.y * 0.3, r.size.x - 6, r.size.y * 0.3 - 3), 4.0), kc.darkened(0.12))
 	ci.draw_line(Vector2(r.position.x + 4, r.position.y + 10), Vector2(r.end.x - 4, r.position.y + 10), kc.darkened(0.22), 2.0)
@@ -530,13 +545,11 @@ func _wobble_begin(ci: Node2D, o: Dictionary, pivot: Vector2, amt := 0.12) -> vo
 func _wobble_end(ci: Node2D) -> void:
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-## Warm sunlit edge on the side of an obstacle that faces the sun (0.8.25).
-func _sun_edge(ci: Node2D, x0: float, x1: float, top: float) -> void:
-	var right := sun_world_x > (x0 + x1) * 0.5
-	var ex := x1 - 1.5 if right else x0 + 1.5
-	var c := Color(pal.rim.lightened(0.2), 0.55 * sun_k)
-	ci.draw_line(Vector2(ex, top + 4.0), Vector2(ex, -2.0), c, 3.0)
-	ci.draw_line(Vector2(lerpf(x0, x1, 0.25), top + 1.0), Vector2(lerpf(x0, x1, 0.75), top + 1.0), Color(c, c.a * 0.6), 2.0)
+func _sun_circle(ci: Node2D, center: Vector2, radius: float) -> void:
+	if sun_k <= 0.01:
+		return
+	var angle := -0.55 if sun_world_x > center.x else PI + 0.55
+	ci.draw_arc(center, radius - 1.0, angle - 0.6, angle + 0.6, 8, Color(pal.rim, 0.55 * sun_k), 2.0, Art.AA)
 
 func _hurdle(ci: Node2D, o: Dictionary) -> void:
 	_wobble_begin(ci, o, Vector2(o.x + o.w * 0.5, 0.0))
@@ -557,7 +570,6 @@ func _hurdle(ci: Node2D, o: Dictionary) -> void:
 				_hurdle_parcels(ci, o)
 	else:
 		_hurdle_parcels(ci, o)
-	_sun_edge(ci, o.x + 4.0, o.x + o.w - 4.0, -o.h)
 	_wobble_end(ci)
 
 func _amphora(ci: Node2D, o: Dictionary) -> void:
@@ -576,7 +588,7 @@ func _amphora(ci: Node2D, o: Dictionary) -> void:
 		var y := -h + 22.0 + u * (h - 22.0)
 		var bulge := sin(u * PI * 0.95 + 0.1) * w
 		body.append(Vector2(cx + maxf(bulge, 9.0), y))
-	_solid(ci, body, clay)
+	_solid(ci, body, clay, 3.0, true)
 	_solid(ci, Art.rrect(Rect2(cx - 11, -h + 6, 22, 18), 3.0), clay.darkened(0.05))
 	_solid(ci, Art.rrect(Rect2(cx - 15, -h + 2, 30, 7), 3.0), clay.lightened(0.08), 2.5)
 	for sd in [-1.0, 1.0]:
@@ -591,7 +603,7 @@ func _orange_crate(ci: Node2D, o: Dictionary) -> void:
 	var h: float = o.h * 0.62
 	var r := Rect2(o.x, -h, o.w, h + 4)
 	var wood := _wood()
-	_solid(ci, Art.rrect(r, 4.0), wood)
+	_solid(ci, Art.rrect(r, 4.0), wood, 3.0, true)
 	for k in 3:
 		var yy: float = r.position.y + 8 + k * (h - 10) / 3.0
 		ci.draw_line(Vector2(r.position.x + 4, yy), Vector2(r.end.x - 4, yy), wood.darkened(0.25), 2.0)
@@ -602,10 +614,12 @@ func _orange_crate(ci: Node2D, o: Dictionary) -> void:
 		var px: float = o.x + 10.0 + k * (o.w - 20.0) / float(maxi(n - 1, 1))
 		ci.draw_circle(Vector2(px, -h - 6), 10.5, INK)
 		ci.draw_circle(Vector2(px, -h - 6), 8.5, oc)
+		_sun_circle(ci, Vector2(px, -h - 6), 8.5)
 	for k in maxi(n - 1, 1):
 		var px2: float = o.x + 19.0 + k * (o.w - 38.0) / float(maxi(n - 2, 1))
 		ci.draw_circle(Vector2(px2, -o.h + 10), 10.5, INK)
 		ci.draw_circle(Vector2(px2, -o.h + 10), 8.5, oc.lightened(0.06))
+		_sun_circle(ci, Vector2(px2, -o.h + 10), 8.5)
 	ci.draw_colored_polygon(Art.ellipse(Vector2(o.x + o.w * 0.5 + 6, -o.h + 1), Vector2(7, 3), 10, -0.5), LEAF.darkened(0.3))
 
 func _log_stack(ci: Node2D, o: Dictionary) -> void:
@@ -616,6 +630,7 @@ func _log_stack(ci: Node2D, o: Dictionary) -> void:
 	for c in cs:
 		ci.draw_circle(c, rr + 3.0, INK)
 		ci.draw_circle(c, rr, bark)
+		_sun_circle(ci, c, rr)
 		ci.draw_circle(c, rr * 0.78, cut)
 		ci.draw_arc(c, rr * 0.5, 0, TAU, 16, cut.darkened(0.2), 1.6)
 		ci.draw_arc(c, rr * 0.22, 0, TAU, 10, cut.darkened(0.25), 1.6)
@@ -637,7 +652,7 @@ func _barrel(ci: Node2D, o: Dictionary) -> void:
 	for k in range(8, -1, -1):
 		var u := k / 8.0
 		pts.append(Vector2(r.end.x + sin(u * PI) * 5.0, r.position.y + u * r.size.y))
-	_solid(ci, pts, wood)
+	_solid(ci, pts, wood, 3.0, true)
 	for k in 3:
 		var sx: float = r.position.x + r.size.x * (0.28 + k * 0.22)
 		ci.draw_line(Vector2(sx, r.position.y + 3), Vector2(sx, r.end.y - 3), wood.darkened(0.22), 2.0)
@@ -659,6 +674,7 @@ func _snowman(ci: Node2D, o: Dictionary) -> void:
 	for c in [[c1, r1], [c2, r2], [c3, r3]]:
 		ci.draw_circle(c[0], c[1] + 3.0, INK)
 		ci.draw_circle(c[0], c[1], snow)
+		_sun_circle(ci, c[0], c[1])
 	ci.draw_arc(c1 + Vector2(-r1 * 0.3, -r1 * 0.3), r1 * 0.6, PI * 1.1, PI * 1.5, 8, Color(1, 1, 1, 0.9), 2.0)
 	# face, carrot nose, scarf and coal buttons
 	ci.draw_circle(c3 + Vector2(-r3 * 0.35, -r3 * 0.15), 2.4, INK)
@@ -700,7 +716,7 @@ func _beam(ci: Node2D, o: Dictionary) -> void:
 	var l0: float = o.x - 26.0
 	var l1: float = o.x + o.w + 4.0
 	for lx in [l0, l1]:
-		_solid(ci, Art.rrect(Rect2(lx, top, 22, -top + 4), 5.0), leg, 2.5)
+		_solid(ci, Art.rrect(Rect2(lx, top, 22, -top + 4), 5.0), leg, 2.5, true)
 	_solid(ci, Art.rrect(Rect2(l0 - 14, top - 18, l1 - l0 + 50, 24), 8.0), leg.lightened(0.06), 2.5)
 	match kind:
 		"pavers":
@@ -724,7 +740,7 @@ func _beam(ci: Node2D, o: Dictionary) -> void:
 	ci.draw_line(Vector2(o.x + 24, top + 6), Vector2(o.x + 24, bottom - 92), INK, 3.0)
 	ci.draw_line(Vector2(o.x + o.w - 24, top + 6), Vector2(o.x + o.w - 24, bottom - 92), INK, 3.0)
 	ci.draw_set_transform_matrix(Transform2D(swing, hang) * Transform2D(0.0, -hang))
-	_solid(ci, Art.rrect(Rect2(o.x, bottom - 72, o.w, 72), 12.0), wood)
+	_solid(ci, Art.rrect(Rect2(o.x, bottom - 72, o.w, 72), 12.0), wood, 3.0, true)
 	# planks
 	ci.draw_line(Vector2(o.x + 6, bottom - 48), Vector2(o.x + o.w - 6, bottom - 48), wood.darkened(0.22), 2.0)
 	ci.draw_line(Vector2(o.x + 6, bottom - 24), Vector2(o.x + o.w - 6, bottom - 24), wood.darkened(0.22), 2.0)
@@ -838,7 +854,7 @@ func _rescue(ci: Node2D, o: Dictionary) -> void:
 func _plane(ci: Node2D, p: Vector2, v: Vector2) -> void:
 	var a = v.angle()
 	ci.draw_set_transform(p, a, Vector2.ONE)
-	ci.draw_colored_polygon(PackedVector2Array([Vector2(16, 0), Vector2(-12, -9), Vector2(-6, 0), Vector2(-12, 9)]), Color(0.96, 0.97, 1.0))
+	ci.draw_colored_polygon(PackedVector2Array([Vector2(16, 0), Vector2(-12, -9), Vector2(-6, 0), Vector2(-12, 9)]), letter_col)
 	ci.draw_line(Vector2(16, 0), Vector2(-6, 0), Color(0.6, 0.7, 0.85), 1.5)
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 

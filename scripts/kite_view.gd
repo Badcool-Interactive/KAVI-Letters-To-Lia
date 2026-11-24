@@ -43,6 +43,11 @@ func set_look(l: Dictionary) -> void:
 	scarf_pattern = l.pattern
 	tip = l.tip
 	helmet = l.helmet
+	extra = l.get("extra", "")
+	trail_kind = l.get("trail", "")
+	face = l.get("face", "classic")
+	bag = l.get("bag", "classic")
+	bag_color = BAG_COLORS[bag]
 const INK := Color(0.04, 0.06, 0.11)
 const VISOR := Color(0.03, 0.05, 0.09)
 const SCARVES := [Color(1.0, 0.35, 0.14), Color(0.30, 0.65, 1.0), Color(1.0, 0.45, 0.65),
@@ -64,6 +69,12 @@ var s = 1.15
 var reduced_motion = false
 var blink_t = 0.0
 var trail_on = true
+var extra := ""        # Garage accessory (0.8.25): glasses, bow, flower, headphones, crown
+var face := "classic"
+var bag := "classic"
+var bag_color := BAG
+var trail_kind := ""   # Garage trail: stars, hearts, petals, snow
+var _bits: Array = []  # trail particles in Kavi's local space
 
 var _scarf_pts: Array = []
 var _scarf_prev: Array = []
@@ -110,6 +121,7 @@ func tick(dt: float) -> void:
 	_turn = move_toward(_turn, 1.0 if pose in FRONT_POSES else 0.0, dt / 0.3)
 	_update_scarf(dt)
 	_update_trail()
+	_update_bits(dt)
 	_base.queue_redraw()
 	_add.queue_redraw()
 
@@ -399,8 +411,35 @@ static var _TORSO := _smooth_closed(PackedVector2Array([Vector2(-14, -30), Vecto
 static var _TORSO_SHADE := _smooth_closed(PackedVector2Array([Vector2(-12, -33), Vector2(-15.5, -50), Vector2(-13.5, -60), Vector2(-6, -64), Vector2(-2, -63), Vector2(-4, -33)]))
 static var _BOOT := _smooth_closed(PackedVector2Array([Vector2(-10, -12), Vector2(4, -12), Vector2(9, -7), Vector2(15, -4), Vector2(15, 1), Vector2(-11, 1)]))
 const STRAP := Color(0.36, 0.20, 0.14)
+const BAG_COLORS := {
+	"classic": BAG, "daypack": Color(0.31, 0.74, 0.64),
+	"postbag": Color(0.58, 0.37, 0.66), "rolltop": Color(0.80, 0.55, 0.24),
+}
+
+func _draw_bag(ci: Node2D) -> void:
+	var body := Rect2(-31, -63, 18, 27)
+	match bag:
+		"daypack":
+			_poly(ci, Art.rrect(body.grow_individual(4, 4, 0, 0), 9), bag_color)
+			ci.draw_colored_polygon(Art.rrect(Rect2(-34, -52, 11, 9), 3), bag_color.darkened(0.24))
+			ci.draw_line(Vector2(-32, -50), Vector2(-25, -50), bag_color.lightened(0.45), 1.5)
+		"postbag":
+			_poly(ci, Art.rrect(body.grow_individual(5, 0, 1, 0), 4), bag_color)
+			ci.draw_colored_polygon(Art.rrect(Rect2(-36, -63, 22, 11), 4), bag_color.lightened(0.22))
+			ci.draw_rect(Rect2(-28, -55, 5, 5), Color(1.0, 0.82, 0.45))
+		"rolltop":
+			_poly(ci, Art.rrect(body.grow_individual(3, 5, 0, 0), 5), bag_color)
+			ci.draw_colored_polygon(Art.rrect(Rect2(-35, -69, 22, 8), 3), bag_color.darkened(0.25))
+			ci.draw_line(Vector2(-28, -66), Vector2(-28, -44), STRAP, 2.5)
+			ci.draw_line(Vector2(-21, -66), Vector2(-21, -44), STRAP, 2.5)
+		_:
+			_poly(ci, Art.rrect(body, 6), bag_color)
+			ci.draw_line(Vector2(-30, -55), Vector2(-14, -55), bag_color.darkened(0.35), 2.0)
+			ci.draw_circle(Vector2(-22, -51), 2.2, Color(1.0, 0.82, 0.45))
 
 func _paint(ci: Node2D, add: bool) -> void:
+	if not add:
+		_draw_bits(ci)
 	var p = _pose_params()
 	var tc: Color = TIER_COL[clampi(tier - 1, 0, 3)]
 	# trail ribbon (world-space history)
@@ -439,9 +478,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 		# --- scarf tails (behind body)
 		_draw_scarf(ci, p)
 		# --- messenger bag on the back, nozzles underneath (hover thrust)
-		_poly(ci, Art.rrect(Rect2(-31, -63, 18, 27), 6), BAG)
-		ci.draw_line(Vector2(-30, -55), Vector2(-14, -55), BAG.darkened(0.35), 2.0)
-		ci.draw_circle(Vector2(-22, -51), 2.2, Color(1.0, 0.82, 0.45))
+		_draw_bag(ci)
 		_poly(ci, Art.ellipse(Vector2(-25, -35), Vector2(4.5, 3.5), 10), JOINT)
 		_poly(ci, Art.ellipse(Vector2(-17, -35), Vector2(4.5, 3.5), 10), JOINT)
 		# --- torso: broad chest tapering to the hips (strong but round)
@@ -599,6 +636,7 @@ func _head_shell(ci: Node2D, hr: Rect2) -> void:
 
 ## Parts that sit behind the head shell.
 func _helmet_back(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
+	_animal_back(ci, hc, hr)
 	match helmet:
 		"teapot":
 			# handle on the left, spout on the right
@@ -618,6 +656,8 @@ func _helmet_back(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
 				ci.draw_colored_polygon(Art.ellipse(c + Vector2(0, 2).rotated(ang), Vector2(3.6, 12), 12, ang), Color(1.0, 0.62, 0.72))
 
 func _helmet_front(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
+	_animal_front(ci, hc, hr)
+	_accessory(ci, hc, hr)
 	match helmet:
 		"astro":
 			# fishbowl glass dome with a collar ring
@@ -809,7 +849,18 @@ func _eyes(ci: Node2D, vc: Vector2) -> void:
 	match e:
 		"normal", "focus":
 			for c in [l, r]:
-				ci.draw_colored_polygon(Art.rrect(Rect2(c.x - 3, c.y - 5.5, 6, 11), 3), col)
+				match face:
+					"buttons":
+						ci.draw_circle(c, 3.5, col)
+					"stars":
+						var pts := PackedVector2Array()
+						for i in 8:
+							pts.append(c + Vector2.from_angle(-PI * 0.5 + i * PI * 0.25) * (5.0 if i % 2 == 0 else 2.0))
+						ci.draw_colored_polygon(pts, col)
+					"crescents":
+						ci.draw_arc(c + Vector2(0, 1), 4.0, PI + 0.2, TAU - 0.2, 10, col, 2.2, Art.AA)
+					_:
+						ci.draw_colored_polygon(Art.rrect(Rect2(c.x - 3, c.y - 5.5, 6, 11), 3), col)
 			if e == "focus":
 				ci.draw_line(l + Vector2(-5, -8), l + Vector2(4, -5), VISOR, 3.0)
 				ci.draw_line(r + Vector2(-4, -5), r + Vector2(5, -8), VISOR, 3.0)
@@ -904,7 +955,7 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 		_strip(ci, tl, 6.6, 4.4, INK)
 		_strip(ci, tl, 5.0, 3.0, scarf_col, _scarf_colors(tl.size()))
 		# bag peeking out behind
-		_poly(ci, Art.rrect(Rect2(-29, -62, 9, 24), 4), BAG)
+		_poly(ci, Art.rrect(Rect2(-29, -62, 9, 24), 4), bag_color)
 		# torso
 		var torso := PackedVector2Array([Vector2(-15, -30), Vector2(-21, -50), Vector2(-20, -61), Vector2(-10, -67),
 			Vector2(10, -67), Vector2(20, -61), Vector2(21, -50), Vector2(15, -30)])
@@ -951,3 +1002,133 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 		if helmet == "explorer":
 			ci.draw_circle(hc + Vector2(14, -22), 3.0, Art.hdr(Color(1.0, 0.92, 0.7), 2.2))
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+# ------------------------------------------------------------------ animal suits, accessories, trails (0.8.25)
+const MANE := Color(0.86, 0.55, 0.22)
+const FUR_BROWN := Color(0.62, 0.42, 0.28)
+const FOX := Color(1.0, 0.55, 0.20)
+const FROG := Color(0.45, 0.82, 0.40)
+const BEE := Color(1.0, 0.80, 0.22)
+
+func _ear(ci: Node2D, c: Vector2, r: float, col: Color, inner: Color) -> void:
+	_poly(ci, Art.ellipse(c, Vector2(r, r), 14), col)
+	ci.draw_colored_polygon(Art.ellipse(c, Vector2(r * 0.55, r * 0.55), 12), inner)
+
+func _animal_back(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
+	match helmet:
+		"lion":
+			for k in 14:
+				var a := TAU * k / 14.0 + sin(t * 2.0 + k) * 0.03
+				ci.draw_circle(hc + Vector2(cos(a) * hr.size.x * 0.62, sin(a) * hr.size.y * 0.66), 10.0, MANE.darkened(0.08 * (k % 2)))
+			_ear(ci, hc + Vector2(-hr.size.x * 0.36, -hr.size.y * 0.52), 6.0, MANE, MANE.lightened(0.3))
+			_ear(ci, hc + Vector2(hr.size.x * 0.36, -hr.size.y * 0.52), 6.0, MANE, MANE.lightened(0.3))
+		"bear":
+			_ear(ci, hc + Vector2(-hr.size.x * 0.38, -hr.size.y * 0.48), 8.0, FUR_BROWN, FUR_BROWN.lightened(0.35))
+			_ear(ci, hc + Vector2(hr.size.x * 0.38, -hr.size.y * 0.48), 8.0, FUR_BROWN, FUR_BROWN.lightened(0.35))
+		"panda":
+			_ear(ci, hc + Vector2(-hr.size.x * 0.38, -hr.size.y * 0.48), 8.0, Color(0.12, 0.12, 0.14), Color(0.25, 0.25, 0.28))
+			_ear(ci, hc + Vector2(hr.size.x * 0.38, -hr.size.y * 0.48), 8.0, Color(0.12, 0.12, 0.14), Color(0.25, 0.25, 0.28))
+		"fox":
+			for sd in [-1.0, 1.0]:
+				var b := hc + Vector2(sd * hr.size.x * 0.30, -hr.size.y * 0.42)
+				var wob := sin(t * 3.0 + sd) * 0.06
+				_poly(ci, PackedVector2Array([b + Vector2(-8, 4).rotated(sd * 0.25 + wob), b + Vector2(0, -18).rotated(sd * 0.25 + wob), b + Vector2(8, 4).rotated(sd * 0.25 + wob)]), FOX)
+				ci.draw_colored_polygon(PackedVector2Array([b + Vector2(-4, 2).rotated(sd * 0.25 + wob), b + Vector2(0, -10).rotated(sd * 0.25 + wob), b + Vector2(4, 2).rotated(sd * 0.25 + wob)]), Color(1, 0.95, 0.9))
+		"dino":
+			for k in 4:
+				var u := float(k) / 3.0
+				var b := Vector2(lerpf(hr.position.x + 6, hr.end.x - 10, u), hr.position.y + 3)
+				_poly(ci, PackedVector2Array([b + Vector2(-6, 3), b + Vector2(0, -11 - 3 * sin(u * PI)), b + Vector2(6, 3)]), FROG.darkened(0.1))
+		"frog":
+			for sd in [-1.0, 1.0]:
+				var e := hc + Vector2(sd * hr.size.x * 0.28, -hr.size.y * 0.50)
+				_poly(ci, Art.ellipse(e, Vector2(9, 8), 14), FROG)
+				ci.draw_circle(e + Vector2(0, -1), 4.5, Color(1, 1, 1))
+				ci.draw_circle(e + Vector2(look.x * 1.5, -1 + look.y), 2.4, INK)
+
+func _animal_front(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
+	match helmet:
+		"lion":
+			ci.draw_colored_polygon(Art.ellipse(Vector2(hc.x, hr.end.y - 2), Vector2(9, 4), 12), MANE.lightened(0.2))
+		"panda":
+			for sd in [-1.0, 1.0]:
+				ci.draw_colored_polygon(Art.ellipse(hc + Vector2(sd * hr.size.x * 0.41, hr.size.y * 0.18), Vector2(4.5, 6), 12), Color(0.12, 0.12, 0.14, 0.9))
+		"fox":
+			ci.draw_colored_polygon(Art.ellipse(Vector2(hc.x, hr.end.y - 3), Vector2(10, 4), 12), Color(1, 0.95, 0.9))
+		"penguin":
+			ci.draw_colored_polygon(Art.rrect(Rect2(hr.position.x - 1, hr.position.y - 2, hr.size.x + 2, hr.size.y * 0.28), 10.0), Color(0.10, 0.12, 0.18))
+			_poly(ci, PackedVector2Array([Vector2(hc.x - 5, hr.end.y - 3), Vector2(hc.x + 5, hr.end.y - 3), Vector2(hc.x, hr.end.y + 5)]), Color(1.0, 0.72, 0.2))
+		"bee":
+			for k in 2:
+				ci.draw_line(Vector2(hr.position.x + 2, hr.position.y + 6 + k * 6), Vector2(hr.end.x - 2, hr.position.y + 6 + k * 6), Color(0.1, 0.1, 0.12, 0.85) if k == 0 else Color(BEE, 0.9), 4.0)
+			for sd in [-1.0, 1.0]:
+				var a0 := hc + Vector2(sd * 7.0, hr.position.y - hc.y + 1)
+				var a1 := a0 + Vector2(sd * 6.0, -15.0 + sin(t * 4.0 + sd) * 1.5)
+				ci.draw_line(a0, a1, INK, 2.0)
+				ci.draw_circle(a1, 3.2, INK)
+
+func _accessory(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
+	match extra:
+		"glasses":
+			var c := hc + Vector2(2, 1)
+			for sd in [-1.0, 1.0]:
+				ci.draw_arc(c + Vector2(sd * 8.0, 0), 7.0, 0.0, TAU, 18, Color(0.95, 0.75, 0.35, 0.95), 2.2)
+			ci.draw_line(c + Vector2(-1, 0), c + Vector2(1, 0), Color(0.95, 0.75, 0.35, 0.95), 2.0)
+		"bow":
+			var b := Vector2(hr.position.x + 8, hr.position.y + 3)
+			var red := Color(0.95, 0.30, 0.42)
+			_poly(ci, PackedVector2Array([b, b + Vector2(-11, -8), b + Vector2(-11, 8)]), red)
+			_poly(ci, PackedVector2Array([b, b + Vector2(11, -8), b + Vector2(11, 8)]), red)
+			ci.draw_circle(b, 3.5, red.darkened(0.2))
+		"flower":
+			var f := Vector2(hr.position.x + 4, hr.position.y + 10)
+			for k in 6:
+				ci.draw_circle(f + Vector2.from_angle(k * TAU / 6.0 + t * 0.5) * 5.0, 3.6, Color(1, 1, 1))
+			ci.draw_circle(f, 3.0, Color(1.0, 0.82, 0.3))
+		"headphones":
+			ci.draw_arc(hc + Vector2(0, -2), hr.size.x * 0.56, PI * 1.1, PI * 1.9, 16, INK, 5.0)
+			ci.draw_arc(hc + Vector2(0, -2), hr.size.x * 0.56, PI * 1.1, PI * 1.9, 16, TEAL, 3.0)
+			for sd in [-1.0, 1.0]:
+				_poly(ci, Art.rrect(Rect2(hc.x + sd * hr.size.x * 0.52 - 5, hc.y - 6, 10, 15), 4.0), TEAL.darkened(0.25))
+		"crown":
+			var b := Vector2(hc.x - 9, hr.position.y - 1)
+			var gold := Color(1.0, 0.82, 0.3)
+			_poly(ci, PackedVector2Array([b, b + Vector2(0, -10), b + Vector2(5, -5), b + Vector2(9, -12), b + Vector2(13, -5), b + Vector2(18, -10), b + Vector2(18, 0)]), gold)
+			ci.draw_circle(b + Vector2(9, -12), 1.8, Color(0.95, 0.3, 0.4))
+
+## Trail bits: small shapes left behind while Kavi runs or hovers; they slide
+## back with the world and float up, fading out.
+func _update_bits(dt: float) -> void:
+	if trail_kind == "" or reduced_motion:
+		_bits.clear()
+		return
+	var moving := pose in ["run", "jump", "hover", "fall", "slide", "dive"] and speed > 60.0
+	if moving and randf() < dt * 14.0:
+		_bits.append({"p": Vector2(-18.0 + randf_range(-6, 6), -40.0 + randf_range(-25, 15)), "a": 0.0, "r": randf() * TAU, "s": randf_range(0.7, 1.2)})
+	for b in _bits:
+		b.a += dt
+		b.p.x -= speed * dt * 0.8
+		b.p.y -= 22.0 * dt
+		b.r += dt * 1.5
+	_bits = _bits.filter(func(b): return b.a < 1.2)
+
+func _draw_bits(ci: Node2D) -> void:
+	for b in _bits:
+		var k: float = 1.0 - b.a / 1.2
+		var p: Vector2 = b.p
+		var sz: float = 5.0 * b.s * (0.6 + 0.4 * k)
+		match trail_kind:
+			"stars":
+				var st := PackedVector2Array()
+				for i in 10:
+					st.append(p + Vector2.from_angle(b.r + i * PI / 5.0) * (sz if i % 2 == 0 else sz * 0.45))
+				ci.draw_colored_polygon(st, Color(1.0, 0.88, 0.40, k))
+			"hearts":
+				_heart(ci, p, sz * 0.9, Color(1.0, 0.45, 0.65, k))
+			"petals":
+				ci.draw_colored_polygon(Art.ellipse(p, Vector2(sz, sz * 0.5), 10, b.r), Color(1.0, 0.70, 0.82, k))
+			"snow":
+				for i in 3:
+					var d := Vector2.from_angle(b.r + i * PI / 3.0) * sz
+					ci.draw_line(p - d, p + d, Color(0.92, 0.97, 1.0, k), 1.5)

@@ -85,6 +85,7 @@ func _update_transition() -> void:
 ## How much of the sun/moon disc is above the hills (0 hidden .. 1 clear).
 ## Light shafts, the water reflection and the rim glow all follow it.
 var sun_vis := 1.0
+var sun_position := Vector2.ZERO
 var _peaks: Array = [] # screen-space mountain triangles that can hide the sun
 
 func _peak_y(x: float) -> float:
@@ -98,15 +99,16 @@ func _peak_y(x: float) -> float:
 			y = minf(y, lerpf(pk[4], pk[2], f))
 	return y
 
-## The dominant sun/moon (during a transition: whichever is brighter).
-## Sun-side light (0.8.25): which way the sun is from a point, and how strongly
-## it lights things (strong when the sun is low and near, none when hidden).
+## Direction and strength of the dominant sun or moon for scene details.
 func sun_light(p: Vector2) -> Vector2:
-	var sp := _sun_screen()
-	var d := sp - p
-	var k := clampf(1.0 - d.length() / (size.x * 0.9), 0.15, 1.0) * clampf(sun_vis * 1.2, 0.25, 1.0)
+	var d := sun_position - p
+	var k := clampf(1.0 - d.length() / (size.x * 0.9), 0.15, 1.0) * sun_strength()
 	return d.normalized() * k
 
+func sun_strength() -> float:
+	return clampf(sun_vis * 1.2, 0.0, 1.0)
+
+## The dominant sun/moon (during a transition: whichever is brighter).
 func _sun_screen() -> Vector2:
 	if tr_from.is_empty():
 		return _sun_at(pal, 0.0)
@@ -115,7 +117,8 @@ func _sun_screen() -> Vector2:
 	return _sun_at(tr_from, e * 120.0) if e < 0.5 else _sun_at(tr_to, (1.0 - e) * 120.0)
 
 func _update_sun_vis() -> void:
-	var sp := _sun_screen()
+	sun_position = _sun_screen()
+	var sp := sun_position
 	var r: float = pal.sun_r * 0.45
 	var v := 0.0
 	# sample three points across the disc; each counts for a third
@@ -509,7 +512,9 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			var top = p.y - 20 * s - th
 			ci.draw_rect(Rect2(x0 - 4 * s, top - 14 * s, tw + 8 * s, 15 * s), col)
 			ci.draw_colored_polygon(PackedVector2Array([Vector2(x0 - 8 * s, top - 13 * s), Vector2(p.x, top - 13 * s - tw * 0.2), Vector2(x0 + tw + 8 * s, top - 13 * s)]), col)
-			ci.draw_line(Vector2(x0 - 8 * s, top - 13 * s), Vector2(p.x, top - 13 * s - tw * 0.2), Color(pal.rim, 0.35), 2.0, Art.AA)
+			var sun := sun_light(Vector2(p.x, top))
+			var sun_x: float = x0 + tw + 8 * s if sun.x > 0.0 else x0 - 8 * s
+			ci.draw_line(Vector2(sun_x, top - 13 * s), Vector2(p.x, top - 13 * s - tw * 0.2), Color(pal.rim, 0.65 * sun.length() * col.a), 2.0, Art.AA)
 			if Art.hash01(seed, 9) < 0.5:
 				L.append([Vector2(p.x, top - 22 * s), 4.0 * s, Art.hdr(pal.mote, 1.0)])
 		"lighthouse":
@@ -634,7 +639,12 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-pw, 60), top, p + Vector2(pw, 60)]), col)
 			if layer < 2:
 				_peaks.append([p.x - pw, top.x, top.y, p.x + pw, p.y + 60.0])
-			ci.draw_line(top, top.lerp(p + Vector2(pw, 60), 0.35), Color(pal.rim, 0.45), 3.0)
+			var sun := sun_light(top)
+			var lit_base: Vector2 = p + Vector2(pw if sun.x > 0.0 else -pw, 60)
+			var foot: Vector2 = p + Vector2(0, 60)
+			var face_light: float = sun.length() * col.a
+			ci.draw_colored_polygon(PackedVector2Array([top, lit_base, foot]), Color(pal.rim, 0.12 * face_light))
+			ci.draw_line(top, top.lerp(lit_base, 0.35), Color(pal.rim, 0.55 * face_light), 3.0)
 		"lantern":
 			var bob = sin(t * 1.3 + seed) * 12.0
 			var lp = p + Vector2(0, -(120.0 + Art.hash01(seed, 2) * 160.0) * s + bob)
@@ -1033,6 +1043,9 @@ func _draw_town(ci: Node2D, off: float, col: Color) -> void:
 			var sx = x - off
 			var by = _ridge_y(0, x + bw * 0.5) + 18.0
 			ci.draw_rect(Rect2(sx, by - bh, bw, bh + 40.0), tc)
+			var sun := sun_light(Vector2(sx + bw * 0.5, by - bh * 0.5))
+			var face_x: float = sx + bw * 0.72 if sun.x > 0.0 else sx
+			ci.draw_rect(Rect2(face_x, by - bh, bw * 0.28, bh + 40.0), Color(pal.rim, 0.25 * sun.length() * fade))
 			var r = Art.hash01(sd, 3)
 			if village:
 				ci.draw_colored_polygon(PackedVector2Array([Vector2(sx - 5, by - bh), Vector2(sx + bw * 0.5, by - bh - bw * 0.5), Vector2(sx + bw + 5, by - bh)]), tc)
@@ -1046,6 +1059,7 @@ func _draw_town(ci: Node2D, off: float, col: Color) -> void:
 				ci.draw_line(Vector2(sx + bw * 0.5, by - bh), Vector2(sx + bw * 0.5, by - bh - 34.0), tc, 2.0)
 				if fmod(t + sd, 2.0) < 1.0:
 					ci.draw_rect(Rect2(sx + bw * 0.5 - 1.5, by - bh - 36.0, 3, 3), Color(Art.hdr(Color(1.0, 0.35, 0.3), 1.4), fade))
+			x += bw + 2.0 + Art.hash01(sd, 4) * (14.0 if village else 6.0)
 			if Art.Q == 0:
 				continue
 			# windows: a handful per building, a few slowly blink on/off
@@ -1057,7 +1071,7 @@ func _draw_town(ci: Node2D, off: float, col: Color) -> void:
 				var wx = sx + 4.0 + floor(Art.hash01(sd, 60 + k) * (bw - 10.0) / 7.0) * 7.0
 				var wy = by - bh + 6.0 + floor(Art.hash01(sd, 80 + k) * maxf(bh - 22.0, 1.0) / 10.0) * 10.0
 				ci.draw_rect(Rect2(wx, wy, 3.0, 4.0), Color(win, (0.55 + 0.45 * Art.hash01(sd, 90 + k)) * fade))
-			x += bw + 2.0 + Art.hash01(sd, 4) * (14.0 if village else 6.0)
+
 
 ## A stick-figure silhouette. p = feet. Returns the right hand position.
 ## A soft silhouette person (rounded body, tapered limbs, round hands and
@@ -1440,3 +1454,5 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 				bp += Vector2.from_angle(ang) * 240.0 * scat
 			var flap = sin(t * (8.0 + 14.0 * scat) + k) * 5.0
 			ci.draw_polyline(PackedVector2Array([bp + Vector2(-8, -flap), bp, bp + Vector2(8, -flap)]), sil, 2.0, Art.AA)
+			var sun := sun_light(bp)
+			ci.draw_line(bp, bp + Vector2(8 if sun.x > 0.0 else -8, -flap), Color(pal.rim, 0.65 * sun.length() * alpha), 1.5, Art.AA)

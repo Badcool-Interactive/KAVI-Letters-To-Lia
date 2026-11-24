@@ -1,4 +1,14 @@
 # Changelog
+## 0.8.25 (2026-11-25) · Settings, world audio and the Garage
+
+- **Settings** has Sound, Graphics, Controls, Accessibility and About pages. Question marks explain options. Master, music, effects and world sounds use independent sliders.
+- **Graphics** has Auto, Low, Medium, High and Extreme, with comparison images and the live world beside the menu. Extreme adds 4× 2D anti-aliasing and more effects and removes the engine frame cap. Custom starts off and exposes scenery detail, glow, rays, floating lights, effects and frame cap, plus resolution on supported phones.
+- **Performance** adds a simple or detailed overlay, session stats, a recent 10-second window and average, 1% low and 0.1% low FPS. Run benchmark measures 10 seconds of Scenic View at High and chooses a Low, Medium or High starting point for Auto. The benchmark keeps its test settings fixed until the result. First-launch Auto samples the rendered scene during the intro reveal.
+- **World lighting** follows the visible sun or moon on mountain faces, town buildings, temple roofs, obstacles and airborne scenery. Balloons have a warm burner glow, and airplanes have coloured wingtip lights and white strobes.
+- **World sounds** crossfade between Greek surf, forest birds, the Danube and mountain wind. Scenic View gives them the most room in the mix.
+- **Garage** adds Lion, Bear, Fox, Panda, Frog, Penguin, Bee and Dino suits, five accessories, three bag designs, three face styles, four trails and four letter colours. The ten tabs switch on focus, the item list scrolls to the focused item, and the Back button stays visible. All cosmetics are free in this development build.
+- **Save compatibility:** older saves get default values for new settings and cosmetics. Previous suit and scarf indices are preserved.
+
 ## 0.8.24 (2026-11-25): About screen, likely fix for vanishing front plants on phones
 - **About screen** (Settings → About KAVI): game name, version, Godot version, "Made by Baljeet Singh · BADCOOL INTERACTIVE", and buttons to play in the browser, get downloads and updates, and view the source on GitHub. For a store release to children, external links will need a parental gate.
 - **Front plants vanishing on phones:** the owner's phone recording showed the whole front-row agave missing for seconds at a time, while on PC (including the phone's 2800×1280 shape and its 1080p scaling) it never happens. Likely cause: the mobile renderer culling a painter with a wrong automatic bounding rect. Every painter now sets a custom, all-covering rect, so Godot never culls it. Not yet confirmed on the phone: the USB debugging link kept dropping.

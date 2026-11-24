@@ -382,6 +382,7 @@ func _gap(v: Container, h: float) -> void:
 func show_title() -> void:
 	main.garage_open = false
 	main.menu_dim = false
+	main.apply_look()
 	var v := _column(0.30)
 	var ch := int(main.save.data.story_chapter)
 	var cont: bool = ch > 0 and not main.save.data.story_done
@@ -519,6 +520,7 @@ func _glide_and_stagger(v: VBoxContainer) -> void:
 ## is rebuilt (with a quick staggered slide-in); tabs, wallet and focus stay.
 var _g_cat := "scarf"
 var _g_list: VBoxContainer
+var _g_scroll: ScrollContainer
 var _g_tabs: Dictionary = {}
 var _g_wallet: Array = []
 
@@ -554,22 +556,33 @@ func show_garage(cat := "scarf", animate := true) -> void:
 	if Looks.DEV_FREE:
 		_small(v, "Preview build: everything is free to try while the game is in development.", 24, Color(0.6, 1.0, 0.85, 0.85))
 	_gap(v, 4)
-	var tabs := HBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 0)
-	v.add_child(tabs)
 	_g_tabs.clear()
-	for c in Looks.CATS:
-		var tb := _item(tabs, Looks.CAT_NAMES[c], _garage_tab.bind(c), 27)
-		tb.selected = c == cat
-		tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		tb.get_theme_stylebox("normal").content_margin_left = 34
-		tb.get_theme_stylebox("normal").content_margin_right = 2
-		tb.on_focus = _garage_tab.bind(c)
-		_g_tabs[c] = tb
+	const TABS_PER_ROW := 5
+	var tabs: HBoxContainer
+	for i in Looks.CATS.size():
+		if i % TABS_PER_ROW == 0:
+			tabs = HBoxContainer.new()
+			tabs.add_theme_constant_override("separation", 0)
+			v.add_child(tabs)
+		var category: String = Looks.CATS[i]
+		var tab := _item(tabs, Looks.CAT_NAMES[category], _garage_tab.bind(category), 24)
+		tab.selected = category == cat
+		tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tab.get_theme_stylebox("normal").content_margin_left = 34
+		tab.get_theme_stylebox("normal").content_margin_right = 2
+		tab.on_focus = _garage_tab.bind(category)
+		_g_tabs[category] = tab
 	_gap(v, 4)
+	_g_scroll = ScrollContainer.new()
+	_g_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_g_scroll.follow_focus = true
+	_g_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_g_scroll.custom_minimum_size.y = 180
+	v.add_child(_g_scroll)
 	_g_list = VBoxContainer.new()
+	_g_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_g_list.add_theme_constant_override("separation", 6)
-	v.add_child(_g_list)
+	_g_scroll.add_child(_g_list)
 	_gap(v, 8)
 	var back := _item(v, "Back", main.go_title, 34)
 	back.on_focus = main.apply_look
@@ -588,6 +601,7 @@ func _garage_tab(c: String) -> void:
 	if c == _g_cat or not is_instance_valid(_g_list):
 		return
 	_g_cat = c
+	_g_scroll.scroll_vertical = 0
 	for k in _g_tabs:
 		_g_tabs[k].selected = k == c
 		_g_tabs[k].queue_redraw()
@@ -625,22 +639,23 @@ func _garage_fill(focus_name := "", animate := true) -> void:
 	_garage_wire.call_deferred()
 	if focus_btn != null:
 		focus_btn.grab_focus.call_deferred()
+		_g_scroll.ensure_control_visible.call_deferred(focus_btn)
 	if animate and not bool(main.save.data.settings.get("reduced_motion", false)):
 		_stagger_in(rows, 0.025, 36.0)
 
 ## After the generic row wiring: Up from the first item returns to the
-## selected tab (not the first tab), and Down from any tab enters the list.
+## selected tab. Down from the second row enters the list.
 func _garage_wire() -> void:
 	_auto_wire()
-	if not is_instance_valid(_g_list) or _g_list.get_child_count() == 0:
+	if not is_instance_valid(_box) or not is_instance_valid(_g_list) or not _box.is_ancestor_of(_g_list) or _g_list.get_child_count() == 0:
 		return
 	var first: Control = _g_list.get_child(0)
 	var tab: Control = _g_tabs.get(_g_cat)
 	if tab != null:
 		first.focus_neighbor_top = first.get_path_to(tab)
-		for k in _g_tabs:
-			var tb: Control = _g_tabs[k]
-			tb.focus_neighbor_bottom = tb.get_path_to(first)
+		for tb in _g_tabs.values():
+			if tb.get_parent() == _g_tabs[Looks.CATS.back()].get_parent():
+				tb.focus_neighbor_bottom = tb.get_path_to(first)
 
 func _stagger_in(rows: Array, step: float, dx: float) -> void:
 	for n in rows:
@@ -715,7 +730,7 @@ const HELP := {
 	"World sounds": "Waves, birds, wind and the river around Kavi.",
 	"Button size": "How big the touch buttons are on phones and tablets.",
 	"Left-handed controls": "Swaps the touch buttons left and right.",
-	"Kind Mode (no fails, just bonks)": "Obstacles never end a run; Kavi just bonks and keeps going.",
+	"Kind Mode": "Obstacles never end a run; Kavi just bonks and keeps going.",
 	"Hover assist over gaps": "Kavi hovers a little on his own over gaps.",
 	"Relaxed speed (82%)": "The whole game runs a bit slower.",
 	"Reduced motion": "Less shaking, swaying and flashing.",
@@ -735,7 +750,7 @@ const HELP := {
 	"Frame-rate cap": "The most frames per second the game will draw. Higher is smoother but uses more battery.",
 	"Performance overlay": "Shows frames per second while you play. Detailed adds 1% lows and timings.",
 	"Performance stats": "How smoothly the game ran since it started.",
-	"Run benchmark": "Plays 10 seconds of Scenic View, measures, and picks the best preset for this device.",
+	"Run benchmark": "Measures 10 seconds of Scenic View at High, then picks an Auto level.",
 }
 
 ## A row with a "?" button: the explanation appears under the list.
@@ -885,7 +900,7 @@ func _page_controls(animate := true) -> void:
 func _page_access(animate := true) -> void:
 	var v := _column(0.16, animate)
 	_heading(v, "Accessibility")
-	_toggle_row(v, "Kind Mode (no fails, just bonks)", "kind_mode")
+	_toggle_row(v, "Kind Mode", "kind_mode")
 	_toggle_row(v, "Hover assist over gaps", "assist_hover")
 	_toggle_row(v, "Relaxed speed (82%)", "slow_speed")
 	_toggle_row(v, "Reduced motion", "reduced_motion")
@@ -908,6 +923,7 @@ func _page_graphics(animate := true) -> void:
 	for p in PRESETS:
 		var b := _item(preset_row, p.capitalize(), func():
 			st.graphics = p
+			st.custom = false
 			_after_graphics_change(), 28)
 		b.selected = p == cur and not st.get("custom", false)
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL

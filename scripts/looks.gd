@@ -12,8 +12,11 @@ const DEV_FREE := true
 const STAMPS_PER_SPARK := 50   # buy 1 Spark for 50 Stamps
 const STAMPS_FOR_SPARK := 25   # sell 1 Spark for 25 Stamps
 
-const CATS := ["suit", "paint", "visor", "scarf", "antenna"]
-const CAT_NAMES := {"suit": "Suits", "paint": "Paint", "visor": "Visor", "scarf": "Scarves", "antenna": "Antenna"}
+const CATS := ["suit", "paint", "visor", "face", "scarf", "antenna", "extra", "bag", "trail", "letter"]
+const CAT_NAMES := {
+	"suit": "Suits", "paint": "Paint", "visor": "Visor", "face": "Faces", "scarf": "Scarves",
+	"antenna": "Antenna", "extra": "Extras", "bag": "Bags", "trail": "Trails", "letter": "Letters",
+}
 
 ## The first six scarves keep the old save indices (owned_scarves) valid.
 const ITEMS := {
@@ -47,6 +50,40 @@ const ITEMS := {
 		{"name": "Heart", "cost": 500, "cur": "stamps", "tip": "heart"},
 		{"name": "Leaf", "cost": 600, "cur": "stamps", "tip": "leaf"},
 	],
+	"face": [
+		{"name": "Courier eyes", "cost": 0, "face": "classic"},
+		{"name": "Button eyes", "cost": 400, "cur": "stamps", "face": "buttons"},
+		{"name": "Star eyes", "cost": 500, "cur": "stamps", "face": "stars"},
+		{"name": "Soft crescents", "cost": 500, "cur": "stamps", "face": "crescents"},
+	],
+	"bag": [
+		{"name": "Courier satchel", "cost": 0, "bag": "classic"},
+		{"name": "Mint daypack", "cost": 450, "cur": "stamps", "bag": "daypack"},
+		{"name": "Plum postbag", "cost": 550, "cur": "stamps", "bag": "postbag"},
+		{"name": "Golden rolltop", "cost": 6, "cur": "sparks", "bag": "rolltop"},
+	],
+	"extra": [
+		{"name": "Nothing", "cost": 0, "extra": ""},
+		{"name": "Round glasses", "cost": 500, "cur": "stamps", "extra": "glasses"},
+		{"name": "Red bow", "cost": 500, "cur": "stamps", "extra": "bow"},
+		{"name": "Daisy", "cost": 400, "cur": "stamps", "extra": "flower"},
+		{"name": "Headphones", "cost": 700, "cur": "stamps", "extra": "headphones"},
+		{"name": "Little crown", "cost": 8, "cur": "sparks", "extra": "crown"},
+	],
+	"trail": [
+		{"name": "Wind (classic)", "cost": 0, "trail": ""},
+		{"name": "Stars", "cost": 600, "cur": "stamps", "trail": "stars"},
+		{"name": "Hearts", "cost": 600, "cur": "stamps", "trail": "hearts"},
+		{"name": "Petals", "cost": 700, "cur": "stamps", "trail": "petals"},
+		{"name": "Snowflakes", "cost": 700, "cur": "stamps", "trail": "snow"},
+	],
+	"letter": [
+		{"name": "Paper white", "cost": 0, "letter": Color(0.96, 0.97, 1.0)},
+		{"name": "Blush pink", "cost": 300, "cur": "stamps", "letter": Color(1.0, 0.76, 0.84)},
+		{"name": "Mint", "cost": 300, "cur": "stamps", "letter": Color(0.72, 1.0, 0.86)},
+		{"name": "Sky", "cost": 300, "cur": "stamps", "letter": Color(0.70, 0.86, 1.0)},
+		{"name": "Gold", "cost": 4, "cur": "sparks", "letter": Color(1.0, 0.86, 0.45)},
+	],
 	"suit": [
 		{"name": "Courier", "cost": 0, "helmet": "round"},
 		{"name": "Kitty", "cost": 8, "cur": "sparks", "helmet": "cat"},
@@ -56,6 +93,14 @@ const ITEMS := {
 		{"name": "Bunny", "cost": 9, "cur": "sparks", "helmet": "bunny"},
 		{"name": "Blocky", "cost": 9, "cur": "sparks", "helmet": "block"},
 		{"name": "Sprout", "cost": 8, "cur": "sparks", "helmet": "sprout"},
+		{"name": "Lion", "cost": 12, "cur": "sparks", "helmet": "lion"},
+		{"name": "Bear", "cost": 9, "cur": "sparks", "helmet": "bear"},
+		{"name": "Fox", "cost": 10, "cur": "sparks", "helmet": "fox"},
+		{"name": "Panda", "cost": 10, "cur": "sparks", "helmet": "panda"},
+		{"name": "Frog", "cost": 9, "cur": "sparks", "helmet": "frog"},
+		{"name": "Penguin", "cost": 10, "cur": "sparks", "helmet": "penguin"},
+		{"name": "Bee", "cost": 9, "cur": "sparks", "helmet": "bee"},
+		{"name": "Dino", "cost": 12, "cur": "sparks", "helmet": "dino"},
 	],
 }
 
@@ -104,6 +149,11 @@ static func compose(wear: Dictionary, preview_cat := "", preview_i := -1) -> Dic
 		"scarf": sc.col, "scarf2": sc.get("col2", sc.col), "pattern": sc.get("pattern", "solid"),
 		"tip": item("antenna", int(w.get("antenna", 0))).tip,
 		"helmet": item("suit", int(w.get("suit", 0))).helmet,
+		"face": item("face", int(w.get("face", 0))).face,
+		"bag": item("bag", int(w.get("bag", 0))).bag,
+		"extra": item("extra", int(w.get("extra", 0))).extra,
+		"trail": item("trail", int(w.get("trail", 0))).trail,
+		"letter": item("letter", int(w.get("letter", 0))).letter,
 	}
 
 static func wallet_key(it: Dictionary) -> String:

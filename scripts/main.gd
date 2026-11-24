@@ -98,7 +98,9 @@ func apply_look(preview_cat := "", preview_i := -1) -> void:
 	if key == _look_key:
 		return
 	_look_key = key
-	kite.set_look(Looks.compose(save.data.wear, preview_cat, preview_i))
+	var look := Looks.compose(save.data.wear, preview_cat, preview_i)
+	kite.set_look(look)
+	track_view.letter_col = look.letter
 	if garage_open:
 		kite_pop(0.6)
 
@@ -365,7 +367,12 @@ func _build_scene() -> void:
 func _initial_quality() -> int:
 	if forced_quality >= 0:
 		return forced_quality
-	var g = save.data.settings.get("graphics", "auto")
+	if not _qb.is_empty():
+		return 2
+	var settings: Dictionary = save.data.settings
+	if settings.get("custom", false):
+		return clampi(int(settings.get("gx_detail", 2)), 0, 2)
+	var g = settings.get("graphics", "auto")
 	var i = ["low", "medium", "high", "extreme"].find(g)
 	if i >= 0:
 		return mini(i, 2)
@@ -417,7 +424,7 @@ static func _median(a: Array) -> float:
 	return float(b[b.size() / 2]) if b.size() > 0 else 0.0
 
 func _adapt_quality(real_dt: float) -> void:
-	if forced_quality >= 0 or capture_dir != "" or bench.size() > 0 or loading or save.data.settings.get("graphics", "auto") != "auto" or save.data.settings.get("custom", false):
+	if forced_quality >= 0 or capture_dir != "" or bench.size() > 0 or not _qb.is_empty() or loading or save.data.settings.get("graphics", "auto") != "auto" or save.data.settings.get("custom", false):
 		return
 	q_cool = maxf(q_cool - real_dt, 0.0)
 	if q_cool > 0.0 or not (state in ["title", "run", "scenic"]):
@@ -491,6 +498,11 @@ func _apply_settings() -> void:
 	kite.reduced_motion = st.reduced_motion
 	apply_quality(_initial_quality())
 	_apply_graphics_options()
+	Painter.profiling = bench.size() > 0 or int(st.get("show_fps", 0)) == 2
+	if not Painter.profiling:
+		Painter.cost_usec = 0
+		Painter.costs.clear()
+		_pf_draw = 0.0
 	if sim != null:
 		sim.kind_mode = st.kind_mode
 		sim.assist_hover = st.assist_hover
@@ -514,6 +526,7 @@ func _load_font(path: String, weight: int) -> Font:
 	return v
 
 func go_title() -> void:
+	_qb.clear()
 	_apply_pending_quality()
 	q_cool = 2.0
 	reset_title_quotes()
@@ -1429,6 +1442,11 @@ func _process(delta: float) -> void:
 			sim.x = title_x
 			kite.pose = debug_pose if debug_pose != "" else "idle"
 			kite.expr = debug_expr if debug_expr != "" else ("normal" if fmod(t, 6.0) < 5.0 else "happy")
+			if garage_open and debug_pose == "":
+				if ui._g_cat == "face":
+					kite.expr = "normal"
+				elif ui._g_cat == "trail":
+					kite.pose = "run"
 			# title mini-game: Kavi waves and makes heart eyes when a plane reaches him
 			if plane_happy_t > 0.0 and debug_pose == "" and not garage_open:
 				kite.expr = "heart"
@@ -1493,6 +1511,8 @@ func _update_kite_view(dt: float) -> void:
 		kite.speed = 0.0 if (sim.frozen or state == "paused") else sim.cur_speed()
 	elif state == "scenic":
 		kite.speed = SCENIC_SPEED
+	elif garage_open and kite.pose == "run" and debug_pose == "":
+		kite.speed = 260.0
 	elif debug_pose != "":
 		kite.speed = debug_speed
 	else:
@@ -1578,10 +1598,6 @@ func _update_views(dt: float) -> void:
 	var half = size * 0.5 / zoom
 	world_view.pal = pal
 	world_view.cam_x = cam.position.x
-	# obstacles light the side facing the sun (0.8.25)
-	var _sun_scr: Vector2 = world_view._sun_screen()
-	track_view.sun_world_x = cam.position.x + (_sun_scr.x - get_viewport_rect().size.x * 0.5) / maxf(cam.zoom.x, 0.01)
-	track_view.sun_k = clampf(world_view.sun_vis * 1.2, 0.25, 1.0)
 	world_view.cam_y = cam.position.y + size.y * (0.80 - 0.5) / zoom
 	world_view.t = t
 	world_view.hero_x = _kite_screen().x
@@ -1589,6 +1605,8 @@ func _update_views(dt: float) -> void:
 	world_view.sun_shift = -0.30 * get_viewport_rect().size.x if state == "title" else 0.0
 	world_view.calm = move_toward(world_view.calm, 1.0 if state in ["recovery", "finale", "title", "scenic"] else 0.0, dt)
 	world_view.refresh()
+	track_view.sun_world_x = cam.position.x + (world_view.sun_position.x - size.x * 0.5) / maxf(cam.zoom.x, 0.01)
+	track_view.sun_k = world_view.sun_strength()
 	track_view.pal = pal
 	track_view.t = t
 	track_view.view_l = cam.position.x - half.x
@@ -2047,6 +2065,7 @@ func menu_scenic() -> void:
 	state = "scenic"
 	state_t = 0.0
 	mode = "scenic"
+	menu_dim = false
 	_new_world(0)
 	set_biome(0, true)
 	sim.frozen = true
@@ -2146,6 +2165,22 @@ func _setup_capture() -> void:
 		cap_steps = [{"do": "wait", "s": 1.0}, {"shot": "i1"}, {"do": "wait", "s": 1.5}, {"shot": "i2"}, {"do": "wait", "s": 2.2}, {"shot": "i3"},
 			{"do": "wait", "s": 1.6}, {"shot": "i4"}, {"do": "wait", "s": 1.3}, {"shot": "i5"},
 			{"until_loaded": true, "max": 30.0}, {"shot": "i6-reveal"}, {"do": "wait", "s": 0.2}, {"shot": "i7a"}, {"do": "wait", "s": 0.2}, {"shot": "i7b"}, {"do": "wait", "s": 0.2}, {"shot": "i7c"}, {"do": "wait", "s": 1.2}, {"shot": "i8-title"}, {"do": "quit"}]
+		return
+	if "--garage2" in OS.get_cmdline_user_args():
+		# New Garage items: animal suits, accessories, bags, faces and a trail.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "garage", "cat": "suit"}, {"do": "wait", "s": 1.5}]
+		for i in range(8, 16):
+			cap_steps.append_array([{"do": "try", "cat": "suit", "i": i}, {"do": "wait", "s": 0.7}, {"shot": "a%02d" % i}])
+		cap_steps.append_array([{"do": "try", "cat": "suit", "i": 0}, {"do": "wait", "s": 0.3}])
+		for i in range(1, 6):
+			cap_steps.append_array([{"do": "try", "cat": "extra", "i": i}, {"do": "wait", "s": 0.7}, {"shot": "x%02d" % i}])
+		for category in ["bag", "face"]:
+			cap_steps.append({"do": "garage", "cat": category})
+			for i in range(1, Looks.ITEMS[category].size()):
+				cap_steps.append_array([{"do": "try", "cat": category, "i": i}, {"do": "wait", "s": 0.7}, {"shot": "%s-%d" % [category, i]}])
+		cap_steps.append({"do": "garage", "cat": "trail"})
+		cap_steps.append_array([{"do": "try", "cat": "trail", "i": 2}, {"do": "wait", "s": 0.6}, {"shot": "tr-tab"}, {"do": "quit"}])
 		return
 	if "--settings2" in OS.get_cmdline_user_args():
 		save.data.tutorial_done = true
@@ -2732,7 +2767,7 @@ func _plane_update(dt: float) -> void:
 func _draw_plane_game(ci: Node2D) -> void:
 	if plane.is_empty():
 		return
-	var cream := Color(1.0, 0.96, 0.90)
+	var cream: Color = Color(1.0, 0.96, 0.90) if int(save.data.wear.letter) == 0 else track_view.letter_col
 	var appear := clampf(state_t / 1.5, 0.0, 1.0)
 	for i in plane_trail.size():
 		if i % 2 == 1:
@@ -2965,12 +3000,10 @@ func _draw_title_poem(ci: Node2D) -> void:
 
 # ------------------------------------------------------------------ studio intro + loading (0.8.21)
 ## The game opens on the BADCOOL INTERACTIVE ident (owner's 5 s video). Behind
-## it the game gets ready: music loads on background threads, every in-run text
-## size is prepared, each menu/route/pause/results screen and each country is
-## drawn once, and the frame timings pick the graphics level. When the video
-## ends: if everything is ready the title fades in; if not, the logo stays and
-## breathes (soft glow, dimming and brightening) above a slim silver loading
-## bar until it is. After the first full viewing, a tap or key skips the video.
+## it the game gets ready: music loads on background threads and the text
+## sizes finish warming up. The menus and countries draw once before playback.
+## If loading continues after the video, the logo breathes above a slim silver
+## loading bar. On first launch, Auto samples the scene during the reveal.
 const INTRO_VIDEO := "res://assets/intro/badcool_ident.ogv"
 const INTRO_LEN := 5.0
 var loading := false
@@ -3141,6 +3174,9 @@ func _load_ready() -> bool:
 func _update_loading(dt: float) -> void:
 	_load_t += dt
 	if _load_fade >= 0.0:
+		if _load_fade >= 0.12 and _needs_intro_graphics_estimate():
+			_est_dt.append(dt)
+			_est_gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid()))
 		# shine-out: the still logo grows a touch while a soft glow swells and
 		# fades, and the whole intro (logo, glow, black) fades as ONE piece
 		_load_fade += dt
@@ -3154,6 +3190,7 @@ func _update_loading(dt: float) -> void:
 		_intro_glow.modulate.a = 0.45 * sin(f * PI)
 		var a := 1.0 - e
 		if a <= 0.0:
+			_estimate_quality()
 			_load_layer.queue_free()
 			_load_layer = null
 			_intro_video = null
@@ -3174,11 +3211,6 @@ func _update_loading(dt: float) -> void:
 	# the world behind the video so the phone only has to play the video
 	# (0.8.23: drawing it cost ~16 ms per frame on a phone and made the intro stutter)
 	_world_hidden(_load_i >= _load_steps.size() and not _intro_done)
-	# graphics estimate from the frames drawn behind the video, counting only
-	# frames after the loading work is done (that work would skew the timing)
-	if _load_i >= _load_steps.size() and _glyph_i >= GLYPH_COMBOS.size() and not _intro_done and _video_started:
-		_est_dt.append(dt)
-		_est_gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid()))
 	if not _intro_done and (_intro_skip or (_video_started and _load_t - _video_t0 > INTRO_LEN + 3.0)):
 		_intro_done = true   # a safety net if the video never reports "finished"
 	var glyph_k := float(_glyph_i) / float(GLYPH_COMBOS.size())
@@ -3219,7 +3251,6 @@ func _finish_intro() -> void:
 	_world_hidden(false)
 	(_load_bar as SilverBar).alpha = 0.0
 	_load_bar.queue_redraw()
-	_estimate_quality()
 	if not save.data.get("intro_seen", false):
 		save.data.intro_seen = true
 		save.save()
@@ -3238,21 +3269,23 @@ func _finish_intro() -> void:
 	else:
 		go_title()
 
-## First launch on "Auto": pick Low/Medium/High from how fast the frames drawn
-## behind the intro were (GPU time when the platform reports it, otherwise the
-## frame time). Later launches use the level auto-graphics learned in play.
+## First-launch Auto uses the frames where the scene is drawn during the fade.
+## Later launches use the level Auto learned in play.
+func _needs_intro_graphics_estimate() -> bool:
+	var settings: Dictionary = save.data.settings
+	return forced_quality < 0 and capture_dir == "" and not settings.has("auto_q") \
+		and settings.get("graphics", "auto") == "auto" and not settings.get("custom", false)
+
 func _estimate_quality() -> void:
-	if forced_quality >= 0 or save.data.settings.get("graphics", "auto") != "auto" or save.data.settings.has("auto_q"):
-		return
-	if _est_dt.size() < 30:
-		return   # too few clean frames: keep High, auto-graphics adjusts in play
+	if not _needs_intro_graphics_estimate() or _est_dt.size() < 6:
+		return  # keep High if too few frames; Auto still adjusts in play
 	var gpu := _median(_est_gpu)
 	var fdt := _median(_est_dt)
 	var q := 2
-	if gpu > 0.0:
-		q = 2 if gpu < 7.0 else (1 if gpu < 12.0 else 0)
-	else:
-		q = 2 if fdt < 0.0185 else (1 if fdt < 0.026 else 0)
+	if fdt > 0.035 or gpu > 12.0:
+		q = 0
+	elif fdt > 0.021 or gpu > 7.0:
+		q = 1
 	print("intro: graphics estimate gpu %.2f ms, frame %.1f ms -> %s" % [gpu, fdt * 1000.0, ["low", "medium", "high"][q]])
 	if q != Art.Q:
 		apply_quality(q)
@@ -3289,7 +3322,8 @@ func _fg_debug_tick(dt: float) -> void:
 ## phone resolution, frame-rate cap).
 func _apply_graphics_options() -> void:
 	var st: Dictionary = save.data.settings
-	var extreme: bool = st.get("graphics", "auto") == "extreme" and not st.get("custom", false)
+	var benchmarking := not _qb.is_empty()
+	var extreme: bool = not benchmarking and st.get("graphics", "auto") == "extreme" and not st.get("custom", false)
 	get_viewport().msaa_2d = Viewport.MSAA_4X if extreme else Viewport.MSAA_DISABLED
 	world_view.rays_on = true
 	world_view.bokeh_on = true
@@ -3298,15 +3332,13 @@ func _apply_graphics_options() -> void:
 	if extreme:
 		fx.density = 1.4 * (0.5 if st.reduced_motion else 1.0)
 		fx.max_parts = 900
-	if not st.get("custom", false):
+	if benchmarking or not st.get("custom", false):
 		return
-	Art.Q = clampi(int(st.get("gx_detail", 2)), 0, 2)
-	Art.AA = Art.Q >= 2
 	if env:
 		env.glow_enabled = st.get("gx_glow", true)
 	world_view.rays_on = st.get("gx_rays", true)
 	world_view.bokeh_on = st.get("gx_lights", true)
-	var e := int(st.get("gx_effects", 1))
+	var e := clampi(int(st.get("gx_effects", 1)), 0, 2)
 	fx.density = [0.35, 0.8, 1.4][e] * (0.5 if st.reduced_motion else 1.0)
 	fx.max_parts = [120, 400, 900][e]
 	if OS.has_feature("mobile"):
@@ -3319,6 +3351,9 @@ func _apply_graphics_options() -> void:
 ## last 10 s, for the overlay and the Performance page (avg, 1% / 0.1% lows).
 var _pf_hist := PackedInt32Array()
 var _pf_recent: Array = []
+var _pf_recent_ms := 0.0
+var _pf_overlay_refresh := 0.0
+var _pf_overlay_lows := [0.0, 0.0, 0.0]
 var _pf_time := 0.0
 var _pf_frames := 0
 var _pf_gpu := 0.0
@@ -3334,12 +3369,19 @@ func _perf_tick(dt: float) -> void:
 	_pf_time += dt
 	_pf_frames += 1
 	_pf_recent.append(ms)
-	if _pf_recent.size() > 600:
-		_pf_recent.pop_front()
+	_pf_recent_ms += ms
+	while _pf_recent.size() > 1 and _pf_recent_ms - float(_pf_recent[0]) >= 10000.0:
+		_pf_recent_ms -= float(_pf_recent.pop_front())
+	if int(save.data.settings.get("show_fps", 0)) > 0:
+		_pf_overlay_refresh -= dt
+		if _pf_overlay_refresh <= 0.0:
+			_pf_overlay_lows = _lows(_pf_recent)
+			_pf_overlay_refresh = 0.25
 	_pf_gpu = lerpf(_pf_gpu, RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid()), 0.05)
-	if Painter.profiling:
+	if Painter.profiling and bench.is_empty():
 		_pf_draw = lerpf(_pf_draw, Painter.cost_usec / 1000.0, 0.05)
 		Painter.cost_usec = 0
+		Painter.costs.clear()
 
 static func _lows(frames: Array) -> Array:
 	if frames.is_empty():
@@ -3393,8 +3435,7 @@ func _draw_perf_overlay(ci: Node2D) -> void:
 	var mode := int(save.data.settings.get("show_fps", 0))
 	if mode == 0 or loading:
 		return
-	Painter.profiling = mode == 2 or bench.size() > 0
-	var r := _lows(_pf_recent)
+	var r := _pf_overlay_lows
 	var lines: Array = ["%.0f fps" % r[0]]
 	if mode == 2:
 		lines.append("1%% low %.0f   0.1%% low %.0f" % [r[1], r[2]])
@@ -3407,12 +3448,16 @@ func _draw_perf_overlay(ci: Node2D) -> void:
 	for i in lines.size():
 		ci.draw_string(font_body, Vector2(x, y + i * 26), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 22 if i == 0 else 19, Color(0.7, 1.0, 0.8) if i == 0 else Color(1, 1, 1, 0.85))
 
-## Quick benchmark from Settings → Graphics: 10 s of Scenic View, then pick
-## the preset this device runs smoothly and show the result.
+## Quick benchmark from Settings → Graphics: 10 s at High in Scenic View,
+## then suggest an Auto level using the measured performance.
 var _qb := {}
 
 func start_quick_benchmark() -> void:
 	_qb = {"t": 0.0, "dt": [], "gpu": []}
+	q_pending = -1
+	q_bad = 0
+	q_good = 0
+	q_upgraded = false
 	menu_scenic()
 	_toast("Benchmark: 10 seconds...", Vector2(get_viewport_rect().size.x * 0.5, get_viewport_rect().size.y * 0.2), Color(1, 1, 1, 0.85), 30)
 
@@ -3443,6 +3488,5 @@ func _quick_bench_tick(dt: float) -> void:
 	st.auto_q = q
 	save.save()
 	go_title()
-	_apply_settings()
 	ui._open_page("graphics")
 	ui._show_help.call_deferred("Benchmark: %.0f fps average, %.0f fps 1%% low. Picked %s (Auto)." % [r[0], r[1], names[q]])
