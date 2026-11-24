@@ -37,6 +37,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_add_menu_keys()
+	main.updates.changed.connect(_update_about_status)
 	_theme = Theme.new()
 	_theme.default_font = font
 	_theme.default_font_size = 38
@@ -1314,6 +1315,22 @@ const LINK_PLAY := "https://singh679.github.io/volt-run-luminous/"
 const LINK_DOWNLOADS := "https://github.com/singh679/volt-run-luminous/releases/latest"
 const LINK_SOURCE := "https://github.com/singh679/volt-run-luminous"
 
+var _about_update_status: Label
+var _about_update_action: MenuItem
+
+func _update_about_status() -> void:
+	if not is_instance_valid(_about_update_status) or not is_instance_valid(_box) or not _box.is_ancestor_of(_about_update_status):
+		return
+	var updates = main.updates
+	_about_update_status.text = updates.message
+	_about_update_status.visible = updates.message != ""
+	_about_update_status.modulate = Color(1.0, 0.75, 0.86) if updates.phase == "current" else Color.WHITE
+	var action: String = updates.action_text()
+	if _about_update_action.visible != (action != ""):
+		_about_update_action.visible = action != ""
+		_auto_wire.call_deferred()
+	_about_update_action.text = action
+
 func show_about() -> void:
 	main.garage_open = false
 	main.menu_dim = true
@@ -1325,7 +1342,11 @@ func show_about() -> void:
 	_small(v, "Made by Baljeet Singh", 28, Color(0.85, 0.88, 0.95))
 	_small(v, "BADCOOL INTERACTIVE", 22, Color(0.75, 0.78, 0.84))
 	_gap(v, 12)
-	var first := _item(v, "Play in your browser", func(): OS.shell_open(LINK_PLAY), 32)
+	var first := _item(v, "Check for updates", main.updates.check, 32)
+	_about_update_status = _small(v, "", 25, Color(1, 1, 1, 0.88))
+	_about_update_action = _item(v, "", main.updates.apply, 32)
+	_update_about_status()
+	_item(v, "Play in your browser", func(): OS.shell_open(LINK_PLAY), 32)
 	_item(v, "Downloads and updates", func(): OS.shell_open(LINK_DOWNLOADS), 32)
 	_item(v, "Source on GitHub", func(): OS.shell_open(LINK_SOURCE), 32)
 	_small(v, "github.com/singh679/volt-run-luminous", 22, Color(1, 1, 1, 0.55))

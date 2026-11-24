@@ -4,7 +4,7 @@ config_version=5
 [application]
 config/name="VOLT/RUN"
 config/description="Kavi: Letters to Lia. A little courier robot carries letters across Europe to reach Lia. (config/name stays VOLT/RUN on purpose: it names the save folder, so changing it would wipe players' progress.)"
-config/version="0.8.25"
+config/version="0.8.26"
 run/main_scene="res://main.tscn"
 config/icon="res://icon.svg"
 config/quit_on_go_back=false

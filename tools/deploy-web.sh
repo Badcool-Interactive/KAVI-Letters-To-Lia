@@ -9,7 +9,9 @@ mkdir -p build/web
 XDG_DATA_HOME="$S/android-export" XDG_CONFIG_HOME="$S/android-export-config" \
   "$ROOT/tools/bin/path/godot" --headless --path . --export-release "Web" "$PWD/build/web/index.html"
 D="$(mktemp -d)"; trap 'rm -rf "$D"' EXIT
-cp -r build/web/. "$D/"; touch "$D/.nojekyll"
+cp -r build/web/. "$D/"
+touch "$D/.nojekyll"
+python3 tools/prepare-pages.py "$D" project.godot
 # Page title and link previews say KAVI (project config/name stays VOLT/RUN on
 # purpose: it names the desktop save folder).
 URL="https://singh679.github.io/volt-run-luminous/"

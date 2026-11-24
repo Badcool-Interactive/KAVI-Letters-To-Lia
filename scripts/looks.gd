@@ -101,6 +101,12 @@ const ITEMS := {
 		{"name": "Penguin", "cost": 10, "cur": "sparks", "helmet": "penguin"},
 		{"name": "Bee", "cost": 9, "cur": "sparks", "helmet": "bee"},
 		{"name": "Dino", "cost": 12, "cur": "sparks", "helmet": "dino"},
+		{"name": "Tiger", "cost": 10, "cur": "sparks", "helmet": "tiger"},
+		{"name": "Axolotl", "cost": 10, "cur": "sparks", "helmet": "axolotl"},
+		{"name": "Bat", "cost": 9, "cur": "sparks", "helmet": "bat"},
+		{"name": "Red Panda", "cost": 10, "cur": "sparks", "helmet": "red_panda"},
+		{"name": "Otter", "cost": 9, "cur": "sparks", "helmet": "otter"},
+		{"name": "Turtle", "cost": 9, "cur": "sparks", "helmet": "turtle"},
 	],
 }
 

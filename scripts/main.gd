@@ -211,7 +211,17 @@ func _read_device_request() -> void:
 		f.close()
 	DirAccess.remove_absolute(path)
 
+const Updates = preload("res://scripts/updates.gd")
+var updates := Updates.new()
+
 func _ready() -> void:
+	var args := OS.get_cmdline_user_args()
+	if not args.is_empty() and args[0] == Updates.INSTALL_ARG:
+		updates.free()
+		get_tree().quit(Updates.run_desktop_helper(args))
+		return
+	add_child(updates)
+	updates.restart_requested.connect(quit_game)
 	randomize()
 	_read_device_request()
 	for a0 in _args():
@@ -2170,7 +2180,7 @@ func _setup_capture() -> void:
 		# New Garage items: animal suits, accessories, bags, faces and a trail.
 		save.data.tutorial_done = true
 		cap_steps = [{"do": "garage", "cat": "suit"}, {"do": "wait", "s": 1.5}]
-		for i in range(8, 16):
+		for i in [1, 5] + range(8, Looks.ITEMS.suit.size()):
 			cap_steps.append_array([{"do": "try", "cat": "suit", "i": i}, {"do": "wait", "s": 0.7}, {"shot": "a%02d" % i}])
 		cap_steps.append_array([{"do": "try", "cat": "suit", "i": 0}, {"do": "wait", "s": 0.3}])
 		for i in range(1, 6):

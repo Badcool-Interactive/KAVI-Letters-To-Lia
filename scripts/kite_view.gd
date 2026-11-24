@@ -6,6 +6,7 @@ extends Node2D
 
 const Art = preload("res://scripts/art.gd")
 const Painter = preload("res://scripts/painter.gd")
+const AnimalSuit = preload("res://scripts/animal_suit.gd")
 
 # Wearable colours (Garage). Defaults are the classic courier look.
 var SHELL := Color(0.965, 0.973, 0.988)
@@ -20,6 +21,8 @@ var scarf_col2 := Color(1.0, 0.35, 0.14)
 var scarf_pattern := "solid"
 var tip := "kite"
 var helmet := "round"
+var costume: Array = []
+var foot_color := BOOT
 ## Face: where the eyes look (-1..1 each axis), eased towards look_target.
 var look := Vector2(1, 0)
 ## Air state from the sim (main sets these), for wobbly hovers and rough landings.
@@ -43,6 +46,13 @@ func set_look(l: Dictionary) -> void:
 	scarf_pattern = l.pattern
 	tip = l.tip
 	helmet = l.helmet
+	costume = AnimalSuit.PALETTES.get(helmet, [])
+	foot_color = BOOT
+	if not costume.is_empty():
+		SHELL = costume[0]
+		SHADE = costume[1]
+		TEAL = costume[2]
+		foot_color = costume[3]
 	extra = l.get("extra", "")
 	trail_kind = l.get("trail", "")
 	face = l.get("face", "classic")
@@ -474,7 +484,9 @@ func _paint(ci: Node2D, add: bool) -> void:
 		var kb = _ik(hpb, fb + Vector2(0, -7), 15, 15, 1.0)
 		_limb2(ci, hpb, kb, 15.0, 12.5, SHADE)
 		_limb2(ci, kb, fb + Vector2(0, -7), 12.5, 11.0, SHADE)
-		_boot(ci, fb, BOOT.darkened(0.3))
+		_boot(ci, fb, foot_color.darkened(0.3))
+		if not costume.is_empty():
+			AnimalSuit.back(ci, helmet, costume, _costume_sway(), false)
 		# --- scarf tails (behind body)
 		_draw_scarf(ci, p)
 		# --- messenger bag on the back, nozzles underneath (hover thrust)
@@ -483,6 +495,8 @@ func _paint(ci: Node2D, add: bool) -> void:
 		_poly(ci, Art.ellipse(Vector2(-17, -35), Vector2(4.5, 3.5), 10), JOINT)
 		# --- torso: broad chest tapering to the hips (strong but round)
 		_poly(ci, _TORSO, SHELL)
+		if not costume.is_empty():
+			AnimalSuit.belly(ci, helmet, Vector2(3, -49), costume)
 		if Art.Q >= 1:
 			# soft shading on the back half and a highlight on the chest
 			ci.draw_colored_polygon(_TORSO_SHADE, Color(SHADE, 0.55))
@@ -504,7 +518,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 		_limb2(ci, hpf, kf, 15.0, 12.5, SHELL)
 		_limb2(ci, kf, ff + Vector2(0, -7), 12.5, 11.0, SHELL)
 		ci.draw_circle(kf, 3.6, TEAL)
-		_boot(ci, ff, BOOT)
+		_boot(ci, ff, foot_color)
 	else:
 		# emissive: thruster cores and flames, wheels
 		var th: float = p.thrust
@@ -548,11 +562,9 @@ func _paint(ci: Node2D, add: bool) -> void:
 		# accent crest along the top
 		ci.draw_line(Vector2(head_r.position.x + 10, head_r.position.y + 1.5), Vector2(head_r.end.x - 14, head_r.position.y + 1.5), TEAL, 4.0, Art.AA)
 		_helmet_extras(ci, hc, head_r)
-		# screen face: accent bezel, dark glass, a glassy reflection
-		_poly(ci, Art.rrect(scr.grow(3), 11), TEAL)
-		ci.draw_colored_polygon(Art.rrect(scr, 9), VISOR)
-		ci.draw_colored_polygon(Art.rrect(Rect2(scr.position.x + 3, scr.position.y + 2, scr.size.x - 6, 6), 3), Color(1, 1, 1, 0.08))
-		ci.draw_line(scr.position + Vector2(scr.size.x - 9, 4), scr.position + Vector2(scr.size.x - 4, 10), Color(1, 1, 1, 0.22), 2.0)
+		_draw_visor(ci, scr, false)
+		if costume.is_empty():
+			ci.draw_line(scr.position + Vector2(scr.size.x - 9, 4), scr.position + Vector2(scr.size.x - 4, 10), Color(1, 1, 1, 0.22), 2.0)
 		_antenna(ci, Vector2(hc.x + 10, head_r.position.y - (4.0 if helmet == "teapot" else 0.0)))
 		_helmet_front(ci, hc, head_r)
 		# scarf wrap at the neck
@@ -570,8 +582,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 		_hand(ci, hf, SHELL, hf - ef)
 		_props(ci, hf, false)
 	else:
-		# faint screen glow, then the face
-		ci.draw_colored_polygon(Art.rrect(scr, 9), Color(GLOW, 0.06))
+		_draw_visor(ci, scr, true)
 		_eyes(ci, scr.get_center() + Vector2(1 + look.x * 3.0, -1 + look.y * 2.5))
 		ci.draw_circle(hc + Vector2(-25, 3), 2.2, Art.hdr(GLOW, 1.6))
 		if helmet == "explorer":
@@ -943,11 +954,13 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 	var hand_r: Vector2 = Vector2(38 + sin(t * 9.0) * 5.0, -92) if waving else Vector2(27, -32)
 	var hand_l := Vector2(-27, -32)
 	if not add:
+		if not costume.is_empty():
+			AnimalSuit.back(ci, helmet, costume, _costume_sway(), true)
 		# legs + boots
 		for lx in [-8.0, 8.0]:
 			_limb2(ci, Vector2(lx, -31), Vector2(lx * 1.1, -8), 15.0, 12.0, SHELL if lx > 0 else SHELL.lerp(SHADE, 0.35))
-			_poly(ci, Art.rrect(Rect2(lx * 1.1 - 10, -12, 20, 13), 6), BOOT)
-			ci.draw_rect(Rect2(lx * 1.1 - 10, -3.5, 20, 4), BOOT.lightened(0.6))
+			_poly(ci, Art.rrect(Rect2(lx * 1.1 - 10, -12, 20, 13), 6), foot_color)
+			ci.draw_rect(Rect2(lx * 1.1 - 10, -3.5, 20, 4), foot_color.lightened(0.6))
 		# scarf tails hanging down on one side, fluttering
 		var tl := PackedVector2Array()
 		for k in 8:
@@ -960,6 +973,8 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 		var torso := PackedVector2Array([Vector2(-15, -30), Vector2(-21, -50), Vector2(-20, -61), Vector2(-10, -67),
 			Vector2(10, -67), Vector2(20, -61), Vector2(21, -50), Vector2(15, -30)])
 		_poly(ci, _smooth_closed(torso), SHELL)
+		if not costume.is_empty():
+			AnimalSuit.belly(ci, helmet, Vector2(0, -49), costume)
 		if Art.Q >= 1:
 			ci.draw_colored_polygon(Art.rrect(Rect2(-14, -45, 28, 10), 5), Color(SHADE, 0.45))
 			ci.draw_arc(Vector2(-6, -55), 9.0, PI * 1.1, PI * 1.5, 8, Color(1, 1, 1, 0.75), 2.2, Art.AA)
@@ -990,21 +1005,38 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 			ci.draw_arc(hc + Vector2(-12, -6), 14.0, PI * 1.05, PI * 1.45, 8, Color(1, 1, 1, 0.8), 2.5, Art.AA)
 		ci.draw_line(Vector2(hr.position.x + 12, hr.position.y + 1.5), Vector2(hr.end.x - 12, hr.position.y + 1.5), TEAL, 4.0, Art.AA)
 		_helmet_extras(ci, hc, hr)
-		_poly(ci, Art.rrect(scr.grow(3), 11), TEAL)
-		ci.draw_colored_polygon(Art.rrect(scr, 9), VISOR)
-		ci.draw_colored_polygon(Art.rrect(Rect2(scr.position.x + 3, scr.position.y + 2, scr.size.x - 6, 6), 3), Color(1, 1, 1, 0.08))
+		_draw_visor(ci, scr, false)
 		_antenna(ci, Vector2(0, hr.position.y - (4.0 if helmet == "teapot" else 0.0)))
 		_helmet_front(ci, hc, hr)
 		_poly(ci, Art.rrect(Rect2(-15, -68, 30, 9), 4.5), scarf_col)
 	else:
-		ci.draw_colored_polygon(Art.rrect(scr, 9), Color(GLOW, 0.06))
+		_draw_visor(ci, scr, true)
 		_eyes(ci, scr.get_center() + Vector2(-0.5 + look.x * 1.5, -1 + look.y * 2.0))
 		if helmet == "explorer":
 			ci.draw_circle(hc + Vector2(14, -22), 3.0, Art.hdr(Color(1.0, 0.92, 0.7), 2.2))
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-# ------------------------------------------------------------------ animal suits, accessories, trails (0.8.25)
+func _costume_sway() -> float:
+	return 0.0 if reduced_motion else sin(t * (8.0 if pose == "run" else 3.0))
+
+func _draw_visor(ci: Node2D, rect: Rect2, emissive: bool) -> void:
+	var shape := Art.rrect(rect, 9) if costume.is_empty() else AnimalSuit.screen_shape(rect, costume[5])
+	if emissive:
+		ci.draw_colored_polygon(shape, Color(GLOW, 0.06))
+		return
+	if costume.is_empty():
+		_poly(ci, Art.rrect(rect.grow(3), 11), TEAL)
+	else:
+		_poly(ci, AnimalSuit.screen_shape(rect.grow(3), costume[5]), costume[2])
+	ci.draw_colored_polygon(shape, VISOR)
+	if costume.is_empty():
+		ci.draw_colored_polygon(Art.rrect(Rect2(rect.position.x + 3, rect.position.y + 2, rect.size.x - 6, 6), 3), Color(1, 1, 1, 0.08))
+	else:
+		var sheen := rect.get_center() + Vector2(-5, -7)
+		ci.draw_colored_polygon(Art.ellipse(sheen, Vector2(8, 2), 12, -0.1), Color(1, 1, 1, 0.18))
+
+# ------------------------------------------------------------------ animal heads, accessories, trails
 const MANE := Color(0.86, 0.55, 0.22)
 const FUR_BROWN := Color(0.62, 0.42, 0.28)
 const FOX := Color(1.0, 0.55, 0.20)
@@ -1044,21 +1076,57 @@ func _animal_back(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
 			for sd in [-1.0, 1.0]:
 				var e := hc + Vector2(sd * hr.size.x * 0.28, -hr.size.y * 0.50)
 				_poly(ci, Art.ellipse(e, Vector2(9, 8), 14), FROG)
-				ci.draw_circle(e + Vector2(0, -1), 4.5, Color(1, 1, 1))
-				ci.draw_circle(e + Vector2(look.x * 1.5, -1 + look.y), 2.4, INK)
+				ci.draw_circle(e + Vector2(0, -1), 4.2, FROG.lightened(0.3))
+		"tiger", "red_panda", "otter":
+			for side in [-1.0, 1.0]:
+				var center := hc + Vector2(side * hr.size.x * 0.41, -hr.size.y * 0.45)
+				_ear(ci, center, 9.0 if helmet == "tiger" else 7.5, costume[1], costume[4])
+		"bat":
+			for side in [-1.0, 1.0]:
+				var base := hc + Vector2(side * 21, -13)
+				var tip := base + Vector2(side * 7, -18)
+				_poly(ci, PackedVector2Array([base + Vector2(-8, 3), tip, base + Vector2(8, 3)]), costume[1])
+				ci.draw_colored_polygon(PackedVector2Array([base + Vector2(-4, 0), tip.lerp(base, 0.28), base + Vector2(4, 0)]), costume[2])
+		"axolotl":
+			for side in [-1.0, 1.0]:
+				for i in 3:
+					var root := hc + Vector2(side * 21, -12 + i * 9)
+					var tip := root + Vector2(side * (16 - i * 2), -8 + i * 3)
+					ci.draw_line(root, tip, costume[1], 7, Art.AA)
+					ci.draw_colored_polygon(Art.ellipse(tip, Vector2(6, 3), 12, -0.35 * side), costume[2])
 
 func _animal_front(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
 	match helmet:
 		"lion":
-			ci.draw_colored_polygon(Art.ellipse(Vector2(hc.x, hr.end.y - 2), Vector2(9, 4), 12), MANE.lightened(0.2))
+			_draw_muzzle(ci, hc, hr)
+		"bear", "otter", "cat", "bunny":
+			_draw_muzzle(ci, hc, hr)
+		"tiger", "red_panda":
+			_draw_muzzle(ci, hc, hr)
+			for side in [-1.0, 1.0]:
+				var cheek := hc + Vector2(side * 23, 11)
+				if helmet == "tiger":
+					for i in 2:
+						ci.draw_colored_polygon(PackedVector2Array([cheek + Vector2(side * 2, i * 5 - 5),
+							cheek + Vector2(-side * 8, i * 5 - 2), cheek + Vector2(side * 2, i * 5)]), costume[2])
+				else:
+					ci.draw_colored_polygon(Art.ellipse(cheek, Vector2(5, 3.5), 12, side * 0.35), costume[4])
+		"dino", "turtle":
+			var snout := Vector2(hc.x + 8, hr.end.y - 2)
+			ci.draw_colored_polygon(Art.ellipse(snout, Vector2(11, 4), 14), costume[4])
+			for x in [-3.0, 3.0]:
+				ci.draw_circle(snout + Vector2(x, -1), 1.5, costume[1])
 		"panda":
 			for sd in [-1.0, 1.0]:
 				ci.draw_colored_polygon(Art.ellipse(hc + Vector2(sd * hr.size.x * 0.41, hr.size.y * 0.18), Vector2(4.5, 6), 12), Color(0.12, 0.12, 0.14, 0.9))
 		"fox":
 			ci.draw_colored_polygon(Art.ellipse(Vector2(hc.x, hr.end.y - 3), Vector2(10, 4), 12), Color(1, 0.95, 0.9))
 		"penguin":
-			ci.draw_colored_polygon(Art.rrect(Rect2(hr.position.x - 1, hr.position.y - 2, hr.size.x + 2, hr.size.y * 0.28), 10.0), Color(0.10, 0.12, 0.18))
-			_poly(ci, PackedVector2Array([Vector2(hc.x - 5, hr.end.y - 3), Vector2(hc.x + 5, hr.end.y - 3), Vector2(hc.x, hr.end.y + 5)]), Color(1.0, 0.72, 0.2))
+			for side in [-1.0, 1.0]:
+				var cheek := hc + Vector2(side * 21, 7)
+				ci.draw_colored_polygon(Art.ellipse(cheek, Vector2(5, 10), 16, side * 0.33), costume[4])
+			var bill := hc + Vector2(5, 12)
+			_poly(ci, PackedVector2Array([bill + Vector2(-6, 0), bill + Vector2(8, 0), bill + Vector2(1, 7)]), costume[3])
 		"bee":
 			for k in 2:
 				ci.draw_line(Vector2(hr.position.x + 2, hr.position.y + 6 + k * 6), Vector2(hr.end.x - 2, hr.position.y + 6 + k * 6), Color(0.1, 0.1, 0.12, 0.85) if k == 0 else Color(BEE, 0.9), 4.0)
@@ -1067,6 +1135,16 @@ func _animal_front(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
 				var a1 := a0 + Vector2(sd * 6.0, -15.0 + sin(t * 4.0 + sd) * 1.5)
 				ci.draw_line(a0, a1, INK, 2.0)
 				ci.draw_circle(a1, 3.2, INK)
+
+func _draw_muzzle(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
+	var center := Vector2(hc.x + 2, hr.end.y - 2)
+	ci.draw_colored_polygon(Art.ellipse(center, Vector2(12, 4.5), 16), costume[4])
+	ci.draw_colored_polygon(Art.ellipse(center + Vector2(0, -2), Vector2(3.6, 2.2), 12), costume[1])
+	if helmet in ["cat", "tiger", "otter"]:
+		for side in [-1.0, 1.0]:
+			for i in 2:
+				var root := center + Vector2(side * 8, 0)
+				ci.draw_line(root, root + Vector2(side * 12, -3 + i * 6), costume[1], 1.4, Art.AA)
 
 func _accessory(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
 	match extra:
