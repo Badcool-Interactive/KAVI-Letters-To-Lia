@@ -99,6 +99,14 @@ func _peak_y(x: float) -> float:
 	return y
 
 ## The dominant sun/moon (during a transition: whichever is brighter).
+## Sun-side light (0.8.25): which way the sun is from a point, and how strongly
+## it lights things (strong when the sun is low and near, none when hidden).
+func sun_light(p: Vector2) -> Vector2:
+	var sp := _sun_screen()
+	var d := sp - p
+	var k := clampf(1.0 - d.length() / (size.x * 0.9), 0.15, 1.0) * clampf(sun_vis * 1.2, 0.25, 1.0)
+	return d.normalized() * k
+
 func _sun_screen() -> Vector2:
 	if tr_from.is_empty():
 		return _sun_at(pal, 0.0)
@@ -193,6 +201,8 @@ func _sky_k() -> float:
 ## smoke heart, ships toot, birds scatter. Hit rects are rebuilt every draw in
 ## screen space; reactions are keyed by object and read back while drawing.
 var interactive := false
+var rays_on := true     # graphics option (Custom)
+var bokeh_on := true    # graphics option (Custom)
 var debug_kind := ""   # capture/testing only (e.g. "bridge")
 var _hits_air: Array = []
 var _hits_sea: Array = []
@@ -794,7 +804,7 @@ func _draw_haze(ci: Node2D, i: int) -> void:
 	ci.draw_rect(Rect2(0, y + h, size.x, size.y), Color(fog, 0.30 - i * 0.08))
 
 func _draw_shafts(ci: Node2D) -> void:
-	if sun_vis < 0.02:
+	if sun_vis < 0.02 or not rays_on:
 		return
 	# rays start at the sun/moon disc itself (same position as _draw_sky_light)
 	var c0 = _sun_screen()
@@ -923,6 +933,8 @@ func _draw_fg_clumps(ci: Node2D, off: float, col: Color) -> void:
 
 ## Out-of-focus light specks (bokeh) close to the camera: big, soft, slow.
 func draw_bokeh(ci: Node2D) -> void:
+	if not bokeh_on:
+		return
 	var n: int = [4, 6, 10][Art.Q]
 	var warm: Color = pal.rim.lerp(pal.mote, 0.5)
 	for i in n:
@@ -1335,10 +1347,20 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 		ci.draw_line(Vector2(-16, 0), Vector2(16, 0), sil, 3.0)
 		ci.draw_line(Vector2(2, 0), Vector2(-6, 7), sil, 2.0)
 		ci.draw_line(Vector2(-14, 0), Vector2(-18, -6), sil, 2.0)
+		# sunlit edge on the side facing the sun
+		var sl := sun_light(p)
+		var up_side := 1.0 if sl.y < 0.0 else -1.0
+		ci.draw_line(Vector2(-15, -1.6 * up_side * (-1.0 if dir < 0 else 1.0)), Vector2(15, -1.6 * up_side * (-1.0 if dir < 0 else 1.0)), Color(pal.rim.lightened(0.2), 0.55 * sl.length() * alpha), 1.5)
+		# navigation lights: red and green wingtips, white tail strobe
 		ci.draw_rect(Rect2(-8.5, 6, 3, 3), Color(Art.hdr(Color(1.0, 0.3, 0.3), 1.5), alpha))
+		ci.draw_rect(Rect2(-5.5, -8, 3, 3), Color(Art.hdr(Color(0.3, 1.0, 0.45), 1.5), alpha))
 		if fmod(t, 1.1) < 0.12:
 			ci.draw_rect(Rect2(13, -2, 4, 4), Color(Art.hdr(Color(1, 1, 1), 2.0), alpha))
+		if fmod(t + 0.5, 1.4) < 0.1:
+			ci.draw_rect(Rect2(-19, -2, 4, 4), Color(Art.hdr(Color(1, 1, 1), 2.0), alpha))
 		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		Art.glow(ci, p + Vector2(-7 * dir, 7), 10.0, Color(1.0, 0.3, 0.3, 0.5 * alpha))
+		Art.glow(ci, p + Vector2(-4 * dir, -7), 10.0, Color(0.3, 1.0, 0.45, 0.4 * alpha))
 	if air.has("balloon"):
 		for b in 2:
 			# 0.8.22: a balloon's look and whether it flies are decided once per
@@ -1373,6 +1395,16 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 			env.append(bp + Vector2(r * 0.28, r * 1.35))
 			env.append(bp + Vector2(-r * 0.28, r * 1.35))
 			ci.draw_colored_polygon(env, bc)
+			# 0.8.25: burner light inside the envelope (stronger when it roars) and
+			# a sunlit rim on the side facing the sun
+			var burn: float = 0.35 + 0.25 * sin(t * 7.0 + b * 3.0) * sin(t * 2.3 + b)
+			if ba < 0.6 or rk < 2.5 or fmod(t * 0.7 + b, 3.0) < 0.6:
+				burn = 1.0
+			ci.draw_colored_polygon(Art.ellipse(bp + Vector2(0, r * 0.55), Vector2(r * 0.62, r * 0.55), 16), Color(_warm(1.0).lerp(bc, 0.35), 0.32 * burn * alpha))
+			var sl := sun_light(bp)
+			if sl.length() > 0.05:
+				var sa0 := sl.angle()
+				ci.draw_arc(bp, r * 0.97, sa0 - 0.9, sa0 + 0.9, 12, Color(pal.rim.lightened(0.25), 0.6 * sl.length() * alpha), 2.5)
 			# vertical gores in a lighter colour
 			ci.draw_colored_polygon(Art.ellipse(bp + Vector2(0, r * 0.1), Vector2(r * 0.32, r * 1.05), 14), Color(bc.lightened(0.22), alpha))
 			ci.draw_arc(bp, r * 0.78, PI * 1.15, PI * 1.55, 8, Color(1, 1, 1, 0.22 * alpha), 2.0)
@@ -1390,6 +1422,7 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 			if fmod(t * 0.7 + b, 3.0) < 0.6 or ba < 0.6 or rk < 2.5:
 				var fl: float = 3.5 + (6.0 if (ba < 0.6 or rk < 2.5) else 0.0) * (0.7 + 0.3 * sin(t * 30.0))
 				ci.draw_circle(thr + Vector2(0, 3), fl, Color(_warm(1.8), alpha))
+				Art.glow(ci, thr + Vector2(0, 2), r * 1.3, Color(1.0, 0.72, 0.35, 0.45 * alpha))
 			if alpha > 0.5:
 				_hits_air.append({"kind": "balloon", "key": bkey, "rect": Rect2(bp - Vector2(r, r), Vector2(r * 2.0, r * 2.35 + 23.0)), "basket": bk})
 	if air.has("birds"):

@@ -12,6 +12,8 @@ var t = 0.0
 var view_l = 0.0
 var view_r = 1920.0
 var kind_mode = false
+var sun_world_x := 1.0e9   # set by main each frame: obstacles light the side facing the sun
+var sun_k := 0.5
 
 var _base: Node2D
 var _add: Node2D
@@ -528,6 +530,14 @@ func _wobble_begin(ci: Node2D, o: Dictionary, pivot: Vector2, amt := 0.12) -> vo
 func _wobble_end(ci: Node2D) -> void:
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+## Warm sunlit edge on the side of an obstacle that faces the sun (0.8.25).
+func _sun_edge(ci: Node2D, x0: float, x1: float, top: float) -> void:
+	var right := sun_world_x > (x0 + x1) * 0.5
+	var ex := x1 - 1.5 if right else x0 + 1.5
+	var c := Color(pal.rim.lightened(0.2), 0.55 * sun_k)
+	ci.draw_line(Vector2(ex, top + 4.0), Vector2(ex, -2.0), c, 3.0)
+	ci.draw_line(Vector2(lerpf(x0, x1, 0.25), top + 1.0), Vector2(lerpf(x0, x1, 0.75), top + 1.0), Color(c, c.a * 0.6), 2.0)
+
 func _hurdle(ci: Node2D, o: Dictionary) -> void:
 	_wobble_begin(ci, o, Vector2(o.x + o.w * 0.5, 0.0))
 	if Art.hash01(int(o.seed), 3) < 0.6:
@@ -547,6 +557,7 @@ func _hurdle(ci: Node2D, o: Dictionary) -> void:
 				_hurdle_parcels(ci, o)
 	else:
 		_hurdle_parcels(ci, o)
+	_sun_edge(ci, o.x + 4.0, o.x + o.w - 4.0, -o.h)
 	_wobble_end(ci)
 
 func _amphora(ci: Node2D, o: Dictionary) -> void:

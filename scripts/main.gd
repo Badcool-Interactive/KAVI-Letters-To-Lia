@@ -235,6 +235,8 @@ func _ready() -> void:
 			capture_dir = a.substr(10)
 		if a.begins_with("--hide="):
 			set_meta("hide", a.substr(7).split(","))
+		if a.begins_with("--graphics="):
+			save.data.settings.graphics = a.substr(11)
 		if a.begins_with("--quality="):
 			forced_quality = ["low", "medium", "high"].find(a.substr(10))
 		if a.begins_with("--bench="):
@@ -364,9 +366,9 @@ func _initial_quality() -> int:
 	if forced_quality >= 0:
 		return forced_quality
 	var g = save.data.settings.get("graphics", "auto")
-	var i = ["low", "medium", "high"].find(g)
+	var i = ["low", "medium", "high", "extreme"].find(g)
 	if i >= 0:
-		return i
+		return mini(i, 2)
 	# 0.8.19: start on High everywhere (phones used to start on Medium) unless
 	# this device already learned its level; auto-quality steps down only on
 	# sustained slowness and can step back up when there is headroom
@@ -415,7 +417,7 @@ static func _median(a: Array) -> float:
 	return float(b[b.size() / 2]) if b.size() > 0 else 0.0
 
 func _adapt_quality(real_dt: float) -> void:
-	if forced_quality >= 0 or capture_dir != "" or bench.size() > 0 or loading or save.data.settings.get("graphics", "auto") != "auto":
+	if forced_quality >= 0 or capture_dir != "" or bench.size() > 0 or loading or save.data.settings.get("graphics", "auto") != "auto" or save.data.settings.get("custom", false):
 		return
 	q_cool = maxf(q_cool - real_dt, 0.0)
 	if q_cool > 0.0 or not (state in ["title", "run", "scenic"]):
@@ -463,14 +465,32 @@ func _apply_pending_quality() -> void:
 	if down and state != "title":
 		_toast("Graphics: " + str(get_meta("quality_name")) + " (smoother)", Vector2(get_viewport_rect().size.x * 0.5, get_viewport_rect().size.y * 0.2), Color(1, 1, 1, 0.7), 28)
 
-func _apply_settings() -> void:
+## Volumes: master x (intro fade-in) on the master bus; music, effects and
+## world sounds inside the synth.
+func _apply_audio_settings() -> void:
 	var st: Dictionary = save.data.settings
 	synth.music_vol = st.music
 	synth.sfx_vol = st.sfx
+	synth.world_vol = float(st.get("world", 0.7))
+	_apply_master_volume()
+
+func _apply_master_volume() -> void:
+	var k := 1.0
+	if _audio_in_t < 0.0:
+		k = 0.0
+	elif _audio_in_t <= 2.5:
+		var f := clampf(_audio_in_t / 2.5, 0.0, 1.0)
+		k = f * f * (3.0 - 2.0 * f)
+	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(float(save.data.settings.get("master", 1.0)) * k, 0.0001)))
+
+func _apply_settings() -> void:
+	var st: Dictionary = save.data.settings
+	_apply_audio_settings()
 	touch.left_handed = st.left_handed
 	touch.scale_k = st.controls_scale
 	kite.reduced_motion = st.reduced_motion
 	apply_quality(_initial_quality())
+	_apply_graphics_options()
 	if sim != null:
 		sim.kind_mode = st.kind_mode
 		sim.assist_hover = st.assist_hover
@@ -1384,6 +1404,8 @@ func _process(delta: float) -> void:
 		_update_loading(real_dt)
 	_update_audio_in(real_dt)
 	_fg_debug_tick(real_dt)
+	_perf_tick(real_dt)
+	_quick_bench_tick(real_dt)
 	if _clean_quit_frames > 0:
 		_clean_quit_frames -= 1
 		if _clean_quit_frames == 0:
@@ -1554,6 +1576,10 @@ func _update_views(dt: float) -> void:
 	var half = size * 0.5 / zoom
 	world_view.pal = pal
 	world_view.cam_x = cam.position.x
+	# obstacles light the side facing the sun (0.8.25)
+	var _sun_scr: Vector2 = world_view._sun_screen()
+	track_view.sun_world_x = cam.position.x + (_sun_scr.x - get_viewport_rect().size.x * 0.5) / maxf(cam.zoom.x, 0.01)
+	track_view.sun_k = clampf(world_view.sun_vis * 1.2, 0.25, 1.0)
 	world_view.cam_y = cam.position.y + size.y * (0.80 - 0.5) / zoom
 	world_view.t = t
 	world_view.hero_x = _kite_screen().x
@@ -1763,6 +1789,7 @@ func _draw_hud(ci: Node2D) -> void:
 		_text(ci, tut.sub, Vector2(sz.x * 0.5, py + 46), 34, Color(1, 1, 1, 0.92 * k))
 	if fade > 0.001:
 		ci.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.01, 0.01, 0.03, fade))
+	_draw_perf_overlay(ci)
 
 func _draw_title(ci: Node2D, sz: Vector2) -> void:
 	# soft darkening behind the menu column for readability (no box)
@@ -2118,6 +2145,16 @@ func _setup_capture() -> void:
 			{"do": "wait", "s": 1.6}, {"shot": "i4"}, {"do": "wait", "s": 1.3}, {"shot": "i5"},
 			{"until_loaded": true, "max": 30.0}, {"shot": "i6-reveal"}, {"do": "wait", "s": 0.2}, {"shot": "i7a"}, {"do": "wait", "s": 0.2}, {"shot": "i7b"}, {"do": "wait", "s": 0.2}, {"shot": "i7c"}, {"do": "wait", "s": 1.2}, {"shot": "i8-title"}, {"do": "quit"}]
 		return
+	if "--settings2" in OS.get_cmdline_user_args():
+		save.data.tutorial_done = true
+		save.data.settings.show_fps = 2
+		cap_steps = [{"do": "wait", "s": 2.0}, {"do": "ui", "f": "show_settings"}, {"do": "wait", "s": 1.0}, {"shot": "st0-main"},
+			{"do": "page", "p": "sound"}, {"do": "wait", "s": 1.0}, {"shot": "st1-sound"},
+			{"do": "page", "p": "graphics"}, {"do": "wait", "s": 1.0}, {"shot": "st2-graphics"},
+			{"do": "custom_on"}, {"do": "wait", "s": 1.0}, {"shot": "st3-custom"},
+			{"do": "page", "p": "perf"}, {"do": "wait", "s": 1.0}, {"shot": "st4-perf"},
+			{"do": "page", "p": "access"}, {"do": "wait", "s": 1.0}, {"shot": "st5-access"}, {"do": "quit"}]
+		return
 	if "--about" in OS.get_cmdline_user_args():
 		save.data.tutorial_done = true
 		cap_steps = [{"do": "wait", "s": 2.0}, {"do": "about"}, {"do": "wait", "s": 1.2}, {"shot": "about"}, {"do": "quit"}]
@@ -2433,6 +2470,14 @@ func _capture_tick(dt: float) -> void:
 			state_t += st.s
 		"about":
 			ui.show_about()
+		"ui":
+			ui.call(st.f)
+		"page":
+			ui._open_page(st.p)
+		"custom_on":
+			save.data.settings.custom = true
+			_apply_settings()
+			ui._open_page("graphics", false)
 		"unfocus":
 			get_viewport().gui_release_focus()
 		"key":
@@ -2957,9 +3002,7 @@ func _update_audio_in(dt: float) -> void:
 	if _audio_in_t < 0.0 or _audio_in_t > 2.5:
 		return
 	_audio_in_t += dt
-	var k := clampf(_audio_in_t / 2.5, 0.0, 1.0)
-	k = k * k * (3.0 - 2.0 * k)
-	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(k, 0.0001)))
+	_apply_master_volume()
 
 ## Slim silver-platinum bar with a soft moving sheen.
 class SilverBar extends Control:
@@ -2998,8 +3041,8 @@ func _start_loading() -> void:
 		if a.begins_with("--slow-load="):
 			_slow_load = float(a.substr(12))
 	# game sound stays silent under the intro, then rises gently (see _update_audio_in)
-	AudioServer.set_bus_volume_db(0, -80.0)
 	_audio_in_t = -1.0
+	_apply_master_volume()
 	_load_layer = CanvasLayer.new()
 	_load_layer.layer = 128
 	add_child(_load_layer)
@@ -3236,3 +3279,168 @@ func _fg_debug_tick(dt: float) -> void:
 		if f != null:
 			f.store_string(JSON.stringify({"cols": ["t", "Q", "fg_vis", "fg_in_tree", "plants", "cam_x", "wv_w", "vp_w", "scale_mode", "state"], "rows": _fgd}))
 			f.close()
+
+
+# ------------------------------------------------------------------ graphics options, performance, benchmark (0.8.25)
+## Extreme = High + 4x smooth edges on every shape, more effects, no frame cap.
+## Custom overrides each option (detail, glow, rays, floating lights, effects,
+## phone resolution, frame-rate cap).
+func _apply_graphics_options() -> void:
+	var st: Dictionary = save.data.settings
+	var extreme: bool = st.get("graphics", "auto") == "extreme" and not st.get("custom", false)
+	get_viewport().msaa_2d = Viewport.MSAA_4X if extreme else Viewport.MSAA_DISABLED
+	world_view.rays_on = true
+	world_view.bokeh_on = true
+	var default_fps := 60 if (OS.has_feature("web") or OS.has_feature("mobile")) else 0
+	Engine.max_fps = 0 if extreme else default_fps
+	if extreme:
+		fx.density = 1.4 * (0.5 if st.reduced_motion else 1.0)
+		fx.max_parts = 900
+	if not st.get("custom", false):
+		return
+	Art.Q = clampi(int(st.get("gx_detail", 2)), 0, 2)
+	Art.AA = Art.Q >= 2
+	if env:
+		env.glow_enabled = st.get("gx_glow", true)
+	world_view.rays_on = st.get("gx_rays", true)
+	world_view.bokeh_on = st.get("gx_lights", true)
+	var e := int(st.get("gx_effects", 1))
+	fx.density = [0.35, 0.8, 1.4][e] * (0.5 if st.reduced_motion else 1.0)
+	fx.max_parts = [120, 400, 900][e]
+	if OS.has_feature("mobile"):
+		var scr := DisplayServer.screen_get_size()
+		if mini(scr.x, scr.y) > 1180:
+			get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT if int(st.get("gx_res", 0)) == 1 else Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	Engine.max_fps = int(st.get("gx_fps", 60))
+
+## Session performance log: a histogram of frame times since launch plus the
+## last 10 s, for the overlay and the Performance page (avg, 1% / 0.1% lows).
+var _pf_hist := PackedInt32Array()
+var _pf_recent: Array = []
+var _pf_time := 0.0
+var _pf_frames := 0
+var _pf_gpu := 0.0
+var _pf_draw := 0.0
+
+func _perf_tick(dt: float) -> void:
+	if loading or dt <= 0.0:
+		return
+	if _pf_hist.is_empty():
+		_pf_hist.resize(400)   # 0.25 ms bins up to 100 ms
+	var ms := dt * 1000.0
+	_pf_hist[clampi(int(ms / 0.25), 0, 399)] += 1
+	_pf_time += dt
+	_pf_frames += 1
+	_pf_recent.append(ms)
+	if _pf_recent.size() > 600:
+		_pf_recent.pop_front()
+	_pf_gpu = lerpf(_pf_gpu, RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid()), 0.05)
+	if Painter.profiling:
+		_pf_draw = lerpf(_pf_draw, Painter.cost_usec / 1000.0, 0.05)
+		Painter.cost_usec = 0
+
+static func _lows(frames: Array) -> Array:
+	if frames.is_empty():
+		return [0.0, 0.0, 0.0]
+	var tot := 0.0
+	for v in frames:
+		tot += v
+	var srt := frames.duplicate()
+	srt.sort()
+	srt.reverse()
+	var n1 := maxi(1, int(srt.size() * 0.01))
+	var w1 := 0.0
+	for i in n1:
+		w1 += srt[i]
+	return [1000.0 / (tot / frames.size()), 1000.0 / (w1 / n1), 1000.0 / srt[maxi(1, int(srt.size() * 0.001)) - 1]]
+
+func _hist_lows() -> Array:
+	if _pf_frames == 0:
+		return [0.0, 0.0, 0.0]
+	var avg := 1000.0 / (_pf_time * 1000.0 / _pf_frames)
+	var res := [avg]
+	for frac in [0.01, 0.001]:
+		var need := maxi(1, int(_pf_frames * frac))
+		var acc := 0
+		var wsum := 0.0
+		for b in range(399, -1, -1):
+			var c := mini(_pf_hist[b], need - acc)
+			if c > 0:
+				acc += c
+				wsum += c * (b + 0.5) * 0.25
+			if acc >= need:
+				break
+		res.append(1000.0 / maxf(wsum / need, 0.001))
+	return res
+
+func perf_summary() -> Dictionary:
+	var h := _hist_lows()
+	var r := _lows(_pf_recent)
+	var mins := int(_pf_time / 60.0)
+	return {"time": "%d min %d s" % [mins, int(_pf_time) % 60], "avg": "%.0f" % h[0], "low1": "%.0f" % h[1], "low01": "%.0f" % h[2],
+		"recent_avg": "%.0f" % r[0], "recent_low1": "%.0f" % r[1],
+		"details": [
+			"Frame time %.1f ms   ·   Graphics chip %.1f ms" % [1000.0 / maxf(r[0], 0.01), _pf_gpu],
+			"Quality: %s%s   ·   Frame cap: %s" % [str(get_meta("quality_name", "?")), " (custom)" if save.data.settings.get("custom", false) else "", "none" if Engine.max_fps == 0 else str(Engine.max_fps)],
+			"Drawing size %dx%d   ·   Screen %dx%d" % [int(get_viewport().get_visible_rect().size.x), int(get_viewport().get_visible_rect().size.y), DisplayServer.window_get_size().x, DisplayServer.window_get_size().y],
+			"Device: %s" % RenderingServer.get_video_adapter_name(),
+			"Frames measured: %d" % _pf_frames,
+		]}
+
+func _draw_perf_overlay(ci: Node2D) -> void:
+	var mode := int(save.data.settings.get("show_fps", 0))
+	if mode == 0 or loading:
+		return
+	Painter.profiling = mode == 2 or bench.size() > 0
+	var r := _lows(_pf_recent)
+	var lines: Array = ["%.0f fps" % r[0]]
+	if mode == 2:
+		lines.append("1%% low %.0f   0.1%% low %.0f" % [r[1], r[2]])
+		lines.append("frame %.1f ms   gpu %.1f ms   draw %.1f ms" % [1000.0 / maxf(r[0], 0.01), _pf_gpu, _pf_draw])
+		lines.append("%s · cap %s" % [str(get_meta("quality_name", "?")), "none" if Engine.max_fps == 0 else str(Engine.max_fps)])
+	var sz := get_viewport_rect().size
+	var x := 24.0
+	var y := sz.y - 30.0 - (lines.size() - 1) * 26.0
+	ci.draw_rect(Rect2(x - 12, y - 30, 420 if mode == 2 else 130, lines.size() * 26 + 16), Color(0, 0, 0, 0.45))
+	for i in lines.size():
+		ci.draw_string(font_body, Vector2(x, y + i * 26), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 22 if i == 0 else 19, Color(0.7, 1.0, 0.8) if i == 0 else Color(1, 1, 1, 0.85))
+
+## Quick benchmark from Settings → Graphics: 10 s of Scenic View, then pick
+## the preset this device runs smoothly and show the result.
+var _qb := {}
+
+func start_quick_benchmark() -> void:
+	_qb = {"t": 0.0, "dt": [], "gpu": []}
+	menu_scenic()
+	_toast("Benchmark: 10 seconds...", Vector2(get_viewport_rect().size.x * 0.5, get_viewport_rect().size.y * 0.2), Color(1, 1, 1, 0.85), 30)
+
+func _quick_bench_tick(dt: float) -> void:
+	if _qb.is_empty():
+		return
+	if state != "scenic":
+		_qb = {}
+		return
+	_qb.t += dt
+	if _qb.t > 1.5:
+		_qb.dt.append(dt)
+		_qb.gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid()))
+	if _qb.t < 11.5:
+		return
+	var r := _lows(_qb.dt.map(func(x): return x * 1000.0))
+	var gpu := _median(_qb.gpu)
+	var q := 2
+	if r[0] < 40.0 or (gpu > 0.0 and gpu > 12.0):
+		q = 0
+	elif r[0] < 54.0 or (gpu > 0.0 and gpu > 7.0):
+		q = 1
+	var names := ["Low", "Medium", "High"]
+	_qb = {}
+	var st: Dictionary = save.data.settings
+	st.custom = false
+	st.graphics = "auto"
+	st.auto_q = q
+	save.save()
+	go_title()
+	_apply_settings()
+	ui._open_page("graphics")
+	ui._show_help.call_deferred("Benchmark: %.0f fps average, %.0f fps 1%% low. Picked %s (Auto)." % [r[0], r[1], names[q]])

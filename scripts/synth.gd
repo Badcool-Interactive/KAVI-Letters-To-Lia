@@ -16,6 +16,7 @@ const KEYS := [
 var sfx := {}
 var music_vol := 0.8
 var sfx_vol := 0.9
+var world_vol := 0.7   # ambient world sounds (0.8.25)
 var biome := -1
 var drive := 1.0
 var _drive_target := 1.0

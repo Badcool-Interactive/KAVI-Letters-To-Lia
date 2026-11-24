@@ -696,41 +696,326 @@ func _garage_pick(cat: String, i: int) -> void:
 	_garage_fill(it.name, false)
 
 ## Settings live in the right-hand column like the Garage (Kavi stays in view).
+## Settings (0.8.25, owner): a tidy main page with sections, each item has a
+## "?" that explains it, volumes are real sliders, and graphics has presets
+## (Low / Medium / High / Extreme) plus a Custom mode, a live preview (the
+## world stays visible beside the menu), performance stats and a benchmark.
+var _page := "main"
+var _help: Label
+
+const HELP := {
+	"Sound": "Volumes for the whole game, the music, sound effects and the sounds of the world.",
+	"Graphics": "How detailed and smooth the game looks. Auto picks what suits this device.",
+	"Controls": "Button size and which hand the touch buttons are for.",
+	"Accessibility": "Options that make the game gentler or calmer.",
+	"About KAVI": "Version, where to get updates, and who made the game.",
+	"Master volume": "Everything at once.",
+	"Music": "The soundtrack of each country.",
+	"Sound effects": "Hops, perfects, menus and the little world toys.",
+	"World sounds": "Waves, birds, wind and the river around Kavi.",
+	"Button size": "How big the touch buttons are on phones and tablets.",
+	"Left-handed controls": "Swaps the touch buttons left and right.",
+	"Kind Mode (no fails, just bonks)": "Obstacles never end a run; Kavi just bonks and keeps going.",
+	"Hover assist over gaps": "Kavi hovers a little on his own over gaps.",
+	"Relaxed speed (82%)": "The whole game runs a bit slower.",
+	"Reduced motion": "Less shaking, swaying and flashing.",
+	"Camera shake": "The screen shakes a little on bumps and landings.",
+	"Auto": "Starts on High and steps down only if this device is slow. Remembers what works.",
+	"Low": "Lightest. Fewer details, no glow. For older phones.",
+	"Medium": "Good balance. Most details, glow on. Phones draw at 1080p.",
+	"High": "Everything on, full sharpness.",
+	"Extreme": "High plus smooth edges on every shape, more effects and no frame-rate cap. Can heat up phones.",
+	"Custom": "Choose each graphics option yourself.",
+	"Scenery detail": "How many trees, houses, stars and little details fill the world.",
+	"Glow": "Soft glow around lights, the sun and Kavi's face.",
+	"Light rays": "Sunbeams and moonbeams through the sky.",
+	"Floating lights": "Soft out-of-focus lights drifting in front of the camera.",
+	"Effects": "How many sparks, puffs and confetti appear.",
+	"Resolution": "Phones: draw at the screen's full sharpness, or at 1080p for speed.",
+	"Frame-rate cap": "The most frames per second the game will draw. Higher is smoother but uses more battery.",
+	"Performance overlay": "Shows frames per second while you play. Detailed adds 1% lows and timings.",
+	"Performance stats": "How smoothly the game ran since it started.",
+	"Run benchmark": "Plays 10 seconds of Scenic View, measures, and picks the best preset for this device.",
+}
+
+## A row with a "?" button: the explanation appears under the list.
+func _row(v: Container, text: String, cb: Callable, size := 32) -> MenuItem:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 0)
+	v.add_child(h)
+	var b := _item(h, text, cb, size)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if HELP.has(text):
+		var q := _item(h, "?", func(): _show_help(text), size - 4)
+		q.custom_minimum_size.x = 70
+		q.get_theme_stylebox("normal").content_margin_left = 22
+		q.fill = Color(1.0, 0.85, 0.55)
+		q.focus_entered.connect(func(): _show_help(text))
+	return b
+
+func _show_help(key: String) -> void:
+	if is_instance_valid(_help):
+		_help.text = HELP.get(key, key)
+		_help.modulate.a = 0.0
+		_help.create_tween().tween_property(_help, "modulate:a", 1.0, 0.2)
+
+func _help_area(v: Container) -> void:
+	_gap(v, 6)
+	_help = _small(v, "Tap ? to learn what an option does.", 24, Color(1.0, 0.92, 0.80, 0.85))
+
+## Slider row: drag, click, or left/right on the keyboard.
+class SliderItem extends MenuItem:
+	var value := 0.5
+	var on_change: Callable
+	func _gui_input(e: InputEvent) -> void:
+		var step := 0.0
+		if e.is_action_pressed("ui_left"):
+			step = -0.05
+		elif e.is_action_pressed("ui_right"):
+			step = 0.05
+		if step != 0.0:
+			_set_v(value + step)
+			accept_event()
+		elif e is InputEventMouseButton and e.pressed and e.button_index == MOUSE_BUTTON_LEFT:
+			_set_from_x(e.position.x)
+			accept_event()
+		elif e is InputEventMouseMotion and (e.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
+			_set_from_x(e.position.x)
+			accept_event()
+		elif e is InputEventScreenDrag:
+			_set_from_x(e.position.x)
+			accept_event()
+	func _bar() -> Rect2:
+		return Rect2(size.x * 0.50, size.y * 0.5 - 4.0, size.x * 0.32, 8.0)
+	func _set_from_x(x: float) -> void:
+		var r := _bar()
+		if x >= r.position.x - 20.0:
+			_set_v((x - r.position.x) / r.size.x)
+	func _set_v(nv: float) -> void:
+		nv = clampf(snappedf(nv, 0.05), 0.0, 1.0)
+		if absf(nv - value) > 0.001:
+			value = nv
+			status = "%d%%" % int(round(value * 100.0))
+			queue_redraw()
+			if on_change.is_valid():
+				on_change.call(value)
+	func _draw() -> void:
+		super._draw()
+		var r := _bar()
+		draw_rect(Rect2(r.position.x, r.position.y + 2.0, r.size.x, 4.0), Color(1, 1, 1, 0.18))
+		draw_rect(Rect2(r.position.x, r.position.y + 2.0, r.size.x * value, 4.0), Color(accent, 0.9))
+		draw_circle(Vector2(r.position.x + r.size.x * value, r.get_center().y), 9.0 + 3.0 * hot, Color(1.0, 0.96, 0.90))
+
+func _slider(v: Container, text: String, key: String) -> SliderItem:
+	var st: Dictionary = main.save.data.settings
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 0)
+	v.add_child(h)
+	var b := SliderItem.new()
+	b.text = text
+	b.add_theme_font_size_override("font_size", 32)
+	b.value = float(st.get(key, 0.8))
+	b.status = "%d%%" % int(round(b.value * 100.0))
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	b.on_change = func(val: float):
+		st[key] = val
+		main._apply_audio_settings()
+		if key != "music":
+			main.synth.play("ui", 1.4, -6.0)
+	b.focus_exited.connect(func(): main.save.save())
+	h.add_child(b)
+	if HELP.has(text):
+		var q := _item(h, "?", func(): _show_help(text), 28)
+		q.custom_minimum_size.x = 70
+		q.get_theme_stylebox("normal").content_margin_left = 22
+		q.fill = Color(1.0, 0.85, 0.55)
+		q.focus_entered.connect(func(): _show_help(text))
+	return b
+
 func show_settings(animate := true) -> void:
 	main.garage_open = false
 	main.menu_dim = true
-	var v := _column(0.12, animate)
+	_page = "main"
+	var v := _column(0.16, animate)
 	_heading(v, "Settings")
-	var st: Dictionary = main.save.data.settings
-	_toggle(v, "Kind Mode (no fails, just bonks)", "kind_mode")
-	_toggle(v, "Hover assist over gaps", "assist_hover")
-	_toggle(v, "Relaxed speed (82%)", "slow_speed")
-	_toggle(v, "Reduced motion", "reduced_motion")
-	_toggle(v, "Camera shake", "shake")
-	_toggle(v, "Left-handed controls", "left_handed")
-	_cycle(v, "Music", "music", [0.0, 0.4, 0.8, 1.0])
-	_cycle(v, "Sound effects", "sfx", [0.0, 0.5, 0.9, 1.0])
-	_cycle(v, "Button size", "controls_scale", [0.8, 1.0, 1.2, 1.4])
-	var gq: String = st.get("graphics", "auto")
-	var g := _item(v, "Graphics", func():
-		var opts := ["auto", "low", "medium", "high"]
-		st["graphics"] = opts[(opts.find(gq) + 1) % opts.size()]
-		_settings_changed(), 32)
-	g.status = gq.capitalize()
-	_item(v, "About KAVI", show_about, 32)
-	_gap(v, 10)
-	var back := _item(v, "Back", main.go_title, 34)
-	if animate:
-		v.get_child(1).grab_focus.call_deferred()
+	var first := _row(v, "Sound", func(): _open_page("sound"))
+	_row(v, "Graphics", func(): _open_page("graphics"))
+	_row(v, "Controls", func(): _open_page("controls"))
+	_row(v, "Accessibility", func(): _open_page("access"))
+	_row(v, "About KAVI", show_about)
+	_help_area(v)
+	_gap(v, 6)
+	_item(v, "Back", main.go_title, 34)
+	if _focus_text == "":
+		first.grab_focus.call_deferred()
 	else:
 		_refocus(v)
+
+func _open_page(pg: String, animate := true) -> void:
+	_page = pg
+	match pg:
+		"sound": _page_sound(animate)
+		"graphics": _page_graphics(animate)
+		"controls": _page_controls(animate)
+		"access": _page_access(animate)
+		"perf": _page_perf(animate)
+
+func _page_sound(animate := true) -> void:
+	var v := _column(0.16, animate)
+	_heading(v, "Sound")
+	var first := _slider(v, "Master volume", "master")
+	_slider(v, "Music", "music")
+	_slider(v, "Sound effects", "sfx")
+	_slider(v, "World sounds", "world")
+	_help_area(v)
+	_gap(v, 6)
+	_item(v, "Back", func(): main.save.save(); show_settings(), 34)
+	first.grab_focus.call_deferred()
+
+func _page_controls(animate := true) -> void:
+	var v := _column(0.16, animate)
+	_heading(v, "Controls")
+	_cycle_row(v, "Button size", "controls_scale", [0.8, 1.0, 1.2, 1.4])
+	_toggle_row(v, "Left-handed controls", "left_handed")
+	_help_area(v)
+	_gap(v, 6)
+	_item(v, "Back", show_settings, 34)
+	_refocus_or_first(v)
+
+func _page_access(animate := true) -> void:
+	var v := _column(0.16, animate)
+	_heading(v, "Accessibility")
+	_toggle_row(v, "Kind Mode (no fails, just bonks)", "kind_mode")
+	_toggle_row(v, "Hover assist over gaps", "assist_hover")
+	_toggle_row(v, "Relaxed speed (82%)", "slow_speed")
+	_toggle_row(v, "Reduced motion", "reduced_motion")
+	_toggle_row(v, "Camera shake", "shake")
+	_help_area(v)
+	_gap(v, 6)
+	_item(v, "Back", show_settings, 34)
+	_refocus_or_first(v)
+
+const PRESETS := ["auto", "low", "medium", "high", "extreme"]
+
+func _page_graphics(animate := true) -> void:
+	var v := _column(0.06, animate)
+	_heading(v, "Graphics", 56)
+	var st: Dictionary = main.save.data.settings
+	var cur: String = st.get("graphics", "auto")
+	var preset_row := HBoxContainer.new()
+	preset_row.add_theme_constant_override("separation", 0)
+	v.add_child(preset_row)
+	for p in PRESETS:
+		var b := _item(preset_row, p.capitalize(), func():
+			st.graphics = p
+			_after_graphics_change(), 28)
+		b.selected = p == cur and not st.get("custom", false)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.get_theme_stylebox("normal").content_margin_left = 30
+		b.focus_entered.connect(func(): _show_help(p.capitalize()); _preview_pic(p))
+	var pic := TextureRect.new()
+	pic.name = "PresetPic"
+	pic.custom_minimum_size = Vector2(0, 0 if st.get("custom", false) else 170)
+	pic.visible = not st.get("custom", false)
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(pic)
+	_toggle_row(v, "Custom", "custom", 28)
+	if st.get("custom", false):
+		_cycle_row(v, "Scenery detail", "gx_detail", [0, 1, 2], ["Low", "Medium", "High"], 26)
+		_toggle_row(v, "Glow", "gx_glow", 26)
+		_toggle_row(v, "Light rays", "gx_rays", 26)
+		_toggle_row(v, "Floating lights", "gx_lights", 26)
+		_cycle_row(v, "Effects", "gx_effects", [0, 1, 2], ["Few", "Normal", "Lots"], 26)
+		if OS.has_feature("mobile"):
+			_cycle_row(v, "Resolution", "gx_res", [0, 1], ["Full", "1080p"], 26)
+		_cycle_row(v, "Frame-rate cap", "gx_fps", [30, 60, 90, 120, 0], ["30", "60", "90", "120", "None"], 26)
+	_cycle_row(v, "Performance overlay", "show_fps", [0, 1, 2], ["Off", "Simple", "Detailed"], 26)
+	_row(v, "Performance stats", func(): _open_page("perf"), 26)
+	_row(v, "Run benchmark", main.start_quick_benchmark, 26)
+	_help_area(v)
+	_item(v, "Back", show_settings, 30)
+	_preview_pic(cur)
+	_refocus_or_first(v)
+
+func _preview_pic(p: String) -> void:
+	var pic: TextureRect = _box.find_child("PresetPic", true, false) if is_instance_valid(_box) else null
+	if pic == null:
+		return
+	var path := "res://assets/ui/preset_%s.jpg" % ("high" if p == "auto" else p)
+	pic.texture = load(path) if ResourceLoader.exists(path) else null
+
+func _after_graphics_change() -> void:
+	var f := get_viewport().gui_get_focus_owner()
+	_focus_text = f.text if f is Button else ""
+	main.save.save()
+	main._apply_settings()
+	_page_graphics(false)
+
+func _page_perf(animate := true) -> void:
+	var v := _column(0.10, animate)
+	_heading(v, "Performance", 56)
+	var r: Dictionary = main.perf_summary()
+	_small(v, "Since the game started (%s):" % r.time, 26, Color(1.0, 0.92, 0.78))
+	_small(v, "Average  %s fps     1%% low  %s fps     0.1%% low  %s fps" % [r.avg, r.low1, r.low01], 30, Color(1, 1, 1, 0.95))
+	_small(v, "Last 10 s:  %s fps average,  %s fps 1%% low" % [r.recent_avg, r.recent_low1], 26, Color(1, 1, 1, 0.8))
+	var details := _item(v, "More details", func(): _perf_more = not _perf_more; _page_perf(false), 26)
+	details.status = "Shown" if _perf_more else ""
+	if _perf_more:
+		for line in r.details:
+			_small(v, line, 22, Color(0.85, 0.9, 1.0, 0.8))
+	_gap(v, 8)
+	_item(v, "Back", func(): _open_page("graphics"), 30)
+	_refocus_or_first(v)
+
+var _perf_more := false
+
+func _refocus_or_first(v: Container) -> void:
+	if _focus_text != "":
+		for n in v.find_children("*", "Button", true, false):
+			if n.text == _focus_text:
+				n.grab_focus.call_deferred()
+				_focus_text = ""
+				return
+	var bs := v.find_children("*", "Button", true, false)
+	if bs.size() > 0:
+		bs[0].grab_focus.call_deferred()
+	_focus_text = ""
+
+func _toggle_row(v: Container, text: String, key: String, size := 32) -> void:
+	var st: Dictionary = main.save.data.settings
+	var b := _row(v, text, func():
+		st[key] = not st.get(key, false)
+		_settings_changed(), size)
+	var on: bool = st.get(key, false)
+	b.status = "On" if on else "Off"
+	b.status_col = Color(0.55, 1.0, 0.85, 0.95) if on else Color(1, 1, 1, 0.5)
+
+func _cycle_row(v: Container, text: String, key: String, vals: Array, names: Array = [], size := 32) -> void:
+	var st: Dictionary = main.save.data.settings
+	var b := _row(v, text, func():
+		var i := 0
+		for k in vals.size():
+			if absf(float(vals[k]) - float(st.get(key, vals[0]))) < 0.01:
+				i = k
+		st[key] = vals[(i + 1) % vals.size()]
+		_settings_changed(), size)
+	var cur_i := 0
+	for k in vals.size():
+		if absf(float(vals[k]) - float(st.get(key, vals[0]))) < 0.01:
+			cur_i = k
+	b.status = str(names[cur_i]) if names.size() > 0 else "%d%%" % int(float(vals[cur_i]) * 100.0)
 
 func _settings_changed() -> void:
 	var f := get_viewport().gui_get_focus_owner()
 	_focus_text = f.text if f is Button else ""
 	main.save.save()
 	main._apply_settings()
-	show_settings(false)
+	if _page == "main":
+		show_settings(false)
+	else:
+		_open_page(_page, false)
 
 ## After an in-place rebuild, put focus back on the item that was pressed.
 func _refocus(v: Container) -> void:
