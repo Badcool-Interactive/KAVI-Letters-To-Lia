@@ -903,17 +903,18 @@ func _draw_fg_clumps(ci: Node2D, off: float, col: Color) -> void:
 		if Art.hash01(c, 541) > 0.55:
 			continue
 		var bx: float = c * cw + Art.hash01(c, 542) * 180.0 - off
-		var pts := PackedVector2Array([Vector2(bx - 60, size.y + 10)])
+		# separate blade triangles (0.8.23: one zigzag outline could fail to
+		# triangulate while swaying and blink out for a frame)
 		var n := 7
 		for k in n:
 			var u := float(k) / (n - 1)
 			var h := (50.0 + Art.hash01(c, 550 + k) * 70.0) * (1.0 - absf(u - 0.5) * 0.9)
 			var x := bx - 50.0 + u * 100.0
 			var lean := sin(t * 1.1 + c + k * 0.4) * 10.0 + (u - 0.5) * 30.0
-			pts.append(Vector2(x - 6.0, size.y))
-			pts.append(Vector2(x + lean, size.y - h))
-		pts.append(Vector2(bx + 60, size.y + 10))
-		ci.draw_colored_polygon(pts, col)
+			var i := _bv.size()
+			_bv.append_array([Vector2(x - 9.0, size.y + 10.0), Vector2(x + 9.0, size.y + 10.0), Vector2(x + lean, size.y - h)])
+			_bi.append_array([i, i + 1, i + 2])
+		_b_flush(ci, col)
 
 ## Out-of-focus light specks (bokeh) close to the camera: big, soft, slow.
 func draw_bokeh(ci: Node2D) -> void:
@@ -943,9 +944,17 @@ func _leaf(ci: Node2D, base: Vector2, tip: Vector2, bend: Vector2, w: float, col
 		var ww := w * sin(PI * minf(u * 0.9 + 0.1, 1.0)) * (1.0 - u * 0.4)
 		left.append(q + nrm * ww)
 		right.append(q - nrm * ww)
-	right.reverse()
-	var poly := left + right
-	ci.draw_colored_polygon(poly, col)
+	# 0.8.23: built from triangles between the two edges instead of one outline
+	# polygon. As a leaf sways its outline sometimes couldn't be triangulated
+	# (pointed tip) and the engine silently skipped the fill for that frame:
+	# the front-row leaves "appeared and disappeared" (owner's phone recording).
+	var flush_after := _bi.is_empty()
+	for k in n:
+		var i := _bv.size()
+		_bv.append_array([left[k], right[k], right[k + 1], left[k + 1]])
+		_bi.append_array([i, i + 1, i + 2, i, i + 2, i + 3])
+	if flush_after:
+		_b_flush(ci, col)
 	ci.draw_polyline(left, rim, 1.5, Art.AA)
 
 ## A fern frond: a curved stem with paired leaflets shrinking to the tip.

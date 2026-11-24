@@ -1,4 +1,11 @@
 # Changelog
+## 0.8.23 (2026-11-24): the flicker found, a smoother intro on phones
+- **Fixed the flicker** (the owner's phone recording): the front-row leaves blinked between solid and outline-only from frame to frame. Each leaf was one outline polygon; as it swayed, the pointed tip sometimes made a shape the engine couldn't triangulate, so the fill was silently skipped for that frame. Leaves are now built from triangles between their two edges, which can't fail. The same fix applies to the ground grass rows and the foreground grass clumps, which were long zigzag outlines.
+- **Smoother intro on phones** (measured on the Honor Magic 7 Pro with the new debug-only `user://intro_timing.json`):
+  - The game world was drawn behind the video the whole time, about 16 ms per frame on the phone, so the intro ran at roughly 10–15 fps. Now the world is drawn only during the warm-up steps and hidden until the video ends. Measured on the phone: about 34 → 51 fps after the warm-up.
+  - The heavy warm-up now happens on a few black frames before the video starts, so the video begins smoothly. Text warm-up during playback is limited to 2.5 ms per frame. (This last step isn't measured on the phone yet; the USB connection kept dropping.)
+- **Clean intro exit:** when the video ends it is swapped for the identical still frame, and the logo, glow and black edges fade out as one piece with a gentle shine-out (scale up 5%, glow swells and fades, 0.8 s). The video square used to fade out after the black edges.
+- **Phone save history:** the phone's KAVI data folder dates from a fresh install at 20:35 on 2026-11-24, before any USB testing. Device installs are updates only (`adb install -r`), and benchmarks are save-isolated.
 ## 0.8.22 (2026-11-24): fixes, zero exit warnings, first real phone benchmark
 - **Fixes:**
   - The Danube landmark bridge now has sloped approach embankments at both ends, running down into the hills; it used to end in mid-air.

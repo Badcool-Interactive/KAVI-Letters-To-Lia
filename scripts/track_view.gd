@@ -343,21 +343,27 @@ func _surface_kind(ci: Node2D, a: float, b: float, band_top: Color, kind: String
 const FLOWERS := {"pavers": [Color(0.92, 0.26, 0.22), Color(1.0, 0.95, 0.88)], "moss": [Color(0.55, 0.62, 1.0), Color(0.95, 0.92, 1.0)],
 	"boards": [Color(1.0, 0.86, 0.30), Color(1.0, 1.0, 0.95)], "snow": []}
 
+## Grass as separate blade triangles plus a thin base strip, one draw call.
+## (0.8.23: it was one zigzag outline; when blades leaned past each other the
+## outline couldn't be triangulated and the whole row vanished for a frame.)
 func _grass_row(ci: Node2D, x0: float, x1: float, period: float, hmin: float, hmax: float, col: Color, seed: int) -> void:
-	var pts := PackedVector2Array([Vector2(x0, 5)])
+	var v := PackedVector2Array([Vector2(x0, 1.0), Vector2(x1, 1.0), Vector2(x1, 5.0), Vector2(x0, 5.0)])
+	var idx := PackedInt32Array([0, 1, 2, 0, 2, 3])
 	var c0 := int(x0 / period) + 1
 	var c1 := int(x1 / period)
 	for c in range(c0, c1 + 1):
 		var x := c * period + Art.hash01(c, seed) * period * 0.4
-		if x <= pts[pts.size() - 1].x + 2.0 or x >= x1:
+		if x - period * 0.42 < x0 or x >= x1:
 			continue
 		var h := hmin + Art.hash01(c, seed + 1) * (hmax - hmin)
 		var lean := sin(t * 1.7 + x * 0.012) * h * 0.28 + (Art.hash01(c, seed + 2) - 0.5) * h * 0.4
-		pts.append(Vector2(x - period * 0.42, 2.0))
-		pts.append(Vector2(x + lean, -h))
-	pts.append(Vector2(x1, 2.0))
-	pts.append(Vector2(x1, 5.0))
-	ci.draw_colored_polygon(pts, col)
+		var i := v.size()
+		v.append_array([Vector2(x - period * 0.42, 2.0), Vector2(x + period * 0.12, 2.0), Vector2(x + lean, -h)])
+		idx.append_array([i, i + 1, i + 2])
+	var cols := PackedColorArray()
+	cols.resize(v.size())
+	cols.fill(col)
+	RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), idx, v, cols)
 
 func _grass(ci: Node2D, a: float, b: float, gcol: Color) -> void:
 	var x0 := maxf(a + 6.0, view_l - 50.0)

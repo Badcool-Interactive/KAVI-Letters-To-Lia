@@ -1686,7 +1686,7 @@ func _warm_glyphs(ci: Node2D, budget_usec: int) -> void:
 
 func _draw_hud(ci: Node2D) -> void:
 	if _glyph_i < GLYPH_COMBOS.size():
-		_warm_glyphs(ci, 7000 if loading else 1500)
+		_warm_glyphs(ci, (2500 if _video_started else 9000) if loading else 1500)
 	var sz = get_viewport_rect().size
 	if has_meta("keyart"):
 		_draw_logo(ci, Vector2(sz.x * 0.74, sz.y * 0.44), 10.0, 1.1)
@@ -2115,7 +2115,7 @@ func _setup_capture() -> void:
 		save.data.tutorial_done = true
 		cap_steps = [{"do": "wait", "s": 1.0}, {"shot": "i1"}, {"do": "wait", "s": 1.5}, {"shot": "i2"}, {"do": "wait", "s": 2.2}, {"shot": "i3"},
 			{"do": "wait", "s": 1.6}, {"shot": "i4"}, {"do": "wait", "s": 1.3}, {"shot": "i5"},
-			{"until_loaded": true, "max": 30.0}, {"shot": "i6-reveal"}, {"do": "wait", "s": 0.3}, {"shot": "i7"}, {"do": "wait", "s": 1.2}, {"shot": "i8-title"}, {"do": "quit"}]
+			{"until_loaded": true, "max": 30.0}, {"shot": "i6-reveal"}, {"do": "wait", "s": 0.2}, {"shot": "i7a"}, {"do": "wait", "s": 0.2}, {"shot": "i7b"}, {"do": "wait", "s": 0.2}, {"shot": "i7c"}, {"do": "wait", "s": 1.2}, {"shot": "i8-title"}, {"do": "quit"}]
 		return
 	if "--bridge" in OS.get_cmdline_user_args():
 		# The Danube landmark bridge, forced into every far-hill slot.
@@ -2925,6 +2925,8 @@ var _load_t := 0.0
 var _load_fade := -1.0
 var _load_progress := 0.0
 var _intro_done := false     # the video has finished (or was skipped)
+var _video_started := false
+var _video_t0 := 0.0
 var _intro_skip := false
 var _hold_t := 0.0           # time spent breathing after the video
 var _est_gpu: Array = []
@@ -2932,6 +2934,7 @@ var _est_dt: Array = []
 var _slow_load := 0.0        # capture testing: pretend loading takes this long
 var _clean_quit_frames := -1   # test: quit through the real clean path after N frames
 var _audio_in_t := 99.0      # < 0: muted under the intro; 0..2.5: fading in
+var _intro_log := {"frames": [], "steps": []}   # debug builds save this to user://intro_timing.json
 
 ## After the intro the whole game's sound rises over 2.5 s with a soft curve,
 ## instead of starting at full volume all at once (owner, 0.8.22).
@@ -3021,7 +3024,8 @@ func _start_loading() -> void:
 		_layout_intro_video()
 		get_viewport().size_changed.connect(_layout_intro_video)
 		_intro_video.finished.connect(func(): _intro_done = true)
-		_intro_video.play()
+		# 0.8.23: the video starts once the heavy warm-up steps are done (a few
+		# black frames first), so it plays smoothly from its very first frame
 	else:
 		_intro_done = true
 	_load_bar = SilverBar.new()
@@ -3047,6 +3051,19 @@ func _start_loading() -> void:
 	_load_i = 0
 	_load_t = 0.0
 
+var _hidden_world: Array = []
+
+func _world_hidden(on: bool) -> void:
+	if on and _hidden_world.is_empty():
+		for n in [world_view, track_view, kite, fx, cast_base, cast_add, fg]:
+			if n.visible:
+				n.visible = false
+				_hidden_world.append(n)
+	elif not on and not _hidden_world.is_empty():
+		for n in _hidden_world:
+			n.visible = true
+		_hidden_world.clear()
+
 func _layout_intro_video() -> void:
 	if not is_instance_valid(_intro_video):
 		return
@@ -3064,25 +3081,46 @@ func _load_ready() -> bool:
 func _update_loading(dt: float) -> void:
 	_load_t += dt
 	if _load_fade >= 0.0:
+		# shine-out: the still logo grows a touch while a soft glow swells and
+		# fades, and the whole intro (logo, glow, black) fades as ONE piece
 		_load_fade += dt
-		var a := 1.0 - clampf(_load_fade / 0.5, 0.0, 1.0)
-		_load_root.modulate.a = a
+		var f := clampf(_load_fade / 0.8, 0.0, 1.0)
+		var e := f * f * (3.0 - 2.0 * f)
+		_load_root.modulate.a = 1.0 - e
+		var sc := 1.0 + 0.05 * e
+		for c in [_intro_hold, _intro_glow]:
+			c.pivot_offset = c.size * 0.5
+			c.scale = Vector2(sc, sc)
+		_intro_glow.modulate.a = 0.45 * sin(f * PI)
+		var a := 1.0 - e
 		if a <= 0.0:
 			_load_layer.queue_free()
 			_load_layer = null
 			_intro_video = null
 			loading = false
 		return
+	if _load_i >= _load_steps.size() and is_instance_valid(_intro_video) and not _intro_video.is_playing() and not _intro_done and not _video_started:
+		_video_started = true
+		_video_t0 = _load_t
+		_intro_video.play()
 	if _load_i < _load_steps.size():
+		var ts := Time.get_ticks_usec()
 		_load_steps[_load_i].call()
+		_intro_log.steps.append(snappedf((Time.get_ticks_usec() - ts) / 1000.0, 0.01))
 		_load_i += 1
+	if not _intro_done:
+		_intro_log.frames.append(snappedf(dt * 1000.0, 0.1))
+	# once the warm-up steps have drawn every screen and country, stop drawing
+	# the world behind the video so the phone only has to play the video
+	# (0.8.23: drawing it cost ~16 ms per frame on a phone and made the intro stutter)
+	_world_hidden(_load_i >= _load_steps.size() and not _intro_done)
 	# graphics estimate from the frames drawn behind the video, counting only
 	# frames after the loading work is done (that work would skew the timing)
-	if _load_i >= _load_steps.size() and _glyph_i >= GLYPH_COMBOS.size() and not _intro_done and _load_t < INTRO_LEN:
+	if _load_i >= _load_steps.size() and _glyph_i >= GLYPH_COMBOS.size() and not _intro_done and _video_started:
 		_est_dt.append(dt)
 		_est_gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid()))
-	if not _intro_done and (_intro_skip or _load_t > INTRO_LEN + 0.5):
-		_intro_done = true   # skipped, or a safety net if the video never reports "finished"
+	if not _intro_done and (_intro_skip or (_video_started and _load_t - _video_t0 > INTRO_LEN + 3.0)):
+		_intro_done = true   # a safety net if the video never reports "finished"
 	var glyph_k := float(_glyph_i) / float(GLYPH_COMBOS.size())
 	var step_k := float(_load_i) / float(_load_steps.size())
 	_load_progress = step_k * 0.45 + glyph_k * 0.35 + (0.2 if synth.preload_done() else 0.0)
@@ -3108,12 +3146,32 @@ func _update_loading(dt: float) -> void:
 	bar.queue_redraw()
 
 func _finish_intro() -> void:
+	# swap the video for the identical still frame before fading, so every
+	# part of the intro fades together (0.8.23: the video square used to fade
+	# out later than the black edges on phones)
+	if is_instance_valid(_intro_video):
+		_intro_video.stop()
+		_intro_video.visible = false
+	_intro_hold.visible = true
+	_intro_hold.modulate = Color(1, 1, 1)
+	_intro_glow.visible = true
+	_intro_glow.modulate.a = 0.0
+	_world_hidden(false)
+	(_load_bar as SilverBar).alpha = 0.0
+	_load_bar.queue_redraw()
 	_estimate_quality()
 	if not save.data.get("intro_seen", false):
 		save.data.intro_seen = true
 		save.save()
 	_load_fade = 0.0
 	_audio_in_t = 0.0
+	if OS.is_debug_build() and capture_dir == "":
+		_intro_log.ready_at = snappedf(_load_t, 0.01)
+		_intro_log.device = "%s / %s" % [OS.get_model_name(), RenderingServer.get_video_adapter_name()]
+		var lf := FileAccess.open("user://intro_timing.json", FileAccess.WRITE)
+		if lf != null:
+			lf.store_string(JSON.stringify(_intro_log))
+			lf.close()
 	print("intro: game ready after %.2f s (video %s)" % [_load_t, "skipped" if _intro_skip else "watched"])
 	if _after_load == "tutorial":
 		start_tutorial()
