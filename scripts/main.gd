@@ -1915,6 +1915,12 @@ func _set_input_mode(m: String) -> void:
 
 func _input(event: InputEvent) -> void:
 	if loading:
+		# after the first full viewing, any tap/click/key skips the studio intro
+		if save.data.get("intro_seen", false) and not _intro_done and event.is_pressed() and not event.is_echo() \
+				and (event is InputEventKey or event is InputEventMouseButton or event is InputEventScreenTouch or event is InputEventJoypadButton):
+			_intro_skip = true
+			if is_instance_valid(_intro_video):
+				_intro_video.stop()
 		get_viewport().set_input_as_handled()
 		return
 	if state in ["title", "scenic"] and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
@@ -2048,8 +2054,9 @@ func _setup_capture() -> void:
 	if "--loading" in OS.get_cmdline_user_args():
 		# The loading screen, the reveal and the menu slide-in.
 		save.data.tutorial_done = true
-		cap_steps = [{"shot": "l0"}, {"do": "wait", "s": 0.15}, {"shot": "l1"}, {"do": "wait", "s": 0.3}, {"shot": "l2"},
-			{"until_loaded": true, "max": 20.0}, {"shot": "l3-reveal"}, {"do": "wait", "s": 0.25}, {"shot": "l4"}, {"do": "wait", "s": 1.2}, {"shot": "l5-title"}, {"do": "quit"}]
+		cap_steps = [{"do": "wait", "s": 1.0}, {"shot": "i1"}, {"do": "wait", "s": 1.5}, {"shot": "i2"}, {"do": "wait", "s": 2.2}, {"shot": "i3"},
+			{"do": "wait", "s": 1.6}, {"shot": "i4"}, {"do": "wait", "s": 1.3}, {"shot": "i5"},
+			{"until_loaded": true, "max": 30.0}, {"shot": "i6-reveal"}, {"do": "wait", "s": 0.3}, {"shot": "i7"}, {"do": "wait", "s": 1.2}, {"shot": "i8-title"}, {"do": "quit"}]
 		return
 	if "--obs" in OS.get_cmdline_user_args():
 		# Obstacle review: autopilot through chapters 1 and 3, a frame every 0.3 s.
@@ -2809,40 +2816,70 @@ func _draw_title_poem(ci: Node2D) -> void:
 		_text(ci, s0, Vector2(cx, y + i * 31.0), 25, col, HORIZONTAL_ALIGNMENT_CENTER, 6)
 	_text(ci, by, Vector2(cx, y + parts.size() * 31.0), 19, Color(pal.rim.lerp(Color(1, 1, 1), 0.4), 0.7 * a), HORIZONTAL_ALIGNMENT_CENTER, 4)
 
-# ------------------------------------------------------------------ loading screen (0.8.19)
-## The boot picture stays up (same image, plus a progress bar) while the game
-## gets ready: music loads on background threads, every in-run text size is
-## prepared, each menu/route/pause/results screen and each country is drawn
-## once behind it. Then the title slides in smoothly. Owner: "load everything
-## before the game starts, but make gameplay smooth".
+# ------------------------------------------------------------------ studio intro + loading (0.8.21)
+## The game opens on the BADCOOL INTERACTIVE ident (owner's 5 s video). Behind
+## it the game gets ready: music loads on background threads, every in-run text
+## size is prepared, each menu/route/pause/results screen and each country is
+## drawn once, and the frame timings pick the graphics level. When the video
+## ends: if everything is ready the title fades in; if not, the logo stays and
+## breathes (soft glow, dimming and brightening) above a slim silver loading
+## bar until it is. After the first full viewing, a tap or key skips the video.
+const INTRO_VIDEO := "res://assets/intro/badcool_ident.ogv"
+const INTRO_LEN := 5.0
 var loading := false
 var _after_load := ""
 var _load_layer: CanvasLayer
 var _load_root: Control
+var _intro_video: VideoStreamPlayer
+var _intro_hold: TextureRect
+var _intro_glow: TextureRect
 var _load_bar: Control
 var _load_steps: Array = []
 var _load_i := 0
 var _load_t := 0.0
 var _load_fade := -1.0
 var _load_progress := 0.0
+var _intro_done := false     # the video has finished (or was skipped)
+var _intro_skip := false
+var _hold_t := 0.0           # time spent breathing after the video
+var _est_gpu: Array = []
+var _est_dt: Array = []
+var _slow_load := 0.0        # capture testing: pretend loading takes this long
 
-class LoadBar extends Control:
+## Slim silver-platinum bar with a soft moving sheen.
+class SilverBar extends Control:
 	var k := 0.0
+	var alpha := 0.0
 	func _draw() -> void:
-		var w := minf(size.x * 0.40, 420.0)
-		var r := Rect2(Vector2((size.x - w) * 0.5, size.y * 0.91 - 5.0), Vector2(w, 10))
-		draw_colored_polygon(Art.rrect(r, 5.0), Color(1, 1, 1, 0.14))
-		if k > 0.01:
-			var f := Rect2(r.position, Vector2(maxf(r.size.x * k, 10.0), r.size.y))
-			var pts := Art.rrect(f, 5.0)
-			var cols := PackedColorArray()
-			for p in pts:
-				var u := clampf((p.x - r.position.x) / r.size.x, 0.0, 1.0)
-				cols.append(Color(1.0, 0.81, 0.48).lerp(Color(1.0, 0.54, 0.36), u))
-			draw_polygon(pts, cols)
+		if alpha <= 0.01:
+			return
+		var w := minf(size.x * 0.28, 520.0)
+		var r := Rect2(Vector2((size.x - w) * 0.5, size.y * 0.88), Vector2(w, 4))
+		draw_colored_polygon(Art.rrect(r, 2.0), Color(1, 1, 1, 0.10 * alpha))
+		var fw := maxf(r.size.x * k, 4.0)
+		var f := Rect2(r.position, Vector2(fw, r.size.y))
+		var pts := Art.rrect(f, 2.0)
+		var cols := PackedColorArray()
+		var sheen := fmod(Time.get_ticks_msec() * 0.0004, 1.4) - 0.2
+		for p in pts:
+			var u := clampf((p.x - r.position.x) / r.size.x, 0.0, 1.0)
+			var base := Color(0.62, 0.65, 0.70).lerp(Color(0.86, 0.88, 0.91), u)
+			var sh := exp(-pow((u - sheen) / 0.08, 2.0))
+			cols.append(Color(base.lerp(Color(1, 1, 1), sh * 0.8), alpha))
+		draw_polygon(pts, cols)
+
+func _intro_fit(c: Control) -> void:
+	# keep the 16:9 video/picture centred on any screen shape (black around it)
+	c.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if c is TextureRect:
+		(c as TextureRect).expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		(c as TextureRect).stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 
 func _start_loading() -> void:
 	loading = true
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--slow-load="):
+			_slow_load = float(a.substr(12))
 	_load_layer = CanvasLayer.new()
 	_load_layer.layer = 128
 	add_child(_load_layer)
@@ -2851,20 +2888,41 @@ func _start_loading() -> void:
 	_load_layer.add_child(_load_root)
 	_load_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
-	bg.color = Color(0.055, 0.07, 0.14)
+	bg.color = Color(0, 0, 0)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_load_root.add_child(bg)
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var tex: Texture2D = load("res://assets/splash.png")
-	if tex != null:
-		var tr := TextureRect.new()
-		tr.texture = tex
-		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_load_root.add_child(tr)
-		tr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_load_bar = LoadBar.new()
+	# the held last frame and its glow (shown only if loading outlasts the video)
+	_intro_hold = TextureRect.new()
+	_intro_hold.texture = load("res://assets/intro/badcool_last.png")
+	_intro_hold.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_intro_hold.visible = false
+	_load_root.add_child(_intro_hold)
+	_intro_fit(_intro_hold)
+	_intro_glow = TextureRect.new()
+	_intro_glow.texture = load("res://assets/intro/badcool_glow.png")
+	_intro_glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var add := CanvasItemMaterial.new()
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_intro_glow.material = add
+	_intro_glow.visible = false
+	_load_root.add_child(_intro_glow)
+	_intro_fit(_intro_glow)
+	# the video itself, letterboxed to 16:9
+	var stream: VideoStream = load(INTRO_VIDEO) if ResourceLoader.exists(INTRO_VIDEO) else null
+	if stream != null:
+		_intro_video = VideoStreamPlayer.new()
+		_intro_video.stream = stream
+		_intro_video.expand = true
+		_intro_video.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_load_root.add_child(_intro_video)
+		_layout_intro_video()
+		get_viewport().size_changed.connect(_layout_intro_video)
+		_intro_video.finished.connect(func(): _intro_done = true)
+		_intro_video.play()
+	else:
+		_intro_done = true
+	_load_bar = SilverBar.new()
 	_load_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_load_root.add_child(_load_bar)
 	_load_bar.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -2887,31 +2945,95 @@ func _start_loading() -> void:
 	_load_i = 0
 	_load_t = 0.0
 
-## One step per frame, so each screen/country is actually drawn once.
+func _layout_intro_video() -> void:
+	if not is_instance_valid(_intro_video):
+		return
+	var sz := get_viewport_rect().size
+	var w := minf(sz.x, sz.y * 16.0 / 9.0)
+	var h := w * 9.0 / 16.0
+	_intro_video.position = (sz - Vector2(w, h)) * 0.5
+	_intro_video.size = Vector2(w, h)
+
+func _load_ready() -> bool:
+	var music_ok: bool = synth.preload_done() or _load_t > 6.0
+	return _load_i >= _load_steps.size() and _glyph_i >= GLYPH_COMBOS.size() and music_ok and _load_t >= _slow_load
+
+## One loading step per frame (so each screen/country is really drawn once).
 func _update_loading(dt: float) -> void:
 	_load_t += dt
 	if _load_fade >= 0.0:
 		_load_fade += dt
-		var a := 1.0 - clampf(_load_fade / 0.35, 0.0, 1.0)
+		var a := 1.0 - clampf(_load_fade / 0.5, 0.0, 1.0)
 		_load_root.modulate.a = a
 		if a <= 0.0:
 			_load_layer.queue_free()
 			_load_layer = null
+			_intro_video = null
 			loading = false
 		return
 	if _load_i < _load_steps.size():
 		_load_steps[_load_i].call()
 		_load_i += 1
+	# graphics estimate from the frames drawn behind the video, counting only
+	# frames after the loading work is done (that work would skew the timing)
+	if _load_i >= _load_steps.size() and _glyph_i >= GLYPH_COMBOS.size() and not _intro_done and _load_t < INTRO_LEN:
+		_est_dt.append(dt)
+		_est_gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid()))
+	if not _intro_done and (_intro_skip or _load_t > INTRO_LEN + 0.5):
+		_intro_done = true   # skipped, or a safety net if the video never reports "finished"
 	var glyph_k := float(_glyph_i) / float(GLYPH_COMBOS.size())
 	var step_k := float(_load_i) / float(_load_steps.size())
-	var music_ok: bool = synth.preload_done() or _load_t > 5.0
-	_load_progress = step_k * 0.5 + glyph_k * 0.4 + (0.1 if music_ok else 0.0)
-	(_load_bar as LoadBar).k = _load_progress
-	_load_bar.queue_redraw()
-	if _load_i >= _load_steps.size() and _glyph_i >= GLYPH_COMBOS.size() and music_ok:
-		# reveal: rebuild the title fresh so its slide-in plays visibly
-		_load_fade = 0.0
-		if _after_load == "tutorial":
-			start_tutorial()
-		else:
-			go_title()
+	_load_progress = step_k * 0.45 + glyph_k * 0.35 + (0.2 if synth.preload_done() else 0.0)
+	if _slow_load > 0.0:
+		_load_progress = minf(_load_progress, _load_t / _slow_load)
+	if not _intro_done:
+		return
+	if _load_ready():
+		_finish_intro()
+		return
+	# still loading after the video: the logo breathes above the silver bar
+	_hold_t += dt
+	if is_instance_valid(_intro_video):
+		_intro_video.visible = false
+	_intro_hold.visible = true
+	_intro_glow.visible = true
+	var breath := 0.5 - 0.5 * cos(_hold_t * TAU / 2.6)
+	_intro_hold.modulate = Color(1, 1, 1).lerp(Color(0.78, 0.78, 0.80), 1.0 - breath)
+	_intro_glow.modulate.a = 0.15 + 0.45 * breath
+	var bar := _load_bar as SilverBar
+	bar.alpha = minf(_hold_t / 0.6, 1.0)
+	bar.k = lerpf(bar.k, _load_progress, 1.0 - exp(-dt * 6.0))
+	bar.queue_redraw()
+
+func _finish_intro() -> void:
+	_estimate_quality()
+	if not save.data.get("intro_seen", false):
+		save.data.intro_seen = true
+		save.save()
+	_load_fade = 0.0
+	print("intro: game ready after %.2f s (video %s)" % [_load_t, "skipped" if _intro_skip else "watched"])
+	if _after_load == "tutorial":
+		start_tutorial()
+	else:
+		go_title()
+
+## First launch on "Auto": pick Low/Medium/High from how fast the frames drawn
+## behind the intro were (GPU time when the platform reports it, otherwise the
+## frame time). Later launches use the level auto-graphics learned in play.
+func _estimate_quality() -> void:
+	if forced_quality >= 0 or save.data.settings.get("graphics", "auto") != "auto" or save.data.settings.has("auto_q"):
+		return
+	if _est_dt.size() < 30:
+		return   # too few clean frames: keep High, auto-graphics adjusts in play
+	var gpu := _median(_est_gpu)
+	var fdt := _median(_est_dt)
+	var q := 2
+	if gpu > 0.0:
+		q = 2 if gpu < 7.0 else (1 if gpu < 12.0 else 0)
+	else:
+		q = 2 if fdt < 0.0185 else (1 if fdt < 0.026 else 0)
+	print("intro: graphics estimate gpu %.2f ms, frame %.1f ms -> %s" % [gpu, fdt * 1000.0, ["low", "medium", "high"][q]])
+	if q != Art.Q:
+		apply_quality(q)
+	save.data.settings.auto_q = Art.Q
+	save.save()

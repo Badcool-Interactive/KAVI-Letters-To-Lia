@@ -1,4 +1,19 @@
 # Changelog
+## 0.8.21 (2026-11-24): BADCOOL INTERACTIVE studio intro
+- **Studio intro:** the game now opens on the owner's 5 s BADCOOL INTERACTIVE ident.
+  - Converted to Ogg Theora, 1920x1080 at 60 fps (531 KB), and letterboxed to 16:9 on any screen.
+  - It replaces the KAVI key-art loading screen.
+  - The start is black throughout: Godot's boot splash is plain black and the web page is black, so it flows straight into the video.
+- **Loading happens behind the video:** music on background threads, text sizes, each menu and gameplay screen, and all four countries.
+  - When the video ends and the game is ready, the title fades in with the menu slide-in; a new player's tutorial starts instead.
+  - If loading isn't finished, the last frame of the logo stays and breathes: a soft glow rises and falls over a 2.6 s cycle while the logo dims and brightens.
+  - Below it, a slim silver-platinum bar with a moving sheen tracks real progress. It floats above the bottom edge.
+- **Graphics picked during the intro:**
+  - On first launch with Auto graphics, the frames drawn behind the video choose Low, Medium or High. GPU time is used where the platform reports it, otherwise frame time.
+  - Only frames after the loading work count. Later launches use the level that auto-graphics learned in play.
+- **Skip:** after the first full viewing, a tap, click or key skips the video (the game still waits until it's ready).
+- The web loading bar is now slim silver on black, and the web page no longer shows a splash image.
+- Measured: ready at about 5.1–5.2 s in the capture rig and in a real browser (the video length); the hold screen was tested with `--slow-load=9`. New capture flags: `--loading`, `--slow-load=N`.
 ## 0.8.20 (2026-11-24): the same look on phone and PC
 - **Fixed: the game looked pale and washed out on Android** (owner's screen recording from an Honor Magic 7 Pro). HDR 2D renders differently on PC and Android: on PC colours came out darker and richer, the look the game was tuned with, while Android showed plain, pale colours. The 0.8.19 Kavi colour correction then double-brightened him on the phone.
 - **HDR 2D is now off on every platform and quality level.** The moody look is applied on purpose by a colour-grade shader on the world layers (sky, hills, ground, obstacles, effects, foreground). Measured against the old PC look, the result is nearly identical.
