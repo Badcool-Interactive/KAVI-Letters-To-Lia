@@ -251,7 +251,7 @@ func _build_scene() -> void:
 	env.glow_intensity = 0.32
 	env.glow_strength = 0.85
 	env.glow_bloom = 0.0
-	env.glow_hdr_threshold = 1.15
+	env.glow_hdr_threshold = 0.90   # LDR now: near-white lights bloom
 	env.glow_hdr_scale = 1.2
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 	for i in 7:
@@ -275,14 +275,11 @@ func _build_scene() -> void:
 	cast_base = Painter.new()
 	cast_base.tag = "cast"
 	cast_base.fn = _draw_cast.bind(false)
-	cast_base.material = Art.true_color_material()
 	add_child(cast_base)
 	cast_add = Painter.new()
 	cast_add.tag = "cast_add"
 	cast_add.fn = _draw_cast.bind(true)
-	var m = CanvasItemMaterial.new()
-	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	cast_add.material = m
+	cast_add.material = Art.grade_material(true)
 	add_child(cast_add)
 	kite = KiteView.new()
 	add_child(kite)
@@ -294,6 +291,7 @@ func _build_scene() -> void:
 	add_child(fgl)
 	fg = Painter.new()
 	fg.tag = "fg"
+	fg.material = Art.grade_material(false)
 	fg.fn = func(ci):
 		world_view.draw_foreground(ci, 0.0)
 		world_view.draw_bokeh(ci)
@@ -353,13 +351,12 @@ func apply_quality(q: int) -> void:
 	Art.Q = clampi(q, 0, 2)
 	Art.AA = Art.Q >= 2
 	set_meta("quality_name", ["low", "medium", "high"][Art.Q])
-	# 0.8.19: HDR stays on at every level (Low used to turn it off, which made
-	# the whole world pale and "dry", and switching it mid-run flashed the
-	# screen). Low only drops the glow post-process, the costly part.
+	# 0.8.19: HDR 2D is off on every platform and level (it looked different on
+	# PC and Android, and switching it mid-run flashed the screen); the moody
+	# look comes from Art.grade_material instead. Low only drops the glow.
 	if env:
 		env.glow_enabled = Art.Q >= 1
-	get_viewport().use_hdr_2d = true
-	Art.set_true_color(true)
+	get_viewport().use_hdr_2d = false
 	fx.density = [0.35, 0.7, 1.0][Art.Q] * (0.5 if save.data.settings.reduced_motion else 1.0)
 	fx.max_parts = [120, 300, 600][Art.Q]
 	kite.trail_on = true

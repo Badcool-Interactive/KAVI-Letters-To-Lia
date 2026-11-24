@@ -38,10 +38,8 @@ func _ready() -> void:
 		var p = Painter.new()
 		p.fn = o[0]
 		p.tag = o[2]
+		p.material = Art.grade_material(o[1])
 		if o[1]:
-			var m = CanvasItemMaterial.new()
-			m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-			p.material = m
 			p.modulate = Color(1, 1, 1, 0.6)
 		add_child(p)
 		_painters.append(p)

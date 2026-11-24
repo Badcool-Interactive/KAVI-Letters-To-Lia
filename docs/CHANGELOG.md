@@ -1,4 +1,13 @@
 # Changelog
+## 0.8.20 (2026-11-24): the same look on phone and PC
+- **Fixed: the game looked pale and washed out on Android** (owner's screen recording from an Honor Magic 7 Pro). HDR 2D renders differently on PC and Android: on PC colours came out darker and richer, the look the game was tuned with, while Android showed plain, pale colours. The 0.8.19 Kavi colour correction then double-brightened him on the phone.
+- **HDR 2D is now off on every platform and quality level.** The moody look is applied on purpose by a colour-grade shader on the world layers (sky, hills, ground, obstacles, effects, foreground). Measured against the old PC look, the result is nearly identical.
+  - Kavi, Lia, the HUD and the menus are not graded, so they show their true colours everywhere. Kavi's 0.8.19 colour-correction shader is gone.
+  - A tiny dither stops dark sky gradients from banding.
+  - Glow now blooms near-white lights (threshold 0.90).
+  - 8-bit colour is also lighter work for phone GPUs than HDR.
+- New key art and loading picture in the final look. Benchmarks are unchanged.
+- Not verified on the phone yet: the owner tests first.
 ## 0.8.19 (2026-11-24): smooth on phones, prettier Low, cuter Kavi
 Owner report from an Honor Magic 7 Pro: flicker, quality dropping from High to Medium or Low, a longer boot, and the menu lagging as it slid in.
 - **Loading screen with warm-up** (replaces the 0.8.17 warm-up that ran during the menu slide-in):

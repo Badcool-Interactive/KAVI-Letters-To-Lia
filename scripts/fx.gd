@@ -11,9 +11,7 @@ var max_parts = 600
 var density = 1.0
 
 func _ready() -> void:
-	var m = CanvasItemMaterial.new()
-	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	material = m
+	material = Art.grade_material(true)
 	modulate = Color(1, 1, 1, 0.7)
 
 func burst(p: Vector2, col: Color, n: int, spd := 300.0, life := 0.6, size := 4.0, grav := 0.0, spread := TAU, dir := 0.0) -> void:

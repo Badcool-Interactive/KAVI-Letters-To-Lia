@@ -53,36 +53,43 @@ static func _rrect_raw(r: Rect2, rad: float, seg: int) -> PackedVector2Array:
 			p.append(cs[k] + Vector2(cos(a), sin(a)) * rad)
 	return p
 
-## True-colour characters (0.8.19). With HDR 2D on, plain colours render darker
-## and more saturated (the world is tuned for that moody look). Kavi and Lia
-## should keep their real, bright colours (owner: the Low-quality Kavi, which
-## had no HDR, looked cuter), so their painters re-encode linear -> sRGB.
-const TRUE_COLOR_SHADER := """
-shader_type canvas_item;
-uniform float encode = 1.0;
-vec3 to_srgb(vec3 c) {
+## World colour grade (0.8.19). HDR 2D rendered differently per platform:
+## darker and moodier on PC, pale and washed out on Android (owner's phone
+## recording). So HDR is off everywhere and the moody look is applied on
+## purpose: world painters convert their sRGB colours to linear (the darker,
+## richer curve the game was tuned with on PC). Characters, HUD and menus are
+## not graded, so they keep their true colours. Same result on every platform.
+const GRADE_CODE := """
+uniform float grade = 1.0;
+vec3 to_linear(vec3 c) {
 	c = max(c, vec3(0.0));
-	return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
 }
 void fragment() {
-	COLOR.rgb = mix(COLOR.rgb, to_srgb(COLOR.rgb), encode);
+	COLOR.rgb = mix(COLOR.rgb, to_linear(COLOR.rgb), grade);
+	// a little dither so deep, dark gradients don't band in 8-bit colour
+	float n = fract(sin(dot(FRAGCOORD.xy, vec2(12.9898, 78.233))) * 43758.5453);
+	COLOR.rgb += (n - 0.5) / 255.0;
 }
 """
-static var _true_mats: Array = []
+static var _grade_mix: ShaderMaterial
+static var _grade_add: ShaderMaterial
 
-static func true_color_material() -> ShaderMaterial:
-	var sh := Shader.new()
-	sh.code = TRUE_COLOR_SHADER
-	var m := ShaderMaterial.new()
-	m.shader = sh
-	_true_mats.append(m)
-	return m
-
-## 1 when HDR 2D is really active (not on the web's Compatibility renderer).
-static func set_true_color(hdr_on: bool) -> void:
-	var on := hdr_on and RenderingServer.get_current_rendering_method() != "gl_compatibility"
-	for m in _true_mats:
-		m.set_shader_parameter("encode", 1.0 if on else 0.0)
+## Shared grade materials: one for normal layers, one for additive light layers.
+static func grade_material(additive := false) -> ShaderMaterial:
+	if additive:
+		if _grade_add == null:
+			var sh := Shader.new()
+			sh.code = "shader_type canvas_item;\nrender_mode blend_add;\n" + GRADE_CODE
+			_grade_add = ShaderMaterial.new()
+			_grade_add.shader = sh
+		return _grade_add
+	if _grade_mix == null:
+		var sh2 := Shader.new()
+		sh2.code = "shader_type canvas_item;\n" + GRADE_CODE
+		_grade_mix = ShaderMaterial.new()
+		_grade_mix.shader = sh2
+	return _grade_mix
 
 ## Global render quality: 0 low, 1 medium, 2 high. AA = antialiased lines.
 static var Q := 2

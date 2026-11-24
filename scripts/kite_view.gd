@@ -84,14 +84,11 @@ func _ready() -> void:
 	_base = Painter.new()
 	_base.tag = "kavi"
 	_base.fn = _paint.bind(false)
-	_base.material = Art.true_color_material()
 	add_child(_base)
 	_add = Painter.new()
 	_add.tag = "kavi_add"
 	_add.fn = _paint.bind(true)
-	var m = CanvasItemMaterial.new()
-	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	_add.material = m
+	_add.material = Art.grade_material(true)
 	add_child(_add)
 
 func tick(dt: float) -> void:

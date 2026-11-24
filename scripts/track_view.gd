@@ -26,13 +26,12 @@ func _ready() -> void:
 	_base = Painter.new()
 	_base.tag = "track"
 	_base.fn = _draw_base
+	_base.material = Art.grade_material(false)
 	add_child(_base)
 	_add = Painter.new()
 	_add.tag = "track_add"
 	_add.fn = _draw_add
-	var m = CanvasItemMaterial.new()
-	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	_add.material = m
+	_add.material = Art.grade_material(true)
 	_add.modulate = Color(1, 1, 1, 0.5)
 	add_child(_add)
 

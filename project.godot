@@ -4,7 +4,7 @@ config_version=5
 [application]
 config/name="VOLT/RUN"
 config/description="Kavi: Letters to Lia. A little courier robot carries letters across Europe to reach Lia. (config/name stays VOLT/RUN on purpose: it names the save folder, so changing it would wipe players' progress.)"
-config/version="0.8.19"
+config/version="0.8.20"
 run/main_scene="res://main.tscn"
 config/icon="res://icon.svg"
 config/quit_on_go_back=false
@@ -33,7 +33,7 @@ common/physics_interpolation=false
 
 [rendering]
 renderer/rendering_method="mobile"
-viewport/hdr_2d=true
+viewport/hdr_2d=false
 environment/defaults/default_clear_color=Color(0.02, 0.03, 0.06, 1)
 textures/canvas_textures/default_texture_filter=1
 textures/vram_compression/import_etc2_astc=true
