@@ -5,12 +5,17 @@ extends Node2D
 var fn: Callable
 var tag := ""
 static var cost_usec := 0
+static var profiling := false   # set by the benchmark; no timing cost otherwise
 static var costs := {}   # tag -> usec this frame (benchmark breakdown)
 
 func _draw() -> void:
-	if fn.is_valid():
-		var t0 := Time.get_ticks_usec()
+	if not fn.is_valid():
+		return
+	if not profiling:
 		fn.call(self)
-		var d := Time.get_ticks_usec() - t0
-		cost_usec += d
-		costs[tag] = int(costs.get(tag, 0)) + d
+		return
+	var t0 := Time.get_ticks_usec()
+	fn.call(self)
+	var d := Time.get_ticks_usec() - t0
+	cost_usec += d
+	costs[tag] = int(costs.get(tag, 0)) + d

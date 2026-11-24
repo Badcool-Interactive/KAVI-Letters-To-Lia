@@ -783,7 +783,7 @@ func _draw_haze(ci: Node2D, i: int) -> void:
 	ci.draw_rect(Rect2(0, y + h, size.x, size.y), Color(fog, 0.30 - i * 0.08))
 
 func _draw_shafts(ci: Node2D) -> void:
-	if Art.Q == 0 or sun_vis < 0.02:
+	if sun_vis < 0.02:
 		return
 	# rays start at the sun/moon disc itself (same position as _draw_sky_light)
 	var c0 = _sun_screen()
@@ -830,8 +830,7 @@ func draw_foreground(ci: Node2D, gy: float) -> void:
 	var col: Color = pal.layers[2].darkened(0.35).lerp(pal.ground, 0.2).lerp(pal.sky[0], 0.15)
 	col.a = 0.97
 	var rim: Color = Color(pal.rim.lightened(0.15), 0.55)
-	if Art.Q >= 1:
-		_draw_fg_clumps(ci, off * 0.9, col.lightened(0.04))
+	_draw_fg_clumps(ci, off * 0.9, col.lightened(0.04))
 	var kind: String = pal.get("surface", "pavers")
 	var cw = 820.0
 	var c0 = int(floor((off - 400.0) / cw))
@@ -907,9 +906,7 @@ func _draw_fg_clumps(ci: Node2D, off: float, col: Color) -> void:
 
 ## Out-of-focus light specks (bokeh) close to the camera: big, soft, slow.
 func draw_bokeh(ci: Node2D) -> void:
-	if Art.Q < 1:
-		return
-	var n: int = [0, 6, 10][Art.Q]
+	var n: int = [4, 6, 10][Art.Q]
 	var warm: Color = pal.rim.lerp(pal.mote, 0.5)
 	for i in n:
 		var h1 := Art.hash01(i, 701)
@@ -1310,7 +1307,7 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 		if fmod(t, 1.1) < 0.12:
 			ci.draw_rect(Rect2(13, -2, 4, 4), Color(Art.hdr(Color(1, 1, 1), 2.0), alpha))
 		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	if air.has("balloon") and Art.Q >= 1:
+	if air.has("balloon"):
 		for b in 2:
 			if Art.hash01(b, 910 + int(n / 3.0)) > 0.55:
 				continue

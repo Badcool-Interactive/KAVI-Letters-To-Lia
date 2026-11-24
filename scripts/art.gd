@@ -53,6 +53,37 @@ static func _rrect_raw(r: Rect2, rad: float, seg: int) -> PackedVector2Array:
 			p.append(cs[k] + Vector2(cos(a), sin(a)) * rad)
 	return p
 
+## True-colour characters (0.8.19). With HDR 2D on, plain colours render darker
+## and more saturated (the world is tuned for that moody look). Kavi and Lia
+## should keep their real, bright colours (owner: the Low-quality Kavi, which
+## had no HDR, looked cuter), so their painters re-encode linear -> sRGB.
+const TRUE_COLOR_SHADER := """
+shader_type canvas_item;
+uniform float encode = 1.0;
+vec3 to_srgb(vec3 c) {
+	c = max(c, vec3(0.0));
+	return mix(12.92 * c, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+void fragment() {
+	COLOR.rgb = mix(COLOR.rgb, to_srgb(COLOR.rgb), encode);
+}
+"""
+static var _true_mats: Array = []
+
+static func true_color_material() -> ShaderMaterial:
+	var sh := Shader.new()
+	sh.code = TRUE_COLOR_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	_true_mats.append(m)
+	return m
+
+## 1 when HDR 2D is really active (not on the web's Compatibility renderer).
+static func set_true_color(hdr_on: bool) -> void:
+	var on := hdr_on and RenderingServer.get_current_rendering_method() != "gl_compatibility"
+	for m in _true_mats:
+		m.set_shader_parameter("encode", 1.0 if on else 0.0)
+
 ## Global render quality: 0 low, 1 medium, 2 high. AA = antialiased lines.
 static var Q := 2
 static var AA := true

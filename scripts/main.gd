@@ -200,7 +200,7 @@ func _ready() -> void:
 	# Display title (window / browser tab). project config/name stays "VOLT/RUN"
 	# because it names the save folder on desktop.
 	get_window().title = "%s: %s" % [HERO, GAME_SUB]
-	synth.preload_all.call_deferred()
+	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 	_setup_cursor()
 	input_mode = "touch" if DisplayServer.is_touchscreen_available() else "keys"
 	if OS.has_feature("web") or OS.has_feature("mobile"):
@@ -214,6 +214,7 @@ func _ready() -> void:
 			forced_quality = ["low", "medium", "high"].find(a.substr(10))
 		if a.begins_with("--bench="):
 			bench = {"out": a.substr(8), "frames": [], "script": [], "draws": [], "prims": [], "t": 0.0}
+			Painter.profiling = true
 	_apply_settings()
 	if capture_dir != "":
 		_setup_capture()
@@ -236,6 +237,10 @@ func _ready() -> void:
 		start_story(0 if bench.transition else 1)
 		card = {}
 	elif capture_dir == "" and not save.data.tutorial_done:
+		_after_load = "tutorial"
+	if (capture_dir == "" or "--loading" in OS.get_cmdline_user_args()) and bench.size() == 0:
+		_start_loading()
+	elif _after_load == "tutorial":
 		start_tutorial()
 
 func _build_scene() -> void:
@@ -270,6 +275,7 @@ func _build_scene() -> void:
 	cast_base = Painter.new()
 	cast_base.tag = "cast"
 	cast_base.fn = _draw_cast.bind(false)
+	cast_base.material = Art.true_color_material()
 	add_child(cast_base)
 	cast_add = Painter.new()
 	cast_add.tag = "cast_add"
@@ -338,36 +344,101 @@ func _initial_quality() -> int:
 	var i = ["low", "medium", "high"].find(g)
 	if i >= 0:
 		return i
-	return 1 if (OS.has_feature("web") or OS.has_feature("mobile")) else 2
+	# 0.8.19: start on High everywhere (phones used to start on Medium) unless
+	# this device already learned its level; auto-quality steps down only on
+	# sustained slowness and can step back up when there is headroom
+	return clampi(int(save.data.settings.get("auto_q", 2)), 0, 2)
 
 func apply_quality(q: int) -> void:
 	Art.Q = clampi(q, 0, 2)
 	Art.AA = Art.Q >= 2
 	set_meta("quality_name", ["low", "medium", "high"][Art.Q])
+	# 0.8.19: HDR stays on at every level (Low used to turn it off, which made
+	# the whole world pale and "dry", and switching it mid-run flashed the
+	# screen). Low only drops the glow post-process, the costly part.
 	if env:
 		env.glow_enabled = Art.Q >= 1
-	get_viewport().use_hdr_2d = Art.Q >= 1
+	get_viewport().use_hdr_2d = true
+	Art.set_true_color(true)
 	fx.density = [0.35, 0.7, 1.0][Art.Q] * (0.5 if save.data.settings.reduced_motion else 1.0)
 	fx.max_parts = [120, 300, 600][Art.Q]
-	kite.trail_on = Art.Q >= 1
+	kite.trail_on = true
+	# Phones with screens above 1080p: High draws at the screen's full
+	# resolution; Medium and Low draw at 1080p and scale up (about 30% fewer
+	# pixels on a 1280p screen, looks the same at phone pixel density).
+	if OS.has_feature("mobile"):
+		var scr := DisplayServer.screen_get_size()
+		if mini(scr.x, scr.y) > 1180:
+			get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS if Art.Q == 2 else Window.CONTENT_SCALE_MODE_VIEWPORT
 	q_frames.clear()
+	q_gpu.clear()
+
+## Auto graphics (0.8.19). The old check averaged frame times during runs, so
+## a few one-off hitches (first effects, the country change) dropped strong
+## phones to Low; and it switched HDR/glow mid-run, which flashed the screen.
+## Now: 2 s windows measured on the title, runs and Scenic View; the MEDIAN
+## frame time (hitches don't count) must be slow in two windows in a row to
+## step down; GPU timing with clear headroom steps back up (once per
+## session). Changes wait for a calm moment (title, breather, run start)
+## unless the game is badly slow; the level is remembered for next launch.
+var q_gpu: Array = []
+var q_bad := 0
+var q_good := 0
+var q_pending := -1
+var q_upgraded := false
+
+static func _median(a: Array) -> float:
+	var b := a.duplicate()
+	b.sort()
+	return float(b[b.size() / 2]) if b.size() > 0 else 0.0
 
 func _adapt_quality(real_dt: float) -> void:
-	if forced_quality >= 0 or capture_dir != "" or save.data.settings.get("graphics", "auto") != "auto":
+	if forced_quality >= 0 or capture_dir != "" or bench.size() > 0 or loading or save.data.settings.get("graphics", "auto") != "auto":
 		return
 	q_cool = maxf(q_cool - real_dt, 0.0)
-	if state != "run" or Art.Q == 0 or q_cool > 0.0:
+	if q_cool > 0.0 or not (state in ["title", "run", "scenic"]):
+		q_frames.clear()
+		q_gpu.clear()
 		return
 	q_frames.append(real_dt)
+	q_gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid()))
 	if q_frames.size() < 120:
 		return
-	var sum := 0.0
-	for f in q_frames:
-		sum += f
+	var med := _median(q_frames)
+	var gpu := _median(q_gpu)
 	q_frames.clear()
-	if sum / 120.0 > 0.021:
-		apply_quality(Art.Q - 1)
-		q_cool = 4.0
+	q_gpu.clear()
+	if med > 0.0205:
+		q_bad += 1
+		q_good = 0
+	else:
+		q_bad = 0
+		q_good = q_good + 1 if (gpu > 0.0 and gpu < 6.0 and med < 0.0185) else 0
+	if q_bad >= 2 and Art.Q > 0:
+		q_pending = Art.Q - 1
+		q_bad = 0
+		q_upgraded = true   # no stepping back up after a step down this session
+		if med > 0.030:
+			_apply_pending_quality()   # badly slow: don't wait for a calm moment
+	elif q_good >= 3 and Art.Q < 2 and not q_upgraded:
+		q_pending = Art.Q + 1
+		q_upgraded = true
+		q_good = 0
+	if state == "title":
+		_apply_pending_quality()
+
+## Calm moments call this: title, breather start, run start.
+func _apply_pending_quality() -> void:
+	if q_pending < 0 or q_pending == Art.Q:
+		q_pending = -1
+		return
+	var down := q_pending < Art.Q
+	apply_quality(q_pending)
+	q_pending = -1
+	q_cool = 3.0
+	save.data.settings.auto_q = Art.Q
+	save.save()
+	if down and state != "title":
 		_toast("Graphics: " + str(get_meta("quality_name")) + " (smoother)", Vector2(get_viewport_rect().size.x * 0.5, get_viewport_rect().size.y * 0.2), Color(1, 1, 1, 0.7), 28)
 
 func _apply_settings() -> void:
@@ -401,6 +472,8 @@ func _load_font(path: String, weight: int) -> Font:
 	return v
 
 func go_title() -> void:
+	_apply_pending_quality()
+	q_cool = 2.0
 	reset_title_quotes()
 	Engine.time_scale = 1.0
 	state = "title"
@@ -591,6 +664,8 @@ func _begin_endless_segment() -> void:
 		rescue_planned = {}
 
 func _enter_run() -> void:
+	_apply_pending_quality()
+	q_cool = 3.0
 	Engine.time_scale = 1.0
 	state = "run"
 	state_t = 0.0
@@ -639,6 +714,7 @@ const ACTIVITIES := [
 ]
 
 func _enter_recovery(then_junction: bool) -> void:
+	_apply_pending_quality()
 	_ground_kite()
 	_clear_ahead()
 	state = "recovery"
@@ -1248,6 +1324,8 @@ func _perfect(text: String, col: Color) -> void:
 func _process(delta: float) -> void:
 	var real_dt = delta / maxf(Engine.time_scale, 0.01)
 	_adapt_quality(real_dt)
+	if loading:
+		_update_loading(real_dt)
 	t += real_dt
 	state_t += real_dt
 	if state == "title" and not (garage_open or menu_dim or has_meta("keyart")):
@@ -1524,24 +1602,30 @@ func _text(ci: Node2D, s: String, p: Vector2, size: int, col: Color, align := HO
 ## toast or countdown never stalls a frame mid-run building its letters (the
 ## country-change hitch the owner felt).
 const WARM_CHARS := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;!?'\"()+-x%/·\u201c\u201d\u2014\u00eb"
-const WARM_SIZES := [96, 84, 76, 72, 64, 40, 38, 36, 34, 32, 30, 28, 26, 25, 24, 22, 20, 19]
-var _warm_i := 0
+## 0.8.19: only the (size, outline) pairs the in-run HUD really draws (0.8.17
+## warmed 18 sizes x 6 outline styles x 2 fonts during the menu slide-in,
+## which lagged on phones). Menus warm themselves: the loader shows each
+## screen once behind the loading picture. Work is time-budgeted per frame.
+const GLYPH_COMBOS := [
+	[26, 8], [28, 8], [30, 8], [34, 8], [36, 8], [38, 8], [40, 8], [44, 8], [46, 8], [56, 8], [58, 8], [60, 8], [64, 8], [72, 8],
+	[26, 0], [28, 0], [30, 0], [34, 0], [36, 0], [38, 0], [40, 0], [44, 0], [46, 0], [56, 0], [58, 0], [60, 0], [64, 0], [72, 0],
+	[96, 14], [96, 0], [84, 14], [84, 0], [76, 8], [76, 0], [72, 12], [20, 0], [24, 0], [25, 6], [25, 0], [19, 4], [19, 0], [26, 6],
+]
+var _glyph_i := 0
 
-func _warm_glyphs(ci: Node2D) -> void:
-	for step in 2:
-		if _warm_i >= WARM_SIZES.size():
-			return
-		var fs: int = WARM_SIZES[_warm_i]
-		_warm_i += 1
-		for f in [font, font_body]:
-			if f != null:
-				ci.draw_string(f, Vector2(-4000, -4000), WARM_CHARS, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1, 1, 1, 0.01))
-				for ow in [4, 6, 8, 12, 14]:
-					ci.draw_string_outline(f, Vector2(-4000, -4000), WARM_CHARS, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, ow, Color(1, 1, 1, 0.01))
+func _warm_glyphs(ci: Node2D, budget_usec: int) -> void:
+	var t0 := Time.get_ticks_usec()
+	while _glyph_i < GLYPH_COMBOS.size() and Time.get_ticks_usec() - t0 < budget_usec:
+		var c: Array = GLYPH_COMBOS[_glyph_i]
+		_glyph_i += 1
+		if c[1] > 0:
+			ci.draw_string_outline(font, Vector2(-4000, -4000), WARM_CHARS, HORIZONTAL_ALIGNMENT_LEFT, -1, c[0], c[1], Color(1, 1, 1, 0.01))
+		else:
+			ci.draw_string(font, Vector2(-4000, -4000), WARM_CHARS, HORIZONTAL_ALIGNMENT_LEFT, -1, c[0], Color(1, 1, 1, 0.01))
 
 func _draw_hud(ci: Node2D) -> void:
-	if _warm_i < WARM_SIZES.size():
-		_warm_glyphs(ci)
+	if _glyph_i < GLYPH_COMBOS.size():
+		_warm_glyphs(ci, 7000 if loading else 1500)
 	var sz = get_viewport_rect().size
 	if has_meta("keyart"):
 		_draw_logo(ci, Vector2(sz.x * 0.74, sz.y * 0.44), 10.0, 1.1)
@@ -1833,6 +1917,9 @@ func _set_input_mode(m: String) -> void:
 		touch.visible_controls = _want_touch()
 
 func _input(event: InputEvent) -> void:
+	if loading:
+		get_viewport().set_input_as_handled()
+		return
 	if state in ["title", "scenic"] and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var hc0 := get_viewport().gui_get_hovered_control()
 		if not (hc0 is BaseButton) and _sky_poke(event.position):
@@ -1960,6 +2047,12 @@ func _setup_capture() -> void:
 				["wave", 0.0, "heart", "k9-wave"], ["fall", 0.0, "scared", "k10-fall"], ["gust", 0.0, "focus", "k11-gust"]]:
 			cap_steps.append_array([{"do": "kpose", "pose": ps[0], "speed": ps[1], "expr": ps[2]}, {"do": "wait", "s": 0.55 if ps[0] == "run" else 1.0}, {"shot": ps[3]}])
 		cap_steps.append({"do": "quit"})
+		return
+	if "--loading" in OS.get_cmdline_user_args():
+		# The loading screen, the reveal and the menu slide-in.
+		save.data.tutorial_done = true
+		cap_steps = [{"shot": "l0"}, {"do": "wait", "s": 0.15}, {"shot": "l1"}, {"do": "wait", "s": 0.3}, {"shot": "l2"},
+			{"until_loaded": true, "max": 20.0}, {"shot": "l3-reveal"}, {"do": "wait", "s": 0.25}, {"shot": "l4"}, {"do": "wait", "s": 1.2}, {"shot": "l5-title"}, {"do": "quit"}]
 		return
 	if "--obs" in OS.get_cmdline_user_args():
 		# Obstacle review: autopilot through chapters 1 and 3, a frame every 0.3 s.
@@ -2201,6 +2294,12 @@ func _capture_tick(dt: float) -> void:
 	if st.has("until_tut"):
 		if (tut != null and tut.lessons >= st.until_tut) or cap_wait > st.max:
 			cap_events.clear()
+			cap_i += 1
+			cap_wait = 0.0
+		return
+	if st.has("until_loaded"):
+		if _load_fade >= 0.0 or not loading or cap_wait > st.max:
+			print("loading took %.2f s (capture timing, software renderer)" % _load_t)
 			cap_i += 1
 			cap_wait = 0.0
 		return
@@ -2712,3 +2811,110 @@ func _draw_title_poem(ci: Node2D) -> void:
 			s0 += "\u201d"
 		_text(ci, s0, Vector2(cx, y + i * 31.0), 25, col, HORIZONTAL_ALIGNMENT_CENTER, 6)
 	_text(ci, by, Vector2(cx, y + parts.size() * 31.0), 19, Color(pal.rim.lerp(Color(1, 1, 1), 0.4), 0.7 * a), HORIZONTAL_ALIGNMENT_CENTER, 4)
+
+# ------------------------------------------------------------------ loading screen (0.8.19)
+## The boot picture stays up (same image, plus a progress bar) while the game
+## gets ready: music loads on background threads, every in-run text size is
+## prepared, each menu/route/pause/results screen and each country is drawn
+## once behind it. Then the title slides in smoothly. Owner: "load everything
+## before the game starts, but make gameplay smooth".
+var loading := false
+var _after_load := ""
+var _load_layer: CanvasLayer
+var _load_root: Control
+var _load_bar: Control
+var _load_steps: Array = []
+var _load_i := 0
+var _load_t := 0.0
+var _load_fade := -1.0
+var _load_progress := 0.0
+
+class LoadBar extends Control:
+	var k := 0.0
+	func _draw() -> void:
+		var w := minf(size.x * 0.40, 420.0)
+		var r := Rect2(Vector2((size.x - w) * 0.5, size.y * 0.91 - 5.0), Vector2(w, 10))
+		draw_colored_polygon(Art.rrect(r, 5.0), Color(1, 1, 1, 0.14))
+		if k > 0.01:
+			var f := Rect2(r.position, Vector2(maxf(r.size.x * k, 10.0), r.size.y))
+			var pts := Art.rrect(f, 5.0)
+			var cols := PackedColorArray()
+			for p in pts:
+				var u := clampf((p.x - r.position.x) / r.size.x, 0.0, 1.0)
+				cols.append(Color(1.0, 0.81, 0.48).lerp(Color(1.0, 0.54, 0.36), u))
+			draw_polygon(pts, cols)
+
+func _start_loading() -> void:
+	loading = true
+	_load_layer = CanvasLayer.new()
+	_load_layer.layer = 128
+	add_child(_load_layer)
+	_load_root = Control.new()
+	_load_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	_load_layer.add_child(_load_root)
+	_load_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var bg := ColorRect.new()
+	bg.color = Color(0.055, 0.07, 0.14)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_load_root.add_child(bg)
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var tex: Texture2D = load("res://assets/splash.png")
+	if tex != null:
+		var tr := TextureRect.new()
+		tr.texture = tex
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_load_root.add_child(tr)
+		tr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_load_bar = LoadBar.new()
+	_load_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_load_root.add_child(_load_bar)
+	_load_bar.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var sample := {"new_best": false, "score": 1234, "dist": 560, "perfects": 12, "tier": 3, "best": 4321, "stamps": 120, "sparks": 1, "banked": 120}
+	_load_steps = [
+		func(): synth.preload_all(),
+		func(): ui.show_junction(true),
+		func(): ui.show_pause(),
+		func(): ui.show_results(sample),
+		func(): ui.show_story_over(1),
+		func(): ui.show_settings(false),
+		func(): ui.show_garage("suit", false),
+		func(): ui.show_garage("scarf", false),
+		func(): set_biome(1, true),
+		func(): set_biome(2, true),
+		func(): set_biome(3, true),
+		func(): set_biome(0, true),
+		func(): ui.show_title(),
+	]
+	_load_i = 0
+	_load_t = 0.0
+
+## One step per frame, so each screen/country is actually drawn once.
+func _update_loading(dt: float) -> void:
+	_load_t += dt
+	if _load_fade >= 0.0:
+		_load_fade += dt
+		var a := 1.0 - clampf(_load_fade / 0.35, 0.0, 1.0)
+		_load_root.modulate.a = a
+		if a <= 0.0:
+			_load_layer.queue_free()
+			_load_layer = null
+			loading = false
+		return
+	if _load_i < _load_steps.size():
+		_load_steps[_load_i].call()
+		_load_i += 1
+	var glyph_k := float(_glyph_i) / float(GLYPH_COMBOS.size())
+	var step_k := float(_load_i) / float(_load_steps.size())
+	var music_ok: bool = synth.preload_done() or _load_t > 5.0
+	_load_progress = step_k * 0.5 + glyph_k * 0.4 + (0.1 if music_ok else 0.0)
+	(_load_bar as LoadBar).k = _load_progress
+	_load_bar.queue_redraw()
+	if _load_i >= _load_steps.size() and _glyph_i >= GLYPH_COMBOS.size() and music_ok:
+		# reveal: rebuild the title fresh so its slide-in plays visibly
+		_load_fade = 0.0
+		if _after_load == "tutorial":
+			start_tutorial()
+		else:
+			go_title()

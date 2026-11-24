@@ -84,6 +84,7 @@ func _ready() -> void:
 	_base = Painter.new()
 	_base.tag = "kavi"
 	_base.fn = _paint.bind(false)
+	_base.material = Art.true_color_material()
 	add_child(_base)
 	_add = Painter.new()
 	_add.tag = "kavi_add"
@@ -364,12 +365,10 @@ static func _ik(a: Vector2, b: Vector2, l1: float, l2: float, bend: float) -> Ve
 	return a + d.normalized().rotated(-ang * bend) * l1
 
 # ------------------------------------------------------------------ paint
-func _poly(ci: Node2D, pts: PackedVector2Array, fill: Color, ink := true) -> void:
+## 0.8.19: Kavi's shapes have no black outline at any quality (owner: the
+## outline-free look of Low is cuter). `_ink` is kept for call compatibility.
+func _poly(ci: Node2D, pts: PackedVector2Array, fill: Color, _ink := true) -> void:
 	ci.draw_colored_polygon(pts, fill)
-	if ink and Art.Q >= 1:
-		var c = pts.duplicate()
-		c.append(pts[0])
-		ci.draw_polyline(c, INK, 2.2, Art.AA)
 
 ## A limb is one inked capsule: 2 draw calls instead of 6.
 func _limb(ci: Node2D, a: Vector2, b: Vector2, w: float, col: Color) -> void:

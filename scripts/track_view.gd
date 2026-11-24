@@ -372,17 +372,14 @@ func _grass(ci: Node2D, a: float, b: float, gcol: Color) -> void:
 		back_g = back_g.lerp(Color(0.85, 0.9, 1.0), 0.25)
 		front_g = front_g.lerp(Color(0.92, 0.95, 1.0), 0.35)
 	_grass_row(ci, x0, x1, 12.0, 7.0, 21.0, back_g, 4)
-	if Art.Q >= 1:
-		_grass_row(ci, x0, x1, 16.0, 4.0, 13.0, front_g, 14)
-	if Art.Q < 1:
-		return
+	_grass_row(ci, x0, x1, 16.0, 4.0, 13.0, front_g, 14)
 	var cols: Array = FLOWERS.get(kind, [])
 	var stems := PackedVector2Array()
 	var step := 84.0
 	var c0 := int(x0 / step) + 1
 	var c1 := int(x1 / step)
 	for c in range(c0, c1 + 1):
-		if Art.hash01(c, 91) > (0.22 if Art.Q == 1 else 0.34):
+		if Art.hash01(c, 91) > [0.14, 0.22, 0.34][Art.Q]:
 			continue
 		var x := c * step + Art.hash01(c, 92) * step * 0.7
 		if x < x0 + 8.0 or x > x1 - 8.0:

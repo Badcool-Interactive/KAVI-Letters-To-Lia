@@ -169,7 +169,7 @@ func _add_menu_keys() -> void:
 ## If a menu is open but nothing has focus (the mouse was used last), the first
 ## menu key focuses the first item instead of doing nothing.
 func _input(event: InputEvent) -> void:
-	if not is_instance_valid(_box) or not _box.is_visible_in_tree():
+	if main.loading or not is_instance_valid(_box) or not _box.is_visible_in_tree():
 		return
 	if not (event.is_action_pressed("ui_up") or event.is_action_pressed("ui_down") or event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right") or event.is_action_pressed("ui_accept")):
 		return

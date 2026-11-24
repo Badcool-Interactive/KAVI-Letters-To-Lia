@@ -1,4 +1,24 @@
 # Changelog
+## 0.8.19 (2026-11-24): smooth on phones, prettier Low, cuter Kavi
+Owner report from an Honor Magic 7 Pro: flicker, quality dropping from High to Medium or Low, a longer boot, and the menu lagging as it slid in.
+- **Loading screen with warm-up** (replaces the 0.8.17 warm-up that ran during the menu slide-in):
+  - The key art stays up with a progress bar while music loads on background threads. Each in-run text size is prepared within a time budget per frame.
+  - Each menu and gameplay screen (route choice, pause, results, out of hearts, settings, Garage) and each country is drawn once behind it.
+  - Then the title fades in and slides in smoothly; a new player's tutorial starts after it.
+  - The glyph warm-up now covers only the 42 size/outline pairs the HUD really uses (0.8.17 did 216 combinations).
+- **Auto graphics fixed:**
+  - Every device now starts on High (phones started on Medium).
+  - The median frame time is checked over 2 s windows, so one-off hitches no longer count. It needs two slow windows in a row to step down, and steps back up once per session when GPU time shows clear headroom.
+  - Changes wait for a calm moment (title, breather, run start) instead of happening mid-run, and the level is remembered for the next launch.
+- **Flicker:** HDR now stays on at every quality level. Auto-quality used to switch HDR off mid-run, which flashed the screen and shifted every colour.
+- **Phones above 1080p:** Medium and Low draw at 1080p and scale up (about 30% fewer pixels); High stays at full resolution.
+- **Low is pretty now:** same rich colours as High (it was pale because HDR was off), plus light rays, balloons, two-tone grass, flowers, foreground grass, soft light specks and Kavi's trail. Low still skips the glow post-process and some scenery density.
+- **Kavi (and Lia) in true colours, with no black outlines:**
+  - With HDR on, plain colours render darker and more saturated; the world keeps that moody look, while the characters are now re-encoded to their real bright colours (owner: the Low Kavi was cuter).
+  - Kavi's shapes no longer get black outline strokes at any quality.
+- New loading-screen key art in the new look. Draw timing in Painter only runs while benchmarking.
+- Medium benchmark: 5.8 ms, 461 draws. Low: 4.4 ms, 314 draws.
+- Not verified on a real phone yet.
 ## 0.8.18 (2026-11-23): obstacles with character
 - **Every country has its own hop obstacles** (60% of the time; the rest are courier parcels). Hitboxes are unchanged:
   - Greek amphoras with a black-figure band, and crates heaped with oranges.

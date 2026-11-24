@@ -59,12 +59,25 @@ func perfect_note(tier: int) -> void:
 	var semis: int = k.root + sc[idx] + 12 * (tier - 1) / 2 - 69 + 12
 	play("bell", pow(2.0, semis / 12.0), -4.0)
 
-## Load every country's pre-rendered music up front (0.8.17), so a country
-## change never loads files from disk mid-run (a small hitch at the switch).
+## Load every country's pre-rendered music up front, on background threads
+## (0.8.19; 0.8.17 loaded them on the main thread as the menu appeared, which
+## stuttered on phones). A country change then never touches the disk.
+var _threaded: Array = []   # paths requested with ResourceLoader.load_threaded_request
+
 func preload_all() -> void:
 	for b in KEYS.size():
-		if not _cache.has(b):
-			_load_prerendered(b)
+		for kind in ["pad", "drive"]:
+			var path := "res://assets/music/b%d_%s.wav" % [b, kind]
+			if ResourceLoader.exists(path) and not _threaded.has(path):
+				ResourceLoader.load_threaded_request(path)
+				_threaded.append(path)
+
+## True once every threaded music load has finished (used by the loading screen).
+func preload_done() -> bool:
+	for path in _threaded:
+		if ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			return false
+	return true
 
 func set_biome(b: int) -> void:
 	if b == biome and _task == -1:
@@ -113,7 +126,13 @@ func _load_prerendered(b: int) -> void:
 		return
 	var pair := []
 	for path in [pad_path, drv_path]:
-		var w: AudioStreamWAV = load(path)
+		var w: AudioStreamWAV
+		if _threaded.has(path):
+			# finished in the background (or wait for it here as a fallback)
+			w = ResourceLoader.load_threaded_get(path)
+			_threaded.erase(path)
+		else:
+			w = load(path)
 		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
 		w.loop_begin = 0
 		w.loop_end = int(w.get_length() * w.mix_rate)
