@@ -489,7 +489,7 @@ func _apply_audio_settings() -> void:
 	var st: Dictionary = save.data.settings
 	synth.music_vol = st.music
 	synth.sfx_vol = st.sfx
-	synth.world_vol = float(st.get("world", 0.7))
+	synth.world_vol = float(st.get("world", Save.DEFAULT_WORLD_VOLUME))
 	_apply_master_volume()
 
 func _apply_master_volume() -> void:

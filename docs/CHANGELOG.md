@@ -6,8 +6,8 @@
 - **Full animal costumes** give the eight recent suits and the original Kitty and Bunny their own body palettes, shaped face glass and animal details. The new suits are Tiger, Axolotl, Bat, Red Panda, Otter and Turtle. Kavi’s eyes, expressions and selected face style stay with him.
 - Existing cosmetic choices and save indices are preserved.
 - **Latest published release** in About opens GitHub's public release. Check for updates identifies a local preview that's ahead of GitHub.
-- **Studio intro** has a soft five-second stereo swell with filtered breath and a warm chord that opens as the logo settles. Its volume follows the Master slider. The mouse stays hidden during the video, any loading hold, and the reveal. Game audio fades in afterwards.
-- **World audio** has new stereo loops with breaking surf, spaced forest calls, river riffles and moving mountain gusts. The sound mix moves smoothly into and out of Scenic View and Pause.
+- **Studio intro** has a soft five-second stereo swell with filtered breath and a warm chord that opens as the logo settles. The intro mix is set to 45% of the earlier preview level and follows the Master slider. The mouse stays hidden during the video, any loading hold, and the reveal. Game audio fades in afterwards.
+- **World audio** has new stereo loops with breaking surf, spaced forest calls, river riffles and moving mountain gusts. World sounds default to 45%, and the mix moves smoothly into and out of Scenic View and Pause.
 
 ## 0.8.25 (2026-11-25) · Settings, world audio and the Garage
 

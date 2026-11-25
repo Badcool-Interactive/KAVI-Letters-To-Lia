@@ -2,6 +2,7 @@ extends RefCounted
 ## Local save data (user://). Tests run with an isolated user-data dir.
 
 const PATH := "user://volt_run_save.json"
+const DEFAULT_WORLD_VOLUME := 0.45
 
 var data := {
 	"best_endless": 0,
@@ -33,7 +34,8 @@ var data := {
 		"controls_scale": 1.0,
 		"graphics": "auto",
 		"master": 1.0,
-		"world": 0.7,
+		"world": DEFAULT_WORLD_VOLUME,
+		"world_mix_revision": 1,
 		"custom": false,
 		"gx_detail": 2,
 		"gx_glow": true,
@@ -59,6 +61,12 @@ func load_data() -> void:
 		return
 	var parsed = JSON.parse_string(f.get_as_text())
 	if parsed is Dictionary:
+		var old_settings = parsed.get("settings")
+		if old_settings is Dictionary and not old_settings.has("world_mix_revision"):
+			# Older saves did not distinguish the default 70% from a manual 70%.
+			var old_world = old_settings.get("world")
+			if old_world is float and is_equal_approx(old_world, 0.7):
+				old_settings["world"] = DEFAULT_WORLD_VOLUME
 		_merge(data, parsed)
 
 func _merge(into: Dictionary, src: Dictionary) -> void:

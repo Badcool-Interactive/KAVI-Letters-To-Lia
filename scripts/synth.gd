@@ -3,6 +3,7 @@ extends Node
 ## music loops (calm pad + drive layer) rendered on a worker thread.
 ## Tailwind "perfect" notes play in the biome's key and climb with the tier.
 
+const Save = preload("res://scripts/save.gd")
 const GAME_BUS := &"Game"
 const RATE := 22050
 const BPM := 96.0
@@ -17,7 +18,7 @@ const KEYS := [
 var sfx := {}
 var music_vol := 0.8
 var sfx_vol := 0.9
-var world_vol := 0.7   # ambient world sounds (0.8.25)
+var world_vol := Save.DEFAULT_WORLD_VOLUME
 var world_level := 0.6  # target presence in the current scene
 var _world_presence := 0.6
 var _amb: Array = []   # two players for crossfading between countries
