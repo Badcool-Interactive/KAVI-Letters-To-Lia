@@ -714,12 +714,16 @@ func _hurdle_parcels(ci: Node2D, o: Dictionary) -> void:
 	ci.draw_polyline(PackedVector2Array([lc + Vector2(-9, 5), lc + Vector2(0, -5), lc + Vector2(9, 5)]), INK, 3.5, Art.AA)
 	ci.draw_circle(Vector2(o.x + o.w - 14, -o.h + 16), 6.0, Color(0.92, 0.32, 0.30))
 
+const BEAM_AIR := 16.0
+
 func _beam(ci: Node2D, o: Dictionary) -> void:
 	# 0.8.18: a gateway (stone in Greece, logs in the forest, rope-and-lantern
 	# poles by the Danube, icy timber in the mountains) stands on the ground,
 	# and the sign hangs from its crossbar on two ropes, swinging when Kavi
 	# scoots under it. (The old posts ran up off the top of the screen.)
-	var bottom: float = -o.h
+	# 0.8.34: drawn 16 px above the hit line, so the taller Kavi (0.8.31) slides
+	# under with a little air instead of his antenna grazing the board
+	var bottom: float = -o.h - BEAM_AIR
 	var wood := _wood()
 	var kind := _country()
 	var leg := wood.darkened(0.45)
@@ -950,12 +954,12 @@ func _draw_add(ci: Node2D) -> void:
 				ci.draw_line(Vector2(o.x + 10, -o.h + 3), Vector2(o.x + o.w - 10, -o.h + 3), Art.hdr(c, 1.7), 4.0)
 				_chevron(ci, Vector2(o.x + o.w * 0.5, -o.h - 28), -1.0, c)
 			BEAM:
-				var br := Art.rrect(Rect2(o.x, -o.h - 70, o.w, 70), 16.0)
+				var br := Art.rrect(Rect2(o.x, -o.h - BEAM_AIR - 70, o.w, 70), 16.0)
 				br.append(br[0])
 				ci.draw_polyline(br, Color(ROSE, 0.4), 2.0, Art.AA)
-				ci.draw_polygon(PackedVector2Array([Vector2(o.x + 10, -o.h - 4), Vector2(o.x + o.w - 10, -o.h - 4), Vector2(o.x + o.w - 10, -o.h + 40), Vector2(o.x + 10, -o.h + 40)]),
+				ci.draw_polygon(PackedVector2Array([Vector2(o.x + 10, -o.h - BEAM_AIR - 4), Vector2(o.x + o.w - 10, -o.h - BEAM_AIR - 4), Vector2(o.x + o.w - 10, -o.h - BEAM_AIR + 40), Vector2(o.x + 10, -o.h - BEAM_AIR + 40)]),
 					PackedColorArray([Color(ROSE, 0.16), Color(ROSE, 0.16), Color(ROSE, 0.0), Color(ROSE, 0.0)]))
-				ci.draw_line(Vector2(o.x + 14, -o.h - 3), Vector2(o.x + o.w - 14, -o.h - 3), Art.hdr(ROSE, 1.6), 4.0)
+				ci.draw_line(Vector2(o.x + 14, -o.h - BEAM_AIR - 3), Vector2(o.x + o.w - 14, -o.h - BEAM_AIR - 3), Art.hdr(ROSE, 1.6), 4.0)
 				for k in maxi(1, int(o.w / 160.0)):
 					_chevron(ci, Vector2(o.x + 80 + k * 160.0, -o.h - 34), 1.0, ROSE)
 			GAP:

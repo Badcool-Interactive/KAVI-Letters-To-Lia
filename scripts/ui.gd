@@ -762,6 +762,7 @@ const HELP := {
 	"World sounds": "Waves, birds, wind and the river around Kavi.",
 	"Button size": "How big the touch buttons are on phones and tablets.",
 	"Left-handed controls": "Swaps the touch buttons left and right.",
+	"Mouse pointer": "Normal uses your computer's own pointer. KAVI is a small game-coloured arrow.",
 	"Kind Mode": "Obstacles never end a run; Kavi just bonks and keeps going.",
 	"Hover assist over gaps": "Kavi hovers a little on his own over gaps.",
 	"Relaxed speed (82%)": "The whole game runs a bit slower.",
@@ -925,6 +926,8 @@ func _page_controls(animate := true) -> void:
 	_heading(v, "Controls")
 	_cycle_row(v, "Button size", "controls_scale", [0.8, 1.0, 1.2, 1.4])
 	_toggle_row(v, "Left-handed controls", "left_handed")
+	if not OS.has_feature("mobile"):
+		_cycle_row(v, "Mouse pointer", "cursor", ["system", "kavi"], ["Normal", "KAVI"])
 	_help_area(v)
 	_gap(v, 6)
 	_item(v, "Back", show_settings, 34)
@@ -962,14 +965,7 @@ func _page_graphics(animate := true) -> void:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.get_theme_stylebox("normal").content_margin_left = 30
 		b.focus_entered.connect(func(): _show_help(p.capitalize()); _preview_pic(p))
-	var pic := TextureRect.new()
-	pic.name = "PresetPic"
-	pic.custom_minimum_size = Vector2(0, 0 if st.get("custom", false) else 170)
-	pic.visible = not st.get("custom", false)
-	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(pic)
+	_preset_panel()
 	_toggle_row(v, "Custom", "custom", 28)
 	if st.get("custom", false):
 		_cycle_row(v, "Scenery detail", "gx_detail", [0, 1, 2], ["Low", "Medium", "High"], 26)
@@ -989,12 +985,62 @@ func _page_graphics(animate := true) -> void:
 	_preview_pic(cur)
 	_refocus_or_first(v)
 
+## 0.8.34 (owner: the preview was too small): a big panel on the left, where
+## Kavi usually stands, with the focused preset by day and in the evening, so
+## glow, light and particles are easy to compare.
+func _preset_panel() -> void:
+	var panel := PanelContainer.new()
+	panel.name = "PresetPanel"
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.anchor_left = 0.04
+	panel.anchor_right = 0.55
+	panel.anchor_top = 0.07
+	panel.anchor_bottom = 0.93
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.04, 0.09, 0.88)
+	sb.set_corner_radius_all(22)
+	sb.set_content_margin_all(18)
+	sb.shadow_color = Color(0, 0, 0, 0.35)
+	sb.shadow_size = 14
+	panel.add_theme_stylebox_override("panel", sb)
+	_box.add_child(panel)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	panel.add_child(col)
+	var title := _small(col, "", 30, Color(1.0, 0.92, 0.78))
+	title.name = "PresetTitle"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	for tod in ["day", "evening"]:
+		var lab := _small(col, "By day" if tod == "day" else "In the evening", 22, Color(1, 1, 1, 0.7))
+		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var pic := TextureRect.new()
+		pic.name = "Pic_" + tod
+		pic.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(pic)
+
 func _preview_pic(p: String) -> void:
-	var pic: TextureRect = _box.find_child("PresetPic", true, false) if is_instance_valid(_box) else null
-	if pic == null:
+	if not is_instance_valid(_box):
 		return
-	var path := "res://assets/ui/preset_%s.jpg" % ("high" if p == "auto" else p)
-	pic.texture = load(path) if ResourceLoader.exists(path) else null
+	var q := "high" if p == "auto" else p
+	var title: Label = _box.find_child("PresetTitle", true, false)
+	if title != null:
+		title.text = "Auto (picks for your device)" if p == "auto" else p.capitalize()
+	for tod in ["day", "evening"]:
+		var pic: TextureRect = _box.find_child("Pic_" + tod, true, false)
+		if pic == null:
+			continue
+		var path := "res://assets/ui/preset_%s_%s.jpg" % [q, tod]
+		if not ResourceLoader.exists(path):
+			path = "res://assets/ui/preset_%s.jpg" % q
+		var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
+		if pic.texture != tex:
+			pic.texture = tex
+			# a quick fade so switching presets feels smooth
+			pic.modulate.a = 0.3
+			create_tween().tween_property(pic, "modulate:a", 1.0, 0.18)
 
 func _after_graphics_change() -> void:
 	var f := get_viewport().gui_get_focus_owner()

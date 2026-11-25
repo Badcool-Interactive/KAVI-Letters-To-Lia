@@ -99,6 +99,12 @@ const SCARF_SEG := 5.6
 var _trail: Array = []
 var _base: Node2D
 var _add: Node2D
+## 0.8.34: comic scenes after the last heart ("cry", "kick", "flop") and props
+## that pop in under him on the menu ("chair", "bed").
+var scene := ""
+var prop := ""
+var _prop := ""
+var _prop_k := 0.0
 var _last_pose = ""
 
 func _ready() -> void:
@@ -128,6 +134,12 @@ func tick(dt: float) -> void:
 		blink_t = 0.25 if randf() < 0.18 else randf_range(2.5, 4.5)
 	_update_look(dt)
 	_update_air(dt)
+	if prop != _prop:
+		_prop_k = move_toward(_prop_k, 0.0, dt / 0.18)
+		if _prop_k <= 0.0:
+			_prop = prop
+	else:
+		_prop_k = move_toward(_prop_k, 1.0 if _prop != "" else 0.0, dt / 0.35)
 	_turn = move_toward(_turn, 1.0 if pose in FRONT_POSES else 0.0, dt / 0.3)
 	_update_scarf(dt)
 	_update_trail()
@@ -284,11 +296,21 @@ func _draw_trail(ci: Node2D, tc: Color) -> void:
 		Art.glow(ci, pts[n - 1], width * 1.6, Color(tc, 0.35 * strength))
 
 # ------------------------------------------------------------------ pose
+## Straight-legged standing: the body rises 5 px and the feet reach 5 px
+## further down in body space, so hip-to-ankle (40) nearly equals the leg (41).
+static func _stand_tall(p: Dictionary) -> void:
+	p.off = Vector2(0, -5.0)
+	p.ff = Vector2(7, 5)
+	p.fb = Vector2(-6, 5)
+
 func _pose_params() -> Dictionary:
 	var p = {"rot": 0.0, "off": Vector2.ZERO, "sq": Vector2.ONE, "ff": Vector2(8, 0), "fb": Vector2(-8, 0),
 		"hf": Vector2(10, 18), "hb": Vector2(-8, 18), "thrust": 0.0, "wheels": false, "head": 0.0, "jets": false}
 	var ph = phase
-	match pose:
+	var ps: String = pose
+	if ps in ["sit", "sulk", "sleep"] and prop != "" and (_prop != prop or _prop_k < 0.7):
+		ps = "idle"   # wait for the chair or bed to pop in
+	match ps:
 		"run", "walk":
 			# Calm upper body, busy legs: the faster he runs, the longer the
 			# stride and the more lean, while bob and head nod stay tiny.
@@ -381,11 +403,17 @@ func _pose_params() -> Dictionary:
 			p.hf = Vector2(-18, -22).lerp(Vector2(26, -14), k)
 			p.hb = Vector2(-10, 16)
 		"fail":
-			p.rot = act_t * 7.0
-			p.ff = Vector2(10, -10)
-			p.fb = Vector2(-10, -10)
-			p.hf = Vector2(18, -16)
-			p.hb = Vector2(-18, -16)
+			# 0.8.34: trips and faceplants (it used to spin forever)
+			var k := ease(clampf(act_t / 0.32, 0.0, 1.0), 0.5)
+			var bump := sin(clampf((act_t - 0.32) / 0.25, 0.0, 1.0) * PI) * 0.08
+			p.rot = 1.5 * k - bump
+			p.off = Vector2(16.0 * k, -28.0 * k)
+			p.ff = Vector2(8, 0).lerp(Vector2(-4, -8), k)
+			p.fb = Vector2(-8, 0).lerp(Vector2(-12, -2), k)
+			p.hf = Vector2(26, -6)
+			p.hb = Vector2(20, -2)
+		"scene":
+			_scene_pose(p)
 		"idle":
 			# standing tall: straight legs, arms relaxed at the sides, slow breath
 			var br := sin(t * 1.8)
@@ -402,12 +430,30 @@ func _pose_params() -> Dictionary:
 			p.hf = Vector2(38 + sin(t * 10.0) * 5.0, -24)
 			p.hb = Vector2(-10, 23)
 			p.head = 0.06
-		"sit":
+		"sit", "sulk":
+			# 0.8.34: sits on a camping chair (seat top 24 above the ground)
 			p.off = Vector2(0, 14)
-			p.ff = Vector2(20, -8)
-			p.fb = Vector2(16, -6)
-			p.hf = Vector2(16, 8)
-			p.hb = Vector2(12, 10)
+			p.ff = Vector2(27, -8)
+			p.fb = Vector2(21, -6)
+			if ps == "sulk":
+				# arms crossed, head down: "when are we going to Lia???"
+				p.hf = Vector2(16, 8)
+				p.hb = Vector2(12, 10)
+				p.head = 0.1
+				p.ff.x += sin(t * 5.0) * 3.0   # impatient foot swing
+			else:
+				p.hf = Vector2(19, 22)
+				p.hb = Vector2(15, 23)
+			p.sq = Vector2(1.0, 1.0 + 0.006 * sin(t * 1.8))
+		"sleep":
+			# flat on his back in the comedy bed, face up, head on the pillow
+			p.rot = -PI * 0.5
+			p.off = Vector2(0, -44)
+			p.ff = Vector2(7, 5)
+			p.fb = Vector2(-6, 5)
+			p.hf = Vector2(10, 14)
+			p.hb = Vector2(6, 16)
+			p.sq = Vector2(1.0 + 0.015 * sin(t * 1.4), 1.0)
 		"ride":
 			p.off = Vector2(0, 4)
 			p.ff = Vector2(18, -14)
@@ -418,9 +464,14 @@ func _pose_params() -> Dictionary:
 		"eat", "drink", "map", "photo", "read":
 			p.hf = Vector2(16, -16) if pose in ["eat", "drink", "photo"] else Vector2(20, 2)
 			p.hb = Vector2(10, 6) if pose != "eat" else Vector2(-6, 18)
-			p.off = Vector2(0, sin(t * 2.0) * 1.2)
+			# 0.8.34: stand tall like idle (these kept the old crouched feet, so
+			# the longer 0.8.31 legs folded); breathing is a squash, not a bob,
+			# so the feet stay planted
+			_stand_tall(p)
+			p.sq = Vector2(1.0, 1.0 + 0.008 * sin(t * 2.0))
 		"stretch":
 			var k2 = 0.5 + 0.5 * sin(t * 2.0)
+			_stand_tall(p)
 			p.hf = Vector2(8, -40 * k2 + 10)
 			p.hb = Vector2(-8, -40 * k2 + 10)
 			p.sq = Vector2(1.0 - 0.04 * k2, 1.0 + 0.05 * k2)
@@ -531,6 +582,17 @@ func _draw_bag(ci: Node2D) -> void:
 			ci.draw_circle(Vector2(-22, -51), 2.2, Color(1.0, 0.82, 0.45))
 
 func _paint(ci: Node2D, add: bool) -> void:
+	if not add and _prop != "" and _prop_k > 0.0:
+		_draw_prop(ci, false)
+	_paint_kavi(ci, add)
+	if not add:
+		if _prop != "" and _prop_k > 0.0:
+			_draw_prop(ci, true)
+		if pose == "scene":
+			_scene_fx(ci)
+		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+func _paint_kavi(ci: Node2D, add: bool) -> void:
 	if not add:
 		_draw_bits(ci)
 	var p = _pose_params()
@@ -648,6 +710,8 @@ func _paint(ci: Node2D, add: bool) -> void:
 			ci.draw_line(scr.position + Vector2(scr.size.x - 9, 4), scr.position + Vector2(scr.size.x - 4, 10), Color(1, 1, 1, 0.22), 2.0)
 		_antenna(ci, Vector2(hc.x + 10, head_r.position.y - (4.0 if helmet == "teapot" else 0.0)))
 		_helmet_front(ci, hc, head_r)
+		if expr == "cry":
+			_tears(ci, scr)
 		# scarf wrap at the neck
 		_body_xf(ci, p)
 		# a thick, readable scarf wrap with a fold line and a knot (0.8.31)
@@ -738,7 +802,7 @@ func _helmet_back(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
 			ci.draw_arc(Vector2(hr.position.x - 4, hc.y + 1), 11.0, PI * 0.5, PI * 1.5, 14, INK, 9.0, Art.AA)
 			ci.draw_arc(Vector2(hr.position.x - 4, hc.y + 1), 11.0, PI * 0.5, PI * 1.5, 14, SHELL, 5.0, Art.AA)
 			var sp := Vector2(hr.end.x + 1, hc.y + 9)
-			_poly(ci, PackedVector2Array([sp + Vector2(-6, -6), sp + Vector2(-6, 7), sp + Vector2(9, -6), sp + Vector2(17, -16), sp + Vector2(19, -12), sp + Vector2(10, 2)]), SHELL)
+			_poly(ci, PackedVector2Array([sp + Vector2(-6, -6), sp + Vector2(-6, 7), sp + Vector2(6, 4), sp + Vector2(19, -12), sp + Vector2(17, -16), sp + Vector2(8, -7)]), SHELL)
 			ci.draw_circle(sp + Vector2(18, -14), 2.2, TEAL)
 		"bunny":
 			var wob := sin(t * 3.0) * 0.12
@@ -1011,6 +1075,15 @@ func _eyes(ci: Node2D, vc: Vector2) -> void:
 				for i in 10:
 					pts.append(c + Vector2.from_angle(-PI * 0.5 + i * PI / 5.0) * (5.5 * sp if i % 2 == 0 else 2.2 * sp))
 				ci.draw_colored_polygon(pts, Art.hdr(Color(1.0, 0.9, 0.4), 2.0))
+		"cry":     # squeezed-shut T_T eyes
+			for c in [l, r]:
+				ci.draw_line(c + Vector2(-4.5, -2), c + Vector2(4.5, -2), col, 2.4)
+				ci.draw_line(c + Vector2(0, -2), c + Vector2(0, 4), col, 2.4)
+		"grumpy":  # flat eyes under angry brows
+			ci.draw_colored_polygon(Art.rrect(Rect2(l.x - 3, l.y - 1.5, 6, 5), 2), col)
+			ci.draw_colored_polygon(Art.rrect(Rect2(r.x - 3, r.y - 1.5, 6, 5), 2), col)
+			ci.draw_line(l + Vector2(-5, -7), l + Vector2(4, -3.5), col, 2.2)
+			ci.draw_line(r + Vector2(-4, -3.5), r + Vector2(5, -7), col, 2.2)
 		"think":
 			ci.draw_colored_polygon(Art.rrect(Rect2(l.x - 3, l.y - 6.5, 6, 9), 3), col)
 			ci.draw_colored_polygon(Art.rrect(Rect2(r.x - 3, r.y - 6.5, 6, 9), 3), col)
@@ -1028,6 +1101,11 @@ func _eyes(ci: Node2D, vc: Vector2) -> void:
 			ci.draw_line(vc + Vector2(-2, 7), vc + Vector2(3, 6), Color(col, 0.85), 1.6)
 		"sleepy":
 			ci.draw_arc(vc + Vector2(0.5, 7.5), 1.4, 0.0, TAU, 8, Color(col, 0.7), 1.4, Art.AA)
+		"cry":     # wailing
+			var w := 1.0 + 0.2 * sin(t * 14.0)
+			ci.draw_colored_polygon(Art.ellipse(vc + Vector2(0.5, 8.0), Vector2(4.5, 3.2 * w), 12), Color(col, 0.9))
+		"grumpy":
+			ci.draw_polyline(PackedVector2Array([vc + Vector2(-4, 8), vc + Vector2(-1.5, 6.5), vc + Vector2(1, 8), vc + Vector2(3.5, 6.5), vc + Vector2(5.5, 8)]), Color(col, 0.85), 1.6, Art.AA)
 
 ## Eyes follow what Kavi is doing: forward when running, up on a jump, down
 ## when falling, and they wander around (sky, camera, ahead) when he is idle.
@@ -1360,3 +1438,152 @@ func _draw_bits(ci: Node2D) -> void:
 				for i in 3:
 					var d := Vector2.from_angle(b.r + i * PI / 3.0) * sz
 					ci.draw_line(p - d, p + d, Color(0.92, 0.97, 1.0, a), 2.2)
+
+# ------------------------------------------------------------------ 0.8.34 scenes and props
+## Comic scenes after the last heart (owner: "instead of that rolling, he falls
+## down and cries dramatically, or says dang it, kicks a rock and falls again").
+func _scene_pose(p: Dictionary) -> void:
+	var T: float = act_t
+	match scene:
+		"cry":
+			# sat flat on the ground, head thrown back, fists pounding, feet kicking
+			var sob := sin(t * 14.0)
+			p.off = Vector2(0, 34)
+			p.rot = -0.08
+			p.head = -0.22 + sob * 0.03
+			p.ff = Vector2(40, -27 - absf(sin(t * 9.0 + 1.0)) * 6.0)
+			p.fb = Vector2(34, -25 - absf(sin(t * 9.0 + 2.6)) * 5.0)
+			p.hf = Vector2(24, 29 - absf(sin(t * 9.0)) * 10.0)
+			p.hb = Vector2(-16, 29 - absf(sin(t * 9.0 + 1.5)) * 10.0)
+			p.sq = Vector2(1.0 + 0.02 * sob, 1.0 - 0.02 * sob)
+		"kick":
+			_stand_tall(p)
+			p.hf = Vector2(14, 20)
+			p.hb = Vector2(-12, 22)
+			if T < 1.4:
+				p.head = 0.06
+			elif T < 1.75:
+				var k := ease((T - 1.4) / 0.35, 0.6)
+				p.ff = Vector2(7, 5).lerp(Vector2(-16, -4), k)
+				p.rot = -0.06 * k
+			elif T < 1.95:
+				var k := (T - 1.75) / 0.2
+				p.ff = Vector2(-16, -4).lerp(Vector2(30, -26), k)
+				p.rot = -0.06 - 0.1 * k
+			elif T < 2.5:
+				var w := sin((T - 1.95) * 18.0)
+				p.ff = Vector2(30, -26)
+				p.rot = -0.16 - w * 0.12
+				p.hf = Vector2(24, -18 + w * 10.0)
+				p.hb = Vector2(-24, -16 - w * 10.0)
+			else:
+				# timber! flat on his back, one knee up
+				var k := ease(clampf((T - 2.5) / 0.35, 0.0, 1.0), 2.2)
+				var land := sin(clampf((T - 2.85) / 0.3, 0.0, 1.0) * PI) * 0.06
+				p.rot = lerpf(-0.2, -PI * 0.5, k) + land
+				p.off = Vector2(0, lerpf(-5.0, -30.0, k))
+				p.ff = Vector2(30, -26).lerp(Vector2(16, -12), k)
+				p.hf = Vector2(22, -16)
+				p.hb = Vector2(-18, -12)
+		"flop":
+			# face-down tantrum: feet drumming, fists pounding; then a sulky rest
+			var amp := 1.0 if fmod(T, 7.0) < 3.2 else 0.15
+			p.rot = PI * 0.5
+			p.off = Vector2(0, -28)
+			p.ff = Vector2(7 - 22.0 * amp * absf(sin(t * 9.0)), 5)
+			p.fb = Vector2(-6 - 22.0 * amp * absf(sin(t * 9.0 + 1.6)), 5)
+			p.hf = Vector2(22 - 12.0 * amp * absf(sin(t * 11.0)), -24)
+			p.hb = Vector2(22 - 12.0 * amp * absf(sin(t * 11.0 + 1.5)), -18)
+
+## Scene extras in Kavi's local space: the kicked pebble and dizzy stars.
+func _scene_fx(ci: Node2D) -> void:
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2(s, s))
+	if scene != "kick":
+		return
+	var tau: float = act_t - 1.85
+	if tau > 0.0 and tau < 1.6:
+		var px := 30.0 + 230.0 * tau
+		var py := minf(-12.0 - 200.0 * tau + 380.0 * tau * tau, -3.0)
+		var pc := Vector2(px, py)
+		ci.draw_colored_polygon(Art.ellipse(pc, Vector2(5.5, 4.2), 10, tau * 9.0), INK)
+		ci.draw_colored_polygon(Art.ellipse(pc, Vector2(4.2, 3.0), 10, tau * 9.0), Color(0.62, 0.6, 0.58))
+	if act_t > 2.85:
+		# stars circling his head (head at about x -97 on the ground)
+		var c := Vector2(-100, -58)
+		for i in 3:
+			var a: float = t * 3.2 + i * TAU / 3.0
+			var sp := c + Vector2(cos(a) * 24.0, sin(a) * 7.0)
+			var pts := PackedVector2Array()
+			for k in 10:
+				pts.append(sp + Vector2.from_angle(-PI * 0.5 + k * PI / 5.0) * (5.0 if k % 2 == 0 else 2.2))
+			ci.draw_colored_polygon(pts, Color(1.0, 0.86, 0.35))
+
+## Comic tear fountains from both sides of the screen face (in head space).
+func _tears(ci: Node2D, scr: Rect2) -> void:
+	var tc := Color(0.55, 0.85, 1.0, 0.95)
+	for side in [-1.0, 1.0]:
+		var o := Vector2(scr.get_center().x + side * 12.0, scr.position.y + 10.0)
+		for i in 7:
+			var ph := fmod(t * 1.8 + i / 7.0, 1.0)
+			var d := o + Vector2(side * (6.0 + ph * 40.0), -10.0 * ph + 52.0 * ph * ph)
+			ci.draw_circle(d, 3.2 - ph * 1.2, tc)
+			ci.draw_circle(d + Vector2(-0.8, -0.8), 1.0, Color(1, 1, 1, 0.8 * (1.0 - ph)))
+
+## Menu props (owner: "give him comedically a bed or chair"). They pop in with
+## a springy scale; the bed's blanket is drawn over him (front = true).
+func _draw_prop(ci: Node2D, front: bool) -> void:
+	var e := _prop_k
+	var sc := e * (1.0 + 0.3 * sin(e * PI))
+	var wood := Color(0.62, 0.40, 0.24)
+	var dark := wood.darkened(0.35)
+	match _prop:
+		"chair":
+			if front:
+				return
+			ci.draw_set_transform(Vector2(4, 0) * s, 0.0, Vector2(s, s) * sc)
+			ci.draw_colored_polygon(Art.ellipse(Vector2(2, 1), Vector2(30, 4), 14), Color(0, 0, 0, 0.3))
+			# X legs
+			for seg in [[Vector2(-15, -22), Vector2(18, 0)], [Vector2(18, -22), Vector2(-15, 0)]]:
+				ci.draw_line(seg[0], seg[1], INK, 6.0, Art.AA)
+				ci.draw_line(seg[0], seg[1], dark, 3.6, Art.AA)
+			# tilted canvas back with stripes
+			var back := PackedVector2Array([Vector2(-27, -66), Vector2(-17, -64), Vector2(-13, -24), Vector2(-21, -24)])
+			_poly(ci, back, Color(1.0, 0.55, 0.25))
+			ci.draw_line(Vector2(-25, -52), Vector2(-15, -50), Color(1.0, 0.93, 0.8), 3.0)
+			ci.draw_line(Vector2(-23, -38), Vector2(-14, -36), Color(1.0, 0.93, 0.8), 3.0)
+			ci.draw_line(Vector2(-28, -68), Vector2(-21, -22), INK, 3.0, Art.AA)
+			# striped seat
+			_poly(ci, Art.rrect(Rect2(-18, -27, 42, 7), 3), Color(1.0, 0.55, 0.25))
+			for k in 3:
+				ci.draw_line(Vector2(-12 + k * 13, -26), Vector2(-12 + k * 13, -21), Color(1.0, 0.93, 0.8), 4.0)
+		"bed":
+			ci.draw_set_transform(Vector2(-55, 0) * s, 0.0, Vector2(s, s) * sc)
+			if not front:
+				ci.draw_colored_polygon(Art.ellipse(Vector2(0, 1), Vector2(86, 5), 18), Color(0, 0, 0, 0.3))
+				# headboard (left, with a heart cut-out look) and footboard
+				_poly(ci, Art.rrect(Rect2(-86, -64, 12, 64), 5), wood)
+				_heart(ci, Vector2(-80, -50), 4.0, Color(1.0, 0.55, 0.65))
+				_poly(ci, Art.rrect(Rect2(73, -40, 10, 40), 4), wood)
+				for x in [-74.0, 66.0]:
+					ci.draw_rect(Rect2(x, -12, 6, 12), dark)
+				_poly(ci, Art.rrect(Rect2(-76, -18, 150, 9), 3), wood)
+				# mattress and pillow
+				_poly(ci, Art.rrect(Rect2(-74, -28, 146, 12), 5), Color(0.96, 0.94, 0.9))
+				_poly(ci, Art.ellipse(Vector2(-50, -31), Vector2(20, 8), 16), Color(1.0, 1.0, 0.98))
+				ci.draw_arc(Vector2(-50, -31), 12.0, PI * 1.1, PI * 1.6, 6, Color(0.8, 0.82, 0.9), 1.5, Art.AA)
+			else:
+				# blanket over him, hanging down the side, with a folded hem
+				var bl := PackedVector2Array([Vector2(-26, -58), Vector2(-6, -66), Vector2(30, -62), Vector2(58, -54),
+					Vector2(76, -44), Vector2(78, -10), Vector2(-28, -10)])
+				_poly(ci, bl, Color(0.40, 0.55, 0.95))
+				for k in 5:
+					_heart(ci, Vector2(-8 + k * 18, -36 + (k % 2) * 10), 3.2, Color(1.0, 0.85, 0.5, 0.9))
+				ci.draw_line(Vector2(-27, -56), Vector2(-25, -12), Color(0.95, 0.95, 1.0), 6.0, Art.AA)
+				# floating Zzz
+				for i in 3:
+					var ph := fmod(t * 0.45 + i / 3.0, 1.0)
+					var zp := Vector2(-44 + ph * 26.0, -86 - ph * 60.0)
+					var zs := 5.0 + ph * 6.0
+					var zc := Color(1, 1, 1, (1.0 - ph) * 0.9)
+					ci.draw_polyline(PackedVector2Array([zp, zp + Vector2(zs, 0), zp + Vector2(0, zs), zp + Vector2(zs, zs)]), zc, 2.4, Art.AA)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

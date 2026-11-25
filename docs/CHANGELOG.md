@@ -1,4 +1,29 @@
 # Changelog
+## 0.8.34 (2026-11-25) · Funny fails, naps and sulks, big Graphics previews, KAVI app ID
+
+- **Fixed (owner's error list):** checking suits printed hundreds of "Invalid polygon data, triangulation failed". The **Teapot** suit's spout was drawn as a shape that crossed over itself; it's redrawn, and a new scan tries every one of the 140+ Garage items with zero errors.
+- **Straight legs again:** the notebook, map, eating, photo and stretch poses kept the old crouched feet, so the longer 0.8.31 legs folded. They now stand tall like the idle pose (breathing no longer bobs the feet).
+- **Obstacles fit his height:** shop signs are drawn 16 px higher, so the taller Kavi slides under them with a little air instead of his antenna grazing the board (the hit line is unchanged, so difficulty stays the same).
+- **Funny fails instead of the endless spin** (on the results screen he used to roll forever and sink through the ground):
+  - Losing a heart: he trips and faceplants.
+  - After the last heart, one of three scenes, each with speech bubbles:
+    - **Cry:** sits down, head back, tear fountains: "WAAAAAAH!"
+    - **Kick:** "Dang it!", kicks a pebble, wobbles, falls flat with circling stars: "...ow." then "I meant to do that."
+    - **Flop:** a face-down tantrum: "Nooooo! Not fair!!" then "...okay. One more run."
+  - He's moved onto solid ground (out of any gap, nearby obstacles puff away) and shown left of the results board.
+  - New faces: crying (T_T) and grumpy.
+- **Props on the menu:**
+  - Watching the view, he sits on a striped camping chair (it used to look like squatting in mid-air).
+  - Dozing, a comedy bed pops in: headboard with a heart, pillow, a starry blanket and floating Zzz.
+- **Settings nap:** after 16 s in Settings or About he yawns "*yawn*... wake me up when we run!" and goes to sleep in his bed.
+- **Garage sulk:** after 9–14 tries (or 50 s), a chair pops in and he sits with crossed arms: "I wanna see Liaaaa!", "When are we going to Liaaa???", "Pleeease press Play!"… Trying something new gets him back up.
+- **Speech bubbles** are drawn above menus and the results board, follow the Garage zoom, and stay on screen.
+- **Graphics page:** a big panel where Kavi stood shows the focused preset **by day and in the evening** (960×540 pictures, cross-fading as you move along the presets). New tool: `tools/make-preset-pics.sh`.
+- **Mouse pointer:** the computer's normal pointer by default (owner found the big custom one annoying). Settings → Controls → Mouse pointer → KAVI gives a smaller 32 px game-coloured arrow.
+- **App ID and folders:**
+  - The Android package is now `studio.badcool.kavi` (was `studio.badcool.voltrun`). Phones install it as a new app, so progress on the phone starts fresh (owner OK: still in development); the old app can be uninstalled.
+  - On PC, the old `volt_run_save.json` is now moved into the KAVI folder as `old_volt_run_save.json` after your progress is copied (verified byte for byte before the original is removed).
+  - The other files in the old `VOLT-RUN` folder (`volt_settings.cfg`, caches) belong to the legacy VOLT/RUN project, which studio rules keep read-only, so they stay where they are.
 ## 0.8.33 (2026-11-25) · KAVI everywhere, Classic colours, Kavi comes alive on the menu
 
 - **The name is KAVI: Letters to Lia everywhere:**

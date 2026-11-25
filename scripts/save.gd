@@ -3,24 +3,38 @@ extends RefCounted
 
 const PATH := "user://kavi_save.json"
 ## Older builds were called VOLT/RUN: their save lived in user://volt_run_save.json
-## inside the "VOLT-RUN" folder. On first launch the old save is COPIED over
-## (never moved or deleted), so nobody loses progress after the rename.
+## inside the "VOLT-RUN" folder. On first launch the old save is copied to
+## kavi_save.json (0.8.33). Since 0.8.34 the old file is then MOVED into the
+## KAVI folder as old_volt_run_save.json (owner: "the remaining files are also
+## moved into that correct folder"); the original is removed only after the
+## moved copy is verified byte for byte. Other files in the old folder
+## (volt_settings.cfg, caches) belong to the legacy VOLT/RUN project and are
+## never touched.
 const LEGACY_IN_USER := "user://volt_run_save.json"
 const LEGACY_DESKTOP_DIR := "godot/app_userdata/VOLT-RUN/volt_run_save.json"
+const LEGACY_BACKUP := "user://old_volt_run_save.json"
 
 func _migrate_legacy() -> void:
-	if FileAccess.file_exists(PATH):
-		return
 	var candidates := [LEGACY_IN_USER, OS.get_data_dir().path_join(LEGACY_DESKTOP_DIR)]
 	for src in candidates:
-		if FileAccess.file_exists(src):
-			var txt := FileAccess.get_file_as_string(src)
-			if txt != "":
-				var f := FileAccess.open(PATH, FileAccess.WRITE)
-				if f != null:
-					f.store_string(txt)
-					f.close()
-				return
+		if not FileAccess.file_exists(src):
+			continue
+		var txt := FileAccess.get_file_as_string(src)
+		if txt == "":
+			continue
+		if not FileAccess.file_exists(PATH):
+			_write(PATH, txt)
+		if not FileAccess.file_exists(LEGACY_BACKUP):
+			_write(LEGACY_BACKUP, txt)
+		if FileAccess.get_file_as_string(LEGACY_BACKUP) == txt and FileAccess.get_file_as_string(PATH) != "":
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(src) if src.begins_with("user://") else src)
+
+static func _write(path: String, txt: String) -> void:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(txt)
+		f.close()
+
 const DEFAULT_WORLD_VOLUME := 0.45
 
 var data := {
@@ -47,6 +61,7 @@ var data := {
 		"slow_speed": false,
 		"reduced_motion": false,
 		"shake": true,
+		"cursor": "system",
 		"music": 0.8,
 		"sfx": 0.9,
 		"left_handed": false,

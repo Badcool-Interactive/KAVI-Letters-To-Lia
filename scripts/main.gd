@@ -104,6 +104,8 @@ func apply_look(preview_cat := "", preview_i := -1) -> void:
 	track_view.letter_col = look.letter
 	if garage_open:
 		kite_pop(0.6)
+		if preview_cat != "":
+			_garage_tried()
 
 ## A springy squash when Kavi changes look in the Garage (0.8.15).
 var _pop_t := 9.0
@@ -370,6 +372,11 @@ func _build_scene() -> void:
 	ui.font = font
 	ui.font_body = font_body
 	ul.add_child(ui)
+	# speech bubbles above the menus and the results board (0.8.34)
+	_bubble_painter = Painter.new()
+	_bubble_painter.tag = "bubble"
+	_bubble_painter.fn = _draw_bubble
+	ul.add_child(_bubble_painter)
 
 	synth = Synth.new()
 	add_child(synth)
@@ -516,6 +523,8 @@ func _apply_settings() -> void:
 	apply_quality(_initial_quality())
 	_apply_graphics_options()
 	_apply_time_of_day()
+	if _cursor_kind != "":
+		_setup_cursor()
 	Painter.profiling = bench.size() > 0 or int(st.get("show_fps", 0)) == 2
 	if not Painter.profiling:
 		Painter.cost_usec = 0
@@ -1129,6 +1138,7 @@ func best_any() -> int:
 	return maxi(int(save.data.best_endless), maxi(int(save.data.best_daily), int(save.data.get("best_story", 0))))
 
 func _game_over() -> void:
+	_start_fail_scene()
 	if mode == "story":
 		save.data.best_story = maxi(int(save.data.get("best_story", 0)), int(score))
 		var got := _bank_run()
@@ -1400,7 +1410,7 @@ func _on_event(e: Dictionary) -> void:
 			score += 25.0 * tw.tier()
 			if e.perfect and o.t in [HURDLE, BEAM]:
 				# confetti from the obstacle itself (0.8.18)
-				var top_y: float = -o.h - (60.0 if o.t == BEAM else 0.0)
+				var top_y: float = -o.h - (60.0 + TrackView.BEAM_AIR if o.t == BEAM else 0.0)
 				var cols := [TrackView.AMBER, TrackView.ROSE, TrackView.CYAN, Color(1, 1, 1)]
 				for ci2 in 4:
 					fx.burst(Vector2(o.x + o.w * 0.5, top_y), cols[ci2], 6, 380.0, 0.9, 5.0, 520.0, PI * 0.9, -PI * 0.5)
@@ -1492,15 +1502,24 @@ func _process(delta: float) -> void:
 			sim.x = title_x
 			kite.pose = debug_pose if debug_pose != "" else "idle"
 			kite.expr = debug_expr if debug_expr != "" else ("normal" if fmod(t, 6.0) < 5.0 else "happy")
+			kite.prop = ""
 			if debug_pose == "" and not garage_open and not menu_dim:
 				_title_life(real_dt)
 			else:
 				_life = {}
+			if debug_pose == "" and menu_dim and not garage_open:
+				_menu_life(real_dt)
+			else:
+				_menu_t = 0.0
 			if garage_open and debug_pose == "":
 				if ui._g_cat == "face":
 					kite.expr = "normal"
 				elif ui._g_cat == "trail":
 					kite.pose = "run"
+				_garage_life(real_dt)
+			elif not garage_open:
+				_g_time = 0.0
+				_sulk = {}
 			# title mini-game: Kavi waves and makes heart eyes when a plane reaches him
 			if plane_happy_t > 0.0 and debug_pose == "" and not garage_open:
 				kite.expr = "heart"
@@ -1555,10 +1574,19 @@ func _update_kite_view(dt: float) -> void:
 			_run_pose()
 		elif state == "fail":
 			kite.pose = "fail"
+		elif state == "results" and _scene != "":
+			kite.pose = "scene"
+			kite.scene = _scene
+			_scene_lines()
 		elif state == "tut_done":
 			# The course has ended and the world is still: celebrate, don't run in place.
 			kite.pose = "wave"
 	kite.position = p
+	_bubble_tick(dt)
+	if state in ["run", "scenic"]:
+		_scene = ""
+	if state != "title":
+		kite.prop = ""
 	if state == "run" or state == "paused":
 		# Frozen (tutorial prompt) or paused: hold the pose; legs cycling while
 		# the world stands still reads as moonwalking backwards.
@@ -1636,6 +1664,9 @@ func _update_camera(dt: float) -> void:
 			target.x = (sim.x + finale.lx) * 0.5
 	if state == "title" or state == "scenic":
 		target.x = sim.x + size.x * 0.27 / zoom
+	if state == "results" and _scene != "":
+		# his fail scene plays left of the results board (0.8.34)
+		target.x = sim.x + size.x * 0.36 / zoom
 	if state == "title" and garage_open:
 		# close-up of Kavi on the left while the Garage list is on the right
 		target.x = sim.x + size.x * 0.18 / zoom
@@ -1684,6 +1715,8 @@ func _update_views(dt: float) -> void:
 	cast_add.queue_redraw()
 	fg.queue_redraw()
 	hud.queue_redraw()
+	if _bubble_painter != null:
+		_bubble_painter.queue_redraw()
 	touch.letters = sim.letters
 
 func _update_hints(dt: float) -> void:
@@ -1886,7 +1919,6 @@ func _draw_title(ci: Node2D, sz: Vector2) -> void:
 		return
 	_draw_motes(ci, sz)
 	_draw_plane_game(ci)
-	_draw_bubble(ci)
 	_draw_logo(ci, Vector2(sz.x * 0.29, sz.y * 0.25), state_t, 1.0)
 
 ## Title ambience (0.8.10): warm motes of light drifting up through the scene,
@@ -2282,6 +2314,27 @@ func _setup_capture() -> void:
 				cap_steps.append_array([{"do": "wait", "s": 3.0}, {"shot": "life-laugh"}])
 		cap_steps.append({"do": "quit"})
 		return
+	if "--presetpic" in OS.get_cmdline_user_args():
+		# Graphics page pictures (0.8.34): Scenic View after a few seconds; run
+		# with --graphics= and --tod= by tools/make-preset-pics.sh
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 2.0}, {"do": "scenic"}, {"do": "wait", "s": 7.5}, {"shot": "pic"}, {"do": "quit"}]
+		return
+	if "--scenes" in OS.get_cmdline_user_args():
+		# 0.8.34: chair, bed, Garage sulk, Settings nap, and the three fail scenes.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 3.0}, {"do": "life", "kind": "watch"}, {"do": "wait", "s": 1.5}, {"shot": "c0-chair"},
+			{"do": "life", "kind": "doze"}, {"do": "wait", "s": 0.25}, {"shot": "c1-bed-pop"}, {"do": "wait", "s": 1.5}, {"shot": "c2-bed"},
+			{"do": "garage", "cat": "suit"}, {"do": "wait", "s": 1.0}]
+		for i in 12:
+			cap_steps.append_array([{"do": "try", "cat": "suit", "i": i % 6}, {"do": "wait", "s": 0.15}])
+		cap_steps.append_array([{"do": "wait", "s": 1.2}, {"shot": "c3-sulk"}, {"do": "menu"}, {"do": "wait", "s": 0.5},
+			{"do": "settings"}, {"do": "skip_menu", "s": 19.5}, {"do": "wait", "s": 1.0}, {"shot": "c4-settings-nap"}, {"do": "menu"}])
+		for sc in ["cry", "kick", "flop"]:
+			cap_steps.append_array([{"do": "endless"}, {"do": "wait", "s": 2.0}, {"do": "scene", "kind": sc}, {"do": "wait", "s": 1.0}, {"shot": "f-%s-1" % sc},
+				{"do": "wait", "s": 2.2}, {"shot": "f-%s-2" % sc}, {"do": "wait", "s": 1.4}, {"shot": "f-%s-3" % sc}, {"do": "menu"}, {"do": "wait", "s": 0.6}])
+		cap_steps.append_array([{"do": "endless"}, {"do": "wait", "s": 2.0}, {"do": "trip"}, {"do": "wait", "s": 0.45}, {"shot": "f-trip"}, {"do": "quit"}])
+		return
 	if "--about" in OS.get_cmdline_user_args():
 		save.data.tutorial_done = true
 		cap_steps = [{"do": "wait", "s": 2.0}, {"do": "about"}, {"do": "wait", "s": 1.2}, {"shot": "about"}, {"do": "quit"}]
@@ -2317,6 +2370,27 @@ func _setup_capture() -> void:
 		cap_steps = [{"do": "wait", "s": 4.5}, {"shot": "q0"}]
 		for k in 3:
 			cap_steps.append_array([{"do": "skip_t", "s": 12.0}, {"do": "wait", "s": 1.5}, {"shot": "q%d" % (k + 1)}])
+		cap_steps.append({"do": "quit"})
+		return
+	if "--heights" in OS.get_cmdline_user_args():
+		# Kavi against obstacles: mid-slide under signs, hop peaks, in two countries.
+		save.data.tutorial_done = true
+		autopilot = true
+		cap_steps = []
+		for ch in [0, 2]:
+			cap_steps.append_array([{"do": "story", "ch": ch}, {"do": "wait", "s": 4.0}])
+			for k in 3:
+				cap_steps.append_array([{"do": "until", "what": "beam"}, {"do": "wait", "s": 0.05}, {"shot": "h%d-beam%d" % [ch, k]}, {"do": "wait", "s": 1.0},
+					{"do": "until", "what": "hurdle"}, {"shot": "h%d-hop%d" % [ch, k]}, {"do": "wait", "s": 1.0}])
+		cap_steps.append({"do": "quit"})
+		return
+	if "--allitems" in OS.get_cmdline_user_args():
+		# Every Garage item in turn (error hunt): each step prints what it tries.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "garage", "cat": "suit"}, {"do": "wait", "s": 1.0}]
+		for c in Looks.CATS:
+			for i in Looks.ITEMS[c].size():
+				cap_steps.append_array([{"do": "try", "cat": c, "i": i}, {"do": "wait", "s": 0.35}])
 		cap_steps.append({"do": "quit"})
 		return
 	if "--suits" in OS.get_cmdline_user_args():
@@ -2597,6 +2671,18 @@ func _capture_tick(dt: float) -> void:
 			state_t += st.s
 		"tier":
 			debug_tier = st.v
+		"scene":
+			hearts = 0
+			_on_fail()
+			_start_fail_scene()
+			_scene = st.kind
+			_end_run()
+		"trip":
+			_on_fail()
+		"menu":
+			go_title()
+		"skip_menu":
+			_menu_t = st.s
 		"life":
 			var kd: String = st.kind
 			if kd == "music":
@@ -2641,6 +2727,16 @@ func _capture_tick(dt: float) -> void:
 				_plane_push(plane.pos + Vector2(0, -60))
 		"quitmenu":
 			ui.confirm_quit()
+		"until":
+			# wait for a moment in the run (height review), max 40 s
+			var ok := false
+			match str(st.what):
+				"beam":
+					ok = sim.sliding and sim._under_beam()
+				"hurdle":
+					ok = not sim.on_ground and sim.vy > -40.0 and sim.vy < 60.0
+			if not ok and cap_wait < 40.0:
+				return
 		"wait":
 			if cap_wait >= st.s:
 				cap_i += 1
@@ -2666,6 +2762,8 @@ func _capture_tick(dt: float) -> void:
 		"resume":
 			resume()
 		"try":
+			if "--allitems" in OS.get_cmdline_user_args():
+				print("TRY ", st.cat, " ", st.i)
 			apply_look(st.cat, st.i)
 		"scenic":
 			menu_scenic()
@@ -2991,15 +3089,29 @@ func _sky_react(kind: String, pos: Vector2, quiet: bool) -> void:
 
 var _cursor_hand := false
 
+## 0.8.34 (owner found the big custom pointer annoying): the computer's own
+## pointer by default; Settings > Controls > Mouse pointer > KAVI gives a
+## smaller (32 px) game-coloured one.
+var _cursor_kind := ""
+
 func _setup_cursor() -> void:
 	if OS.has_feature("mobile"):
 		return
-	var arrow: Texture2D = load("res://assets/cursor/arrow.png")
-	var point: Texture2D = load("res://assets/cursor/point.png")
-	if arrow == null or point == null:
+	var want := str(save.data.settings.get("cursor", "system"))
+	if want == _cursor_kind:
 		return
-	Input.set_custom_mouse_cursor(arrow, Input.CURSOR_ARROW, Vector2(4, 3))
-	Input.set_custom_mouse_cursor(point, Input.CURSOR_POINTING_HAND, Vector2(4, 3))
+	_cursor_kind = want
+	if want != "kavi":
+		Input.set_custom_mouse_cursor(null, Input.CURSOR_ARROW)
+		Input.set_custom_mouse_cursor(null, Input.CURSOR_POINTING_HAND)
+		return
+	for e in [["arrow", Input.CURSOR_ARROW], ["point", Input.CURSOR_POINTING_HAND]]:
+		var tex: Texture2D = load("res://assets/cursor/%s.png" % e[0])
+		if tex == null:
+			continue
+		var img := tex.get_image()
+		img.resize(32, 32, Image.INTERPOLATE_LANCZOS)
+		Input.set_custom_mouse_cursor(ImageTexture.create_from_image(img), e[1], Vector2(3, 2))
 
 ## Over something clickable in the scene (sky toys, the paper plane) the
 ## cursor shows the glowing pointer, like it does over menu items.
@@ -3705,6 +3817,7 @@ func _title_life(dt: float) -> void:
 	match str(_life.kind):
 		"watch":
 			kite.pose = "sit"
+			kite.prop = "chair"
 			kite.expr = "calm" if fmod(k, 7.0) < 5.5 else "happy"
 		"write":
 			kite.pose = "read"
@@ -3731,24 +3844,133 @@ func _title_life(dt: float) -> void:
 			kite.expr = "music"
 			kite.position.y += 0.0
 		"doze":
-			kite.pose = "sit"
+			kite.pose = "sleep"
+			kite.prop = "bed"
 			kite.expr = "sleepy"
 		_:
 			pass
+
+func _bubble_tick(dt: float) -> void:
 	if not _bubble.is_empty():
 		_bubble.t += dt
 		if _bubble.t > _bubble.life:
 			_bubble = {}
 
+func _bubble_hidden() -> bool:
+	return has_meta("keyart") or (state == "title" and ui._g_cat == "trail" and garage_open)
+
+## 0.8.34 (owner: "players take forever in settings"): after 16 s in Settings
+## or About he yawns, a bed pops in, and he goes to sleep until you come back.
+var _menu_t := 0.0
+
+func _menu_life(dt: float) -> void:
+	_menu_t += dt
+	if _menu_t > 16.0 and _menu_t - dt <= 16.0:
+		_say("*yawn*... wake me up when we run!", 2.6)
+	if _menu_t > 16.0:
+		kite.expr = "sleepy"
+	if _menu_t > 18.5:
+		kite.pose = "sleep"
+		kite.prop = "bed"
+
+## Garage (owner: "after trying out a lot of things he sits down and says I
+## wanna see Liaaaa"): after 9-14 tries, or 50 s, a chair pops in and he sulks
+## with his arms crossed. Trying something new gets him back up.
+const LIA_LINES := [
+	"I wanna see Liaaaa!",
+	"When are we going to Liaaa???",
+	"I look amazing. Can we GO now?",
+	"Lia is waiting... and I'm trying on hats.",
+	"Pleeease press Play!",
+	"Okay okay, but which one would LIA like?",
+]
+var _g_tries := 0
+var _g_sulk_at := 11
+var _g_time := 0.0
+var _sulk := {}
+
+func _garage_tried() -> void:
+	_g_tries += 1
+	if not _sulk.is_empty() and float(_sulk.t) > 0.8:
+		_sulk = {}
+		_g_time = 0.0
+
+func _garage_life(dt: float) -> void:
+	_g_time += dt
+	if _sulk.is_empty():
+		if _g_tries >= _g_sulk_at or _g_time > 50.0:
+			_sulk = {"t": 0.0}
+			_g_tries = 0
+			_g_time = 0.0
+			_g_sulk_at = randi_range(9, 14)
+			_say(LIA_LINES.pick_random(), 3.4)
+		return
+	_sulk.t += dt
+	kite.pose = "sulk"
+	kite.prop = "chair"
+	kite.expr = "grumpy" if fmod(float(_sulk.t), 4.0) < 3.0 else "sleepy"
+	if float(_sulk.t) > 7.0:
+		_sulk = {}
+
+# ------------------------------------------------------------------ fail scenes (0.8.34)
+## Owner: "instead of that rolling animation he falls down and cries
+## dramatically, or says dang it, kicks a rock and falls again". One of three
+## comic scenes plays on the results screen after the last heart.
+var _scene := ""
+var _scene_said := 0
+
+func _start_fail_scene() -> void:
+	if mode == "tutorial":
+		return
+	_scene = ["cry", "kick", "flop"].pick_random()
+	_scene_said = 0
+	# solid, clear ground: back out of any gap, and puff away obstacles he'd
+	# overlap while lying down
+	var g := 0
+	while (track.hole_at(sim.x - 140.0) or track.hole_at(sim.x) or track.hole_at(sim.x + 120.0)) and g < 80:
+		sim.x -= 30.0
+		g += 1
+	sim.y = 0.0
+	sim.vy = 0.0
+	var keep: Array = []
+	for o in track.obs:
+		var ox: float = o.x
+		if ox + Track.obstacle_extent(o) > sim.x - 180.0 and ox < sim.x + 160.0:
+			fx.smoke(Vector2(ox + Track.obstacle_extent(o) * 0.5, -60.0), 7, 70.0, 0.9)
+		else:
+			keep.append(o)
+	track.obs = keep
+	fx.smoke(Vector2(sim.x, -40.0), 12, 90.0, 1.0)
+
+func _scene_lines() -> void:
+	var T: float = kite.act_t
+	var lines: Array = []
+	match _scene:
+		"cry":
+			lines = [[0.4, "WAAAAAAH!", 2.2], [4.2, "I was SO close to Lia...", 2.8], [9.0, "*sniff* ...one more try?", 2.6]]
+			kite.expr = "cry" if fmod(T, 7.0) < 5.0 or T < 9.0 else "sweat"
+		"kick":
+			lines = [[0.3, "Dang it!", 1.3], [3.3, "...ow.", 1.8], [6.0, "I meant to do that.", 2.4]]
+			kite.expr = "grumpy" if T < 2.5 else ("dizzy" if T < 6.0 else "sweat")
+		"flop":
+			lines = [[0.3, "Nooooo! Not fair!!", 2.0], [4.0, "...okay. One more run.", 2.6]]
+			kite.expr = "cry"
+	if _scene_said < lines.size() and T >= float(lines[_scene_said][0]):
+		_say(lines[_scene_said][1], lines[_scene_said][2])
+		_scene_said += 1
+
 func _say(text: String, life: float) -> void:
 	_bubble = {"text": text, "t": 0.0, "life": life}
 
 ## Comic speech bubble above Kavi (screen space), plus music notes.
+var _bubble_painter: Node2D
+
 func _draw_bubble(ci: Node2D) -> void:
-	if state != "title" or garage_open or menu_dim:
+	# above his head in world space, so it follows the Garage zoom (0.8.34)
+	var kp := _world_to_screen(Vector2(sim.x, sim.y - 168.0))
+	if not (state in ["title", "results"]) or _bubble_hidden() or loading:
 		return
-	var kp := _kite_screen() + Vector2(0, -150)
-	if not _life.is_empty() and _life.kind == "music":
+	if state == "title" and not _life.is_empty() and _life.kind == "music" and not (garage_open or menu_dim):
 		for i in 3:
 			var ph := fmod(t * 0.5 + i / 3.0, 1.0)
 			var np := _kite_screen() + Vector2(40 + ph * 30.0 + sin(t * 3.0 + i) * 8.0, -120 - ph * 70.0)
@@ -3766,12 +3988,15 @@ func _draw_bubble(ci: Node2D) -> void:
 	var lines := ceili(font_body.get_string_size(_bubble.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x / maxw)
 	var bw := tw + 40.0
 	var bh := 26.0 * lines + 26.0
-	var c := kp + Vector2(bw * 0.35, -bh * 0.5)
+	var side := -1.0 if state == "results" else 1.0
+	var c := kp + Vector2(bw * 0.35 * side, -bh * 0.5)
+	c.x = clampf(c.x, bw * 0.5 + 16.0, get_viewport_rect().size.x - bw * 0.5 - 16.0)
 	ci.draw_set_transform(c, 0.0, Vector2(pop, pop))
 	var r := Rect2(-bw * 0.5, -bh * 0.5, bw, bh)
 	ci.draw_colored_polygon(Art.rrect(r.grow(3.0), 18.0), Color(0.05, 0.06, 0.12, 0.85 * a))
 	ci.draw_colored_polygon(Art.rrect(r, 16.0), Color(1.0, 0.98, 0.94, a))
-	var tail := PackedVector2Array([Vector2(-bw * 0.32, bh * 0.5 - 2), Vector2(-bw * 0.18, bh * 0.5 - 2), Vector2(-bw * 0.40, bh * 0.5 + 18)])
+	var tx := clampf((kp.x - c.x) / pop, -bw * 0.5 + 34.0, bw * 0.5 - 34.0)
+	var tail := PackedVector2Array([Vector2(tx + 6.0 * side, bh * 0.5 - 2), Vector2(tx + 26.0 * side, bh * 0.5 - 2), Vector2(tx, bh * 0.5 + 18)])
 	ci.draw_colored_polygon(tail, Color(1.0, 0.98, 0.94, a))
 	ci.draw_multiline_string(font_body, Vector2(-tw * 0.5, -bh * 0.5 + 30.0), _bubble.text, HORIZONTAL_ALIGNMENT_CENTER, tw, fs, -1, Color(0.12, 0.12, 0.20, a))
 	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
