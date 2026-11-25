@@ -1276,6 +1276,9 @@ func _quit_cleanly() -> void:
 	_shutdown()
 	for i in 4:
 		await get_tree().process_frame
+	# 0.8.35: also give the audio thread real time to release the stopped
+	# streams (frames can pass in microseconds when nothing is drawn)
+	await get_tree().create_timer(0.2, true, false, true).timeout
 	get_tree().quit()
 
 ## Everything that would otherwise still be alive when the engine exits:

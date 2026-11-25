@@ -16,7 +16,7 @@
   - a white blouse dress with an embroidered hem, and a deep purple shawl with Romanian stepped diamonds, a rosette brooch and a swaying lilac fringe;
   - jointed white legs with lilac knees and boots, mitten hands, and a sketchbook with a spiral binding and a heart doodle;
   - she waves when she's happy and hops a little with heart eyes. Shown in the reunion.
-- **Known:** closing the game in its first ~5 seconds (while music is still loading) prints audio "leaked" lines in a terminal. It's harmless and also happens in 0.8.34; closing later is clean.
+- **Fixed:** closing the game could print audio "leaked" lines in a terminal (always when closed during the first ~5 s, and sometimes later). The quit now gives the audio thread a moment to let go; both cases are clean.
 ## 0.8.34 (2026-11-25) · Funny fails, naps and sulks, big Graphics previews, KAVI app ID
 
 - **Fixed (owner's error list):** checking suits printed hundreds of "Invalid polygon data, triangulation failed". The **Teapot** suit's spout was drawn as a shape that crossed over itself; it's redrawn, and a new scan tries every one of the 140+ Garage items with zero errors.
