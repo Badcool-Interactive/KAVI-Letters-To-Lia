@@ -2110,7 +2110,9 @@ func _draw_run_hud(ci: Node2D, sz: Vector2) -> void:
 	Art.glow(ci, sp, 22, Color(pal.mote, 0.6), 3)
 	ci.draw_circle(sp, 8, pal.mote)
 	_text(ci, str(stamps_run), sp + Vector2(24, 12), 36, Color(1, 1, 1, 0.9), HORIZONTAL_ALIGNMENT_LEFT)
-	# pause button
+	# pause button (hidden while the portrait controller shows: it has Pause)
+	if get_meta("deck_active", false):
+		return
 	var pb = Vector2(sz.x - 64, top + 50)
 	ci.draw_circle(pb, 30, Color(0, 0, 0, 0.35))
 	ci.draw_rect(Rect2(pb.x - 10, pb.y - 12, 7, 24), Color(1, 1, 1, 0.8))
@@ -2121,6 +2123,8 @@ func _seg_start_estimate() -> float:
 	return seg_end - _story_params(chapter, stage, route).v * _story_params(chapter, stage, route).secs - 40.0
 
 func pause_hit(p: Vector2) -> bool:
+	if get_meta("deck_active", false):
+		return false
 	var sz = get_viewport_rect().size
 	var top = sz.y * 0.09 * lb + 26.0
 	return p.distance_to(Vector2(sz.x - 64, top + 50)) < 50.0
@@ -2354,10 +2358,18 @@ func _setup_capture() -> void:
 		cap_steps = [{"do": "wait", "s": 2.5}, {"do": "ui_scenic"}, {"do": "wait", "s": 1.0}, {"shot": "sp0-picker"},
 			{"do": "scenic_set"}, {"do": "wait", "s": 4.0}, {"shot": "sp1-danube-day"}, {"do": "menu"}, {"do": "wait", "s": 2.0}, {"shot": "sp2-back"}, {"do": "quit"}]
 		return
+	if "--decknav" in OS.get_cmdline_user_args():
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 3.0}]
+		for k in 3:
+			cap_steps.append_array([{"do": "deck_tap", "zn": "down", "down": true}, {"do": "wait", "s": 0.1}, {"do": "deck_tap", "zn": "down", "down": false}, {"do": "wait", "s": 0.4}, {"shot": "n%d" % k}])
+		cap_steps.append_array([{"do": "deck_tap", "zn": "a", "down": true}, {"do": "wait", "s": 0.1}, {"do": "deck_tap", "zn": "a", "down": false}, {"do": "wait", "s": 0.8}, {"shot": "n3-enter"}, {"do": "quit"}])
+		return
 	if "--portrait" in OS.get_cmdline_user_args():
 		# 0.8.35 portrait deck: title, a run, the deck hidden and shown again
 		save.data.tutorial_done = true
-		cap_steps = [{"do": "wait", "s": 3.0}, {"shot": "pt0-title"}, {"do": "endless"}, {"do": "wait", "s": 3.0}, {"shot": "pt1-run"}, {"do": "deck_tap", "zn": "jump", "down": true}, {"do": "wait", "s": 0.3}, {"shot": "pt1b-hop"}, {"do": "deck_tap", "zn": "jump", "down": false},
+		cap_steps = [{"do": "wait", "s": 3.0}, {"shot": "pt0-title"}, {"do": "deck_tap", "zn": "down", "down": true}, {"do": "wait", "s": 0.1}, {"do": "deck_tap", "zn": "down", "down": false},
+			{"do": "wait", "s": 0.3}, {"do": "deck_tap", "zn": "down", "down": true}, {"do": "wait", "s": 0.1}, {"do": "deck_tap", "zn": "down", "down": false}, {"do": "wait", "s": 0.5}, {"shot": "pt0b-menu-nav"}, {"do": "endless"}, {"do": "wait", "s": 3.0}, {"shot": "pt1-run"}, {"do": "deck_tap", "zn": "jump", "down": true}, {"do": "wait", "s": 0.3}, {"shot": "pt1b-hop"}, {"do": "deck_tap", "zn": "jump", "down": false},
 			{"do": "deck", "hide": true}, {"do": "wait", "s": 0.5}, {"shot": "pt2-hidden"}, {"do": "deck", "hide": false}, {"do": "wait", "s": 0.5}, {"do": "quit"}]
 		return
 	if "--presetpic" in OS.get_cmdline_user_args():
@@ -2739,7 +2751,9 @@ func _capture_tick(dt: float) -> void:
 			var sh = get_tree().current_scene
 			if sh != null and sh.has_method("_zones"):
 				var z: Dictionary = sh._zones()
-				var pos: Vector2 = z.rocker - Vector2(0, z.u * 0.85) if st.zn == "jump" else z[st.zn]
+				var pos: Vector2 = z.dpad + Vector2(0, -z.u * 0.9) if st.zn in ["jump", "up"] else (z.dpad + Vector2(0, z.u * 0.9) if st.zn == "down" else z[st.zn])
+				# window pixels, as a real click arrives
+				pos *= Vector2(get_window().size) / get_tree().root.get_visible_rect().size
 				var ev := InputEventMouseButton.new()
 				ev.button_index = MOUSE_BUTTON_LEFT
 				ev.position = pos

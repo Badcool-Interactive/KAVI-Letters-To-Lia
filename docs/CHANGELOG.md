@@ -1,4 +1,18 @@
 # Changelog
+## 0.8.36 (2026-11-26) · A prettier handheld, with menu controls
+
+- **The portrait layout is a real little console now:** a rounded handheld body with a big rounded bottom-right corner; a screen bezel with a breathing power light and the "KAVI · Letters to Lia" name plate; an orange scarf stripe; a cross-shaped D-pad; tilted A/B buttons in a recess; slanted Hide and Pause buttons; and a speaker grille.
+- **Menu controls** (owner: "so players don't have to reach the top all the time"): on every menu the D-pad works as the arrow keys (hold to repeat), **A = OK (Enter)** and **B = Back**.
+- **Game controls when you start playing:** the same buttons swap with a little bounce and cross-fade:
+  - D-pad up = **Hop**, down = **Scoot** (left and right dim);
+  - A = **Gust**, B = **Letter**, with your letters left shown under it;
+  - plus a **Pause** button.
+  - A label shows which set is active ("MENU CONTROLS" / "GAME CONTROLS").
+- **Only one pause button:** while the controller is showing, the on-screen pause button (top right of the run) hides. It comes back when you hide the controller.
+- Tested in a 750×1195 window:
+  - D-pad down moved through Endless Road → Daily Relay → Scenic View, and A opened the Scenic View picker;
+  - in a run, D-pad up made Kavi hop and lit the button;
+  - Hide centres the screen with a "Show controls" pill.
 ## 0.8.35 (2026-11-26) · Portrait mode, Scenic picker, prettier Medium, new Lia, smoother phones
 
 - **Portrait mode, Game Boy style:** when the window or phone is taller than wide, the game shows as a screen at the top with a controller deck below:
