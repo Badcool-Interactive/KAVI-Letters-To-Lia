@@ -618,6 +618,7 @@ func start_story(from_chapter := 0) -> void:
 	story_done_px = 0.0
 	_begin_story_segment()
 	_enter_run()
+	_reset_run_moments()
 	_show_card(Art.biome(chapter).name, "Chapter %d · %s" % [chapter + 1, Art.biome(chapter).country])
 
 func start_tutorial() -> void:
@@ -707,6 +708,7 @@ func start_endless(daily := false) -> void:
 	dist_start = sim.x
 	_begin_endless_segment()
 	_enter_run()
+	_reset_run_moments()
 	_show_card("The Endless Road" if not daily else "Daily Relay", "How far will %s's tailwind carry?" % HERO if not daily else _daily_key())
 
 func _daily_key() -> String:
@@ -1344,9 +1346,10 @@ func _physics_process(dt: float) -> void:
 			m.taken = true
 			stamps_run += 1
 			score += 10.0 * tw.tier()
-			synth.play("mote", 1.0 + randf() * 0.3, -6.0)
+			synth.pickup_note(t)
 			fx.burst(Vector2(m.x, m.y), pal.mote, 8, 220, 0.4, 4)
 	score += sim.cur_speed() * dt / PX_PER_M * (1.5 if route == "wild" and mode != "story" else 1.0)
+	_run_moments()
 	if sim.x > seg_end:
 		_segment_finished()
 	track.trim_before(sim.x - 3000.0)
@@ -1413,6 +1416,32 @@ func _on_event(e: Dictionary) -> void:
 			_start_rescue(e.o)
 		"fail":
 			_on_fail()
+
+## "One more run" moments (0.8.29): passing your best mid-run gets a fanfare
+## and a toast; every 500 m a soft chime. Both are gentle, never interrupting.
+var _run_best := 0
+var _passed_best := false
+var _next_mile := 500
+
+func _reset_run_moments() -> void:
+	var key := "best_daily" if mode == "daily" else ("best_story" if mode == "story" else "best_endless")
+	_run_best = int(save.data.get(key, 0))
+	_passed_best = _run_best <= 0
+	_next_mile = 500
+
+func _run_moments() -> void:
+	if mode == "tutorial":
+		return
+	if not _passed_best and int(score) > _run_best:
+		_passed_best = true
+		synth.fanfare(true)
+		_toast("NEW BEST!", _kite_screen() + Vector2(0, -260), Color(1.0, 0.85, 0.45), 64)
+		fx.ring(Vector2(sim.x, sim.y - 50.0), Color(1.0, 0.85, 0.45), 260, 0.7, 8)
+	var m := int((sim.x - dist_start) / PX_PER_M)
+	if m >= _next_mile:
+		_next_mile += 500
+		synth.fanfare(false)
+		_toast("%d m" % m, Vector2(get_viewport_rect().size.x * 0.5, get_viewport_rect().size.y * 0.24), Color(1, 1, 1, 0.8), 34)
 
 func _perfect(text: String, col: Color) -> void:
 	note_capture_event("perfect")

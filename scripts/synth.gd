@@ -75,6 +75,30 @@ func perfect_note(tier: int) -> void:
 	var semis: int = k.root + sc[idx] + 12 * (tier - 1) / 2 - 69 + 12
 	play("bell", pow(2.0, semis / 12.0), -4.0)
 
+## Stamp pickups climb the country's scale while you keep collecting (a
+## streak), so a clean line of stamps plays a little melody (0.8.29).
+var _pick_step := 0
+var _pick_t := -10.0
+
+func pickup_note(now: float) -> void:
+	if now - _pick_t > 0.7:
+		_pick_step = 0
+	_pick_t = now
+	var k: Dictionary = KEYS[maxi(biome, 0) % KEYS.size()]
+	var sc: Array = k.scale
+	var i: int = mini(_pick_step, 11)
+	_pick_step += 1
+	var semis: int = k.root + sc[i % sc.size()] + 12 * (i / sc.size()) - 69 + 24
+	play("mote", pow(2.0, semis / 12.0), -7.0 + minf(i * 0.4, 3.0))
+
+## A short rising "sparkle" for big moments (new best, milestones).
+func fanfare(big := false) -> void:
+	var k: Dictionary = KEYS[maxi(biome, 0) % KEYS.size()]
+	var notes := [0, 4, 7, 12] if big else [7, 12]
+	for n in notes.size():
+		get_tree().create_timer(0.07 * n).timeout.connect(func():
+			play("bell", pow(2.0, (k.root - 69 + 12 + int(notes[n])) / 12.0), -3.0 if big else -6.0))
+
 ## Load every country's pre-rendered music up front, on background threads
 ## (0.8.19; 0.8.17 loaded them on the main thread as the menu appeared, which
 ## stuttered on phones). A country change then never touches the disk.

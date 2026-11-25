@@ -1,4 +1,12 @@
 # Changelog
+## 0.8.29 (2026-11-25) · A real speed trail, and "one more run" moments
+
+- **Running trail rebuilt:** it used to be loose line segments whose length depended on frame rate (a stub on 120 Hz screens, gone on slow phones) and that only appeared at Tailwind ×3. It's now a smooth, tapered swoosh behind Kavi's back, sampled 60 times a second, so it's the same length on every screen. It's in the Tailwind colour from ×1, grows with each tier, has a bright core, and glows at ×3–×4.
+- **Stamp streaks play a melody:** pickups climb the country's musical scale while you keep collecting (each within 0.7 s), instead of a random pitch.
+- **New best, mid-run:** passing your best score during a run plays a short fanfare, shows "NEW BEST!" and sends out a gold ring. It happens once per run.
+- **Milestones:** a soft chime and a "500 m" (1000 m, …) toast every 500 m.
+- **Results:** the score counts up with soft ticks and lands with a chime (a fanfare and a pop on a new best). If you finish within 20% of your best: "So close! Only N points from your best."
+- **Review of Codex's 0.8.25–0.8.26:** all 22 suits checked in the Garage close-up (the full animal costumes look right); tests pass and there are no warnings at exit. Kept as they are.
 ## 0.8.28 (2026-11-25) · No more automatic slides
 
 - **Fixed (present since the first version):** Kavi slid under every sign on his own and scored a "perfect", even with no input. The rule meant to keep him crouched while already under a sign also *started* a slide the moment he reached one. He now only stays down if the player was already sliding. A new test checks both cases: with no input he hits the sign; holding down slides under it. The fairness bot still clears every generated course.

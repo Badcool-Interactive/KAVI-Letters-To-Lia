@@ -1117,11 +1117,14 @@ func show_pause() -> void:
 func show_results(r: Dictionary) -> void:
 	var v := _center(720)
 	_heading(v, "NEW BEST!" if r.new_best else "Run complete", 80, Color(1.0, 0.85, 0.45) if r.new_best else Color(1, 0.96, 0.9))
-	_heading(v, "Score  %d" % r.score, 54)
+	var sc_l := _heading(v, "Score  0", 54)
+	_count_up(sc_l, int(r.score), bool(r.new_best))
 	_small(v, "%d m   ·   %d perfect moves   ·   best Tailwind x%d   ·   best score %d" % [r.dist, r.perfects, r.tier, r.best], 26, Color(1, 1, 1, 0.8))
 	_gap(v, 6)
 	_small(v, "Collected:  +%d Stamps    +%d Sparks" % [r.get("banked", r.stamps), r.sparks], 30, Color(1.0, 0.86, 0.5))
 	_small(v, "Spend them in the Garage. Sparks come from Tailwind x4 and every 10 perfect moves.", 22, Color(1, 1, 1, 0.55))
+	if not r.new_best and int(r.best) > 0 and int(r.score) >= int(r.best) * 0.8:
+		_small(v, "So close! Only %d points from your best." % (int(r.best) - int(r.score)), 28, Color(0.65, 1.0, 0.85))
 	_gap(v, 14)
 	var b := _item(v, "Run again", main.menu_retry, 48)
 	_item(v, "Main menu", main.go_title, 40)
@@ -1360,3 +1363,26 @@ func show_about() -> void:
 	_gap(v, 10)
 	_item(v, "Back", show_settings, 34)
 	first.grab_focus.call_deferred()
+
+## Results score counts up with soft ticks, then lands with a chime (0.8.29).
+func _count_up(l: Label, target: int, best: bool) -> void:
+	var dur := clampf(0.4 + target / 8000.0, 0.6, 1.4)
+	var t0 := Time.get_ticks_msec()
+	var last_tick := -1
+	while is_instance_valid(l):
+		var k := clampf((Time.get_ticks_msec() - t0) / 1000.0 / dur, 0.0, 1.0)
+		var e := 1.0 - pow(1.0 - k, 3.0)
+		l.text = "Score  %d" % int(target * e)
+		var tick := int(k * 14.0)
+		if tick != last_tick and k < 1.0:
+			last_tick = tick
+			main.synth.play("ui", 1.6 + k * 0.6, -14.0)
+		if k >= 1.0:
+			main.synth.fanfare(best)
+			if best:
+				l.pivot_offset = l.size * 0.5
+				var tw := l.create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+				l.scale = Vector2(1.25, 1.25)
+				tw.tween_property(l, "scale", Vector2.ONE, 0.4)
+			return
+		await get_tree().process_frame
