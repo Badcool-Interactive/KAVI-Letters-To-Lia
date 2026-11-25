@@ -504,12 +504,14 @@ func _solid(ci: Node2D, pts: PackedVector2Array, fill: Color, ink_w := 3.0, sunl
 		for pt in pts:
 			left = minf(left, pt.x)
 			right = maxf(right, pt.x)
-		var sun_right := sun_world_x > (left + right) * 0.5
+		# smooth: the lit side cross-fades as the sun passes (0.8.31)
+		var sd := _sun_side((left + right) * 0.5)
 		var shine: Color = fill.lightened(0.25).lerp(pal.rim, 0.35)
 		var colors := PackedColorArray()
 		for pt in pts:
 			var side := inverse_lerp(left, right, pt.x)
-			colors.append(fill.lerp(shine, (side if sun_right else 1.0 - side) * sun_k))
+			var lit := side * maxf(sd, 0.0) + (1.0 - side) * maxf(-sd, 0.0)
+			colors.append(fill.lerp(shine, lit * sun_k))
 		ci.draw_polygon(pts, colors)
 	else:
 		ci.draw_colored_polygon(pts, fill)
@@ -556,8 +558,13 @@ func _wobble_end(ci: Node2D) -> void:
 func _sun_circle(ci: Node2D, center: Vector2, radius: float) -> void:
 	if sun_k <= 0.01:
 		return
-	var angle := -0.55 if sun_world_x > center.x else PI + 0.55
-	ci.draw_arc(center, radius - 1.0, angle - 0.6, angle + 0.6, 8, Color(pal.rim, 0.55 * sun_k), 2.0, Art.AA)
+	var sd := _sun_side(center.x)
+	var angle := lerp_angle(PI + 0.55, -0.55, (sd + 1.0) * 0.5)
+	ci.draw_arc(center, radius - 1.0, angle - 0.6, angle + 0.6, 8, Color(pal.rim, 0.55 * sun_k * (0.4 + 0.6 * absf(sd))), 2.0, Art.AA)
+
+func _sun_side(x: float) -> float:
+	var v := clampf((sun_world_x - x) / 320.0, -1.0, 1.0)
+	return v * (1.5 - 0.5 * v * v)
 
 func _hurdle(ci: Node2D, o: Dictionary) -> void:
 	_wobble_begin(ci, o, Vector2(o.x + o.w * 0.5, 0.0))

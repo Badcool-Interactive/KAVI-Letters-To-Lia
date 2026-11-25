@@ -1467,6 +1467,7 @@ func _process(delta: float) -> void:
 	if loading:
 		_update_loading(real_dt)
 	_update_audio_in(real_dt)
+	_update_mouse_hide(real_dt)
 	synth.world_level = {"scenic": 1.0, "title": 0.55, "recovery": 0.9, "finale": 0.7, "paused": 0.25}.get(state, 0.6)
 	_fg_debug_tick(real_dt)
 	_perf_tick(real_dt)
@@ -1752,7 +1753,8 @@ func _text(ci: Node2D, s: String, p: Vector2, size: int, col: Color, align := HO
 	var w = 2000.0
 	var x = p.x - w * 0.5 if align == HORIZONTAL_ALIGNMENT_CENTER else (p.x if align == HORIZONTAL_ALIGNMENT_LEFT else p.x - w)
 	if outline > 0:
-		ci.draw_string_outline(font, Vector2(x, p.y), s, align, w, size, outline, Color(0, 0, 0, col.a * 0.55))
+		var ok := 0.85 if Art.day else 0.55
+		ci.draw_string_outline(font, Vector2(x, p.y), s, align, w, size, outline + (3 if Art.day else 0), Color(0.02, 0.04, 0.10, col.a * ok))
 	ci.draw_string(font, Vector2(x, p.y), s, align, w, size, col)
 
 ## Glyph warm-up (0.8.17): every letter is rasterised once per font size the
@@ -1866,8 +1868,16 @@ func _draw_title(ci: Node2D, sz: Vector2) -> void:
 	var shade := Color(0.01, 0.02, 0.05)
 	# back to the lighter 0.8.12 shade (owner: the darker one made the game feel
 	# dark); readability now comes from drop shadows on the menu text instead
+	var sa := 0.78 if menu_dim else 0.55
+	if Art.day:
+		shade = Color(0.04, 0.09, 0.20)   # a soft navy veil reads better on bright skies
+		sa += 0.08
 	ci.draw_polygon(PackedVector2Array([Vector2(sz.x * 0.52, 0), Vector2(sz.x, 0), Vector2(sz.x, sz.y), Vector2(sz.x * 0.52, sz.y)]),
-		PackedColorArray([Color(shade, 0.0), Color(shade, 0.78 if menu_dim else 0.55), Color(shade, 0.78 if menu_dim else 0.55), Color(shade, 0.0)]))
+		PackedColorArray([Color(shade, 0.0), Color(shade, sa), Color(shade, sa), Color(shade, 0.0)]))
+	if Art.day and not (garage_open or menu_dim):
+		# and a soft veil behind the logo and the quote
+		var c := Vector2(sz.x * 0.29, sz.y * 0.30)
+		Art.glow(ci, c, sz.x * 0.26, Color(shade, 0.45))
 	if garage_open or menu_dim:
 		return
 	_draw_motes(ci, sz)
@@ -2075,6 +2085,8 @@ func _set_input_mode(m: String) -> void:
 		touch.visible_controls = _want_touch()
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_mouse_idle = 0.0
 	if loading:
 		# the studio intro always plays in full (owner, 0.8.22)
 		get_viewport().set_input_as_handled()
@@ -3587,3 +3599,21 @@ func _apply_time_of_day() -> void:
 		return
 	Art.set_day(d)
 	set_biome(biome, true)
+
+## Mouse hides during runs, like a video player: it reappears when moved and
+## hides again after 1.5 s still. Menus always show it (0.8.31).
+var _mouse_idle := 0.0
+var _mouse_hidden := false
+
+func _update_mouse_hide(dt: float) -> void:
+	if OS.has_feature("mobile") or loading:
+		return
+	var playing: bool = state in ["run", "recovery", "junction", "rescue", "fail", "scenic", "finale"]
+	if playing and not (state == "junction"):
+		_mouse_idle += dt
+	else:
+		_mouse_idle = 0.0
+	var want_hidden := playing and _mouse_idle > 1.5
+	if want_hidden != _mouse_hidden:
+		_mouse_hidden = want_hidden
+		Input.mouse_mode = Input.MOUSE_MODE_HIDDEN if want_hidden else Input.MOUSE_MODE_VISIBLE

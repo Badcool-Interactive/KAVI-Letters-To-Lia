@@ -310,15 +310,21 @@ class MenuItem extends Button:
 		var sh := maxf(2.0, fs * 0.06)
 		draw_string_outline(f, base + Vector2(sh * 0.6, sh * 1.6), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, int(fs * 0.22), Color(0, 0, 0, 0.16))
 		draw_string(f, base + Vector2(sh * 0.6, sh * 1.2), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.0, 0.01, 0.03, 0.55))
-		draw_string_outline(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, maxi(4, int(fs * 0.14)), Color(0.02, 0.03, 0.07, 0.55))
+		# daytime (0.8.31): bright skies need a firmer outline and a deeper accent
+		var dayk := 1.0 if Art.day else 0.0
+		draw_string_outline(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, maxi(4, int(fs * (0.14 + 0.06 * dayk))), Color(0.02, 0.04, 0.10, 0.55 + 0.35 * dayk))
 		draw_string(f, base, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, fill)
 		if selected:
 			draw_circle(Vector2(22, y), 4.0, Color(accent, 0.9))
 		if hot > 0.01:
 			var d := 9.0 * hot
 			var m := Vector2(22 + 4.0 * hot, y)
-			draw_colored_polygon(PackedVector2Array([m + Vector2(0, -d), m + Vector2(d * 0.7, 0), m + Vector2(0, d), m + Vector2(-d * 0.7, 0)]), Color(accent, hot))
-			draw_line(Vector2(46, size.y - 6), Vector2(46 + tw * hot, size.y - 6), Color(accent, 0.55 * hot), 2.0, true)
+			var acc := Color(1.0, 0.55, 0.12) if Art.day else accent
+			if Art.day:
+				draw_colored_polygon(PackedVector2Array([m + Vector2(0, -d - 2.5), m + Vector2(d * 0.7 + 2.5, 0), m + Vector2(0, d + 2.5), m + Vector2(-d * 0.7 - 2.5, 0)]), Color(0.02, 0.04, 0.10, 0.8 * hot))
+				draw_line(Vector2(46, size.y - 6), Vector2(46 + tw * hot, size.y - 6), Color(0.02, 0.04, 0.10, 0.7 * hot), 6.0, true)
+			draw_colored_polygon(PackedVector2Array([m + Vector2(0, -d), m + Vector2(d * 0.7, 0), m + Vector2(0, d), m + Vector2(-d * 0.7, 0)]), Color(acc, hot))
+			draw_line(Vector2(46, size.y - 6), Vector2(46 + tw * hot, size.y - 6), Color(acc, (0.95 if Art.day else 0.55) * hot), 3.0 if Art.day else 2.0, true)
 		if status != "":
 			var sf := get_theme_font("font")
 			var ss := int(fs * 0.62)
@@ -654,9 +660,25 @@ func _garage_wire() -> void:
 	var tab: Control = _g_tabs.get(_g_cat)
 	if tab != null:
 		first.focus_neighbor_top = first.get_path_to(tab)
-		for tb in _g_tabs.values():
-			if tb.get_parent() == _g_tabs[Looks.CATS.back()].get_parent():
-				tb.focus_neighbor_bottom = tb.get_path_to(first)
+	# 0.8.31 (owner: Down from Suits landed on Antenna): all tabs behave as ONE
+	# row. Left/Right walk through every tab in order (and wrap), Down from
+	# any tab goes straight into that tab's items, Up goes to the exchange.
+	var order: Array = []
+	for c in Looks.CATS:
+		order.append(_g_tabs[c])
+	var above: Control = null
+	for n in _box.find_children("*", "Button", true, false):
+		if n.text.begins_with("Swap "):
+			above = n
+	for i in order.size():
+		var tb: Control = order[i]
+		tb.focus_neighbor_left = tb.get_path_to(order[(i - 1 + order.size()) % order.size()])
+		tb.focus_neighbor_right = tb.get_path_to(order[(i + 1) % order.size()])
+		tb.focus_neighbor_bottom = tb.get_path_to(first)
+		tb.focus_previous = tb.focus_neighbor_left
+		tb.focus_next = tb.focus_neighbor_right
+		if above != null:
+			tb.focus_neighbor_top = tb.get_path_to(above)
 
 func _stagger_in(rows: Array, step: float, dx: float) -> void:
 	for n in rows:
@@ -1341,27 +1363,35 @@ func _update_about_status() -> void:
 		_auto_wire.call_deferred()
 	_about_update_action.text = action
 
+## About (0.8.31 redesign, owner): a small credits card. The game, the studio
+## and the maker stand out; version and engine on one quiet line; then links.
 func show_about() -> void:
 	main.garage_open = false
 	main.menu_dim = true
-	var v := _column(0.12)
-	_heading(v, "About", 64)
-	_small(v, "KAVI: Letters to Lia", 34, Color(1.0, 0.92, 0.78))
-	_small(v, "Version %s  ·  made with Godot %s" % [str(ProjectSettings.get_setting("application/config/version", "?")), Engine.get_version_info().string.get_slice("-", 0)], 26, Color(1, 1, 1, 0.8))
-	_gap(v, 6)
-	_small(v, "Made by Baljeet Singh", 28, Color(0.85, 0.88, 0.95))
-	_small(v, "BADCOOL INTERACTIVE", 22, Color(0.75, 0.78, 0.84))
-	_gap(v, 12)
-	var first := _item(v, "Check for updates", main.updates.check, 32)
-	_about_update_status = _small(v, "", 25, Color(1, 1, 1, 0.88))
-	_about_update_action = _item(v, "", main.updates.apply, 32)
-	_update_about_status()
-	_item(v, "Play in your browser", func(): OS.shell_open(LINK_PLAY), 32)
-	_item(v, "Latest published release", func(): OS.shell_open(LINK_DOWNLOADS), 32)
-	_item(v, "Source on GitHub", func(): OS.shell_open(LINK_SOURCE), 32)
-	_small(v, "github.com/singh679/volt-run-luminous", 22, Color(1, 1, 1, 0.55))
+	var v := _column(0.08)
+	_heading(v, "About", 56)
+	_heading(v, "KAVI: Letters to Lia", 44, Color(1.0, 0.93, 0.80))
+	_small(v, "A little courier robot carrying letters across Europe to his friend Lia.", 24, Color(1, 1, 1, 0.75))
 	_gap(v, 10)
-	_item(v, "Back", show_settings, 34)
+	_small(v, "CREATED BY", 20, Color(1.0, 0.82, 0.55, 0.85))
+	_heading(v, "Singh Baljeet", 52, Color(1.0, 0.98, 0.94))
+	_small(v, "BADCOOL INTERACTIVE", 24, Color(0.80, 0.83, 0.90))
+	_gap(v, 10)
+	var godot_v: String = Engine.get_version_info().string.get_slice("-", 0)
+	_small(v, "Version %s   ·   Made with Godot Engine %s" % [str(ProjectSettings.get_setting("application/config/version", "?")), godot_v], 22, Color(1, 1, 1, 0.6))
+	_gap(v, 8)
+	var first := _item(v, "Check for updates", main.updates.check, 30)
+	_about_update_status = _small(v, "", 24, Color(1, 1, 1, 0.88))
+	_about_update_action = _item(v, "", main.updates.apply, 30)
+	_update_about_status()
+	var links := HBoxContainer.new()
+	links.add_theme_constant_override("separation", 12)
+	v.add_child(links)
+	_item(links, "Play online", func(): OS.shell_open(LINK_PLAY), 26)
+	_item(links, "Downloads", func(): OS.shell_open(LINK_DOWNLOADS), 26)
+	_item(links, "Source code", func(): OS.shell_open(LINK_SOURCE), 26)
+	_gap(v, 8)
+	_item(v, "Back", show_settings, 32)
 	first.grab_focus.call_deferred()
 
 ## Results score counts up with soft ticks, then lands with a chime (0.8.29).

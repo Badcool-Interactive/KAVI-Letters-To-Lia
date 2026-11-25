@@ -105,6 +105,13 @@ func sun_light(p: Vector2) -> Vector2:
 	var k := clampf(1.0 - d.length() / (size.x * 0.9), 0.15, 1.0) * sun_strength()
 	return d.normalized() * k
 
+## Smooth side of the sun for a point: -1 (sun far left) .. +1 (far right),
+## easing through 0 over a few hundred pixels, so lit faces cross-fade as the
+## sun passes instead of snapping from one side to the other (0.8.31).
+func sun_side(p: Vector2) -> float:
+	var x := clampf((sun_position.x - p.x) / 320.0, -1.0, 1.0)
+	return x * (1.5 - 0.5 * x * x)
+
 func sun_strength() -> float:
 	return clampf(sun_vis * 1.2, 0.0, 1.0)
 
@@ -185,6 +192,33 @@ func _ground_y() -> float:
 	return size.y * BASE[2] - cam_y * 0.05
 
 # ------------------------------------------------------------------ sky
+## A few soft, flat clouds drifting slowly across the sky (0.8.31). White and
+## crisp by day; at dusk they catch the sun's colour along their underside and
+## sit dimmer against the sky. Parallax is very slow (they're far away).
+func _draw_clouds(ci: Node2D) -> void:
+	var day: bool = pal.get("day", false)
+	var n: int = [3, 5, 7][Art.Q]
+	var w: float = size.x
+	var h: float = size.y
+	# solid colours (overlapping see-through puffs showed their circles)
+	var top_c: Color = Color(1, 1, 1) if day else pal.sky[1].lerp(pal.fog, 0.30)
+	var under: Color = Color(0.84, 0.89, 0.96) if day else pal.sky[1].lerp(pal.rim, 0.35)
+	for i in n:
+		var span := w * 1.8
+		var x: float = fposmod(Art.hash01(i, 801) * span - cam_x * (0.012 + 0.01 * Art.hash01(i, 803)) - t * (4.0 + 6.0 * Art.hash01(i, 804)), span) - w * 0.4
+		var y: float = h * (0.08 + Art.hash01(i, 802) * 0.28)
+		var sc: float = 0.6 + Art.hash01(i, 805) * 0.9
+		var puffs := 3 + int(Art.hash01(i, 806) * 3.0)
+		var base_w := 70.0 * sc * puffs
+		# flat underside, then rounded puffs on top
+		ci.draw_rect(Rect2(x - base_w * 0.5, y - 6.0 * sc, base_w, 22.0 * sc), under)
+		for k in puffs:
+			var u := (float(k) + 0.5) / float(puffs)
+			var r: float = (26.0 + 22.0 * sin(u * PI) + 10.0 * Art.hash01(i * 7 + k, 807)) * sc
+			var c := Vector2(x - base_w * 0.5 + u * base_w, y - r * 0.35)
+			ci.draw_circle(c + Vector2(0, 6.0 * sc), r, under)
+			ci.draw_circle(c, r, top_c)
+
 func _draw_sky(ci: Node2D) -> void:
 	var w = size.x
 	var h = size.y
@@ -207,6 +241,7 @@ func _draw_sky(ci: Node2D) -> void:
 			var a: float = pal.stars * tw * (1.0 - sy / (h * 0.6)) * 0.85
 			var sr = 1.0 + Art.hash01(i, 7) * 1.8
 			ci.draw_rect(Rect2(sx - sr * 0.5, sy - sr * 0.5, sr, sr), Color(0.9, 0.95, 1.0, a))
+	_draw_clouds(ci)
 	_draw_air(ci)
 
 ## 0..1 progress of the sky part of a world transition (old sun sets, new rises).
@@ -526,8 +561,12 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			ci.draw_rect(Rect2(x0 - 4 * s, top - 14 * s, tw + 8 * s, 15 * s), col)
 			ci.draw_colored_polygon(PackedVector2Array([Vector2(x0 - 8 * s, top - 13 * s), Vector2(p.x, top - 13 * s - tw * 0.2), Vector2(x0 + tw + 8 * s, top - 13 * s)]), col)
 			var sun := sun_light(Vector2(p.x, top))
-			var sun_x: float = x0 + tw + 8 * s if sun.x > 0.0 else x0 - 8 * s
-			ci.draw_line(Vector2(sun_x, top - 13 * s), Vector2(p.x, top - 13 * s - tw * 0.2), Color(pal.rim, 0.65 * sun.length() * col.a), 2.0, Art.AA)
+			var sd := sun_side(Vector2(p.x, top))
+			for side in [1.0, -1.0]:
+				var wgt := maxf(sd * side, 0.0)
+				if wgt > 0.02:
+					var sun_x: float = x0 + tw + 8 * s if side > 0.0 else x0 - 8 * s
+					ci.draw_line(Vector2(sun_x, top - 13 * s), Vector2(p.x, top - 13 * s - tw * 0.2), Color(pal.rim, 0.65 * wgt * sun.length() * col.a), 2.0, Art.AA)
 			if Art.hash01(seed, 9) < 0.5:
 				L.append([Vector2(p.x, top - 22 * s), 4.0 * s, Art.hdr(pal.mote, 1.0)])
 		"lighthouse":
@@ -653,11 +692,15 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			if layer < 2:
 				_peaks.append([p.x - pw, top.x, top.y, p.x + pw, p.y + 60.0])
 			var sun := sun_light(top)
-			var lit_base: Vector2 = p + Vector2(pw if sun.x > 0.0 else -pw, 60)
+			var sd := sun_side(top)
 			var foot: Vector2 = p + Vector2(0, 60)
-			var face_light: float = sun.length() * col.a
-			ci.draw_colored_polygon(PackedVector2Array([top, lit_base, foot]), Color(pal.rim, 0.12 * face_light))
-			ci.draw_line(top, top.lerp(lit_base, 0.35), Color(pal.rim, 0.55 * face_light), 3.0)
+			for side in [1.0, -1.0]:
+				var wgt := maxf(sd * side, 0.0)
+				if wgt > 0.02:
+					var lit_base: Vector2 = p + Vector2(pw * side, 60)
+					var face_light: float = sun.length() * col.a * wgt
+					ci.draw_colored_polygon(PackedVector2Array([top, lit_base, foot]), Color(pal.rim, 0.12 * face_light))
+					ci.draw_line(top, top.lerp(lit_base, 0.35), Color(pal.rim, 0.55 * face_light), 3.0)
 		"lantern":
 			var bob = sin(t * 1.3 + seed) * 12.0
 			var lp = p + Vector2(0, -(120.0 + Art.hash01(seed, 2) * 160.0) * s + bob)
@@ -1061,8 +1104,12 @@ func _draw_town(ci: Node2D, off: float, col: Color) -> void:
 			var by = _ridge_y(0, x + bw * 0.5) + 18.0
 			ci.draw_rect(Rect2(sx, by - bh, bw, bh + 40.0), tc)
 			var sun := sun_light(Vector2(sx + bw * 0.5, by - bh * 0.5))
-			var face_x: float = sx + bw * 0.72 if sun.x > 0.0 else sx
-			ci.draw_rect(Rect2(face_x, by - bh, bw * 0.28, bh + 40.0), Color(pal.rim, 0.25 * sun.length() * fade))
+			var sdir := sun_side(Vector2(sx + bw * 0.5, by - bh * 0.5))
+			for side in [1.0, -1.0]:
+				var wgt := maxf(sdir * side, 0.0)
+				if wgt > 0.02:
+					var face_x: float = sx + bw * 0.72 if side > 0.0 else sx
+					ci.draw_rect(Rect2(face_x, by - bh, bw * 0.28, bh + 40.0), Color(pal.rim, 0.25 * wgt * sun.length() * fade))
 			var r = Art.hash01(sd, 3)
 			if village:
 				ci.draw_colored_polygon(PackedVector2Array([Vector2(sx - 5, by - bh), Vector2(sx + bw * 0.5, by - bh - bw * 0.5), Vector2(sx + bw + 5, by - bh)]), tc)
@@ -1472,4 +1519,4 @@ func _draw_air_set(ci: Node2D, air: Array, alpha: float) -> void:
 			var flap = sin(t * (8.0 + 14.0 * scat) + k) * 5.0
 			ci.draw_polyline(PackedVector2Array([bp + Vector2(-8, -flap), bp, bp + Vector2(8, -flap)]), sil, 2.0, Art.AA)
 			var sun := sun_light(bp)
-			ci.draw_line(bp, bp + Vector2(8 if sun.x > 0.0 else -8, -flap), Color(pal.rim, 0.65 * sun.length() * alpha), 1.5, Art.AA)
+			ci.draw_line(bp, bp + Vector2(8.0 * sun_side(bp), -flap), Color(pal.rim, 0.65 * sun.length() * alpha), 1.5, Art.AA)

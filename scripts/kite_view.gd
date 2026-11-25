@@ -141,7 +141,7 @@ func reset_scarf() -> void:
 
 func _neck_world() -> Vector2:
 	var p = _pose_params()
-	return global_position + (Vector2(-4, -63) * s).rotated(p.rot) + p.off * s
+	return global_position + (Vector2(-4, -63 - LEG) * s).rotated(p.rot) + p.off * s
 
 func _update_air(dt: float) -> void:
 	stumble_t = maxf(stumble_t - dt, 0.0)
@@ -448,8 +448,14 @@ static func _ik(a: Vector2, b: Vector2, l1: float, l2: float, bend: float) -> Ve
 # ------------------------------------------------------------------ paint
 ## 0.8.19: Kavi's shapes have no black outline at any quality (owner: the
 ## outline-free look of Low is cuter). `_ink` is kept for call compatibility.
-func _poly(ci: Node2D, pts: PackedVector2Array, fill: Color, _ink := true) -> void:
+## 0.8.31: a thin, soft outline again (owner: Kavi needs a small outline to
+## stand apart from the world; the old 2.2 px black lines were too heavy).
+func _poly(ci: Node2D, pts: PackedVector2Array, fill: Color, ink := true) -> void:
 	ci.draw_colored_polygon(pts, fill)
+	if ink and Art.Q >= 1 and pts.size() > 2:
+		var c := pts.duplicate()
+		c.append(pts[0])
+		ci.draw_polyline(c, Color(INK, 0.7), 1.3, Art.AA)
 
 ## A limb is one inked capsule: 2 draw calls instead of 6.
 func _limb(ci: Node2D, a: Vector2, b: Vector2, w: float, col: Color) -> void:
@@ -474,6 +480,17 @@ static func _capsule(a: Vector2, b: Vector2, r: float) -> PackedVector2Array:
 ## messenger bag, a long scarf, thick tapered limbs, mitten hands, chunky boots.
 ## Body units: feet at y=0, hip y=-31, shoulders y=-58, head centre y=-86.
 const HIP := Vector2(0, -31)
+## 0.8.31 (owner: his legs were shorter than his head): the whole upper body
+## is lifted by LEG and the legs grow to reach the ground, so he stands taller
+## with better proportions. Feet and the ground contact stay where they were.
+const LEG := 11.0
+const THIGH := 15.0 + LEG * 0.5
+const SHIN := 15.0 + LEG * 0.5
+
+## Body transform with the lift applied (side view).
+func _body_xf(ci: Node2D, p: Dictionary, extra_rot := 0.0) -> void:
+	var lift: Vector2 = (Vector2(0, -LEG) * p.sq * s).rotated(p.rot)
+	ci.draw_set_transform(p.off * s + lift, p.rot + extra_rot, p.sq * s)
 const SHOULDER := Vector2(2, -58)
 const HEAD_C := Vector2(5, -86)
 const BAG := Color(0.66, 0.38, 0.24)
@@ -526,11 +543,11 @@ func _paint(ci: Node2D, add: bool) -> void:
 			return
 		# first half of the turn: the side view squashes towards the camera
 		p.sq.x *= 1.0 - _turn * 2.0
-	ci.draw_set_transform(p.off * s, p.rot, p.sq * s)
+	_body_xf(ci, p)
 	var hf: Vector2 = SHOULDER + p.hf
 	var hb: Vector2 = SHOULDER + p.hb
-	var ff: Vector2 = Vector2(p.ff.x, p.ff.y)
-	var fb: Vector2 = Vector2(p.fb.x, p.fb.y)
+	var ff: Vector2 = Vector2(p.ff.x, p.ff.y + LEG)
+	var fb: Vector2 = Vector2(p.fb.x, p.fb.y + LEG)
 
 	if not add:
 		# --- back arm + back leg (shaded, behind the body)
@@ -540,7 +557,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 		_limb2(ci, eb, hb, 10.5, 9.5, SHADE)
 		_hand(ci, hb, SHADE.darkened(0.1), hb - eb)
 		var hpb := HIP + Vector2(-4, 0)
-		var kb = _ik(hpb, fb + Vector2(0, -7), 15, 15, 1.0)
+		var kb = _ik(hpb, fb + Vector2(0, -7), THIGH, SHIN, 1.0)
 		_limb2(ci, hpb, kb, 15.0, 12.5, SHADE)
 		_limb2(ci, kb, fb + Vector2(0, -7), 12.5, 11.0, SHADE)
 		_boot(ci, fb, foot_color.darkened(0.3))
@@ -573,7 +590,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 		ci.draw_line(Vector2(-12, -63), Vector2(15, -38), STRAP, 3.6, Art.AA)
 		# --- front leg
 		var hpf := HIP + Vector2(4, 0)
-		var kf = _ik(hpf, ff + Vector2(0, -7), 15, 15, 1.0)
+		var kf = _ik(hpf, ff + Vector2(0, -7), THIGH, SHIN, 1.0)
 		_limb2(ci, hpf, kf, 15.0, 12.5, SHELL)
 		_limb2(ci, kf, ff + Vector2(0, -7), 12.5, 11.0, SHELL)
 		ci.draw_circle(kf, 3.6, TEAL)
@@ -602,7 +619,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 				ci.draw_circle(w + Vector2(-6, -1), 3.5, Art.hdr(Color(1.0, 0.75, 0.35), 2.0))
 
 	# --- head: steadied against the body lean so it doesn't wobble
-	ci.draw_set_transform(p.off * s, p.rot + p.head, p.sq * s)
+	_body_xf(ci, p, p.head)
 	var hc := HEAD_C
 	var head_r := Rect2(hc.x - 26, hc.y - 21, 52, 42)
 	var scr := Rect2(hc.x - 15, hc.y - 14, 36, 28)
@@ -627,9 +644,12 @@ func _paint(ci: Node2D, add: bool) -> void:
 		_antenna(ci, Vector2(hc.x + 10, head_r.position.y - (4.0 if helmet == "teapot" else 0.0)))
 		_helmet_front(ci, hc, head_r)
 		# scarf wrap at the neck
-		ci.draw_set_transform(p.off * s, p.rot, p.sq * s)
-		_poly(ci, Art.rrect(Rect2(-12, -68, 28, 9), 4.5), scarf_col)
-		ci.draw_circle(Vector2(14, -62), 4.2, scarf_col.darkened(0.15))
+		_body_xf(ci, p)
+		# a thick, readable scarf wrap with a fold line and a knot (0.8.31)
+		_poly(ci, Art.rrect(Rect2(-13, -71, 31, 13), 6.0), scarf_col)
+		ci.draw_line(Vector2(-10, -64.5), Vector2(15, -64.5), scarf_col.darkened(0.22), 2.0, Art.AA)
+		ci.draw_line(Vector2(-9, -69), Vector2(10, -69), scarf_col.lightened(0.3), 1.6, Art.AA)
+		_poly(ci, Art.ellipse(Vector2(15, -61), Vector2(6.0, 5.2), 14), scarf_col.darkened(0.12))
 		# --- front arm on top
 		var sf := SHOULDER + Vector2(4, 2)
 		var ef = _ik(sf, hf, 13, 13, -1.0)
@@ -647,7 +667,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 		if helmet == "explorer":
 			ci.draw_circle(hc + Vector2(14, -22), 3.0, Art.hdr(Color(1.0, 0.92, 0.7), 2.2))
 			Art.glow(ci, hc + Vector2(16, -22), 22.0, Color(1.0, 0.9, 0.6, 0.35), 3)
-		ci.draw_set_transform(p.off * s, p.rot, p.sq * s)
+		_body_xf(ci, p)
 		if pose == "gust":
 			Art.glow(ci, hf + Vector2(6, 0), 26.0, Color(0.6, 1.0, 0.8, 0.6), 4)
 		_props(ci, hf, true)
@@ -655,7 +675,7 @@ func _paint(ci: Node2D, add: bool) -> void:
 
 ## Tapered inked limb (wider at the root).
 func _limb2(ci: Node2D, a: Vector2, b: Vector2, w0: float, w1: float, col: Color) -> void:
-	ci.draw_colored_polygon(_taper(a, b, w0 * 0.5 + 2.0, w1 * 0.5 + 2.0), INK)
+	ci.draw_colored_polygon(_taper(a, b, w0 * 0.5 + 1.0, w1 * 0.5 + 1.0), INK)
 	ci.draw_colored_polygon(_taper(a, b, w0 * 0.5, w1 * 0.5), col)
 
 static func _taper(a: Vector2, b: Vector2, r0: float, r1: float) -> PackedVector2Array:
@@ -813,13 +833,13 @@ func _draw_scarf(ci: Node2D, p: Dictionary) -> void:
 			var f = float(k) / (SCARF_N - 4)
 			raw2.append(raw[k] + Vector2(1.5 * f, (3.0 + 9.0 * f) * s + sin(t * 13.0 - k * 0.9) * 2.5 * f * s))
 		var tail2 = _smooth(raw2)
-		_strip(ci, tail2, 6.2 * s, 4.0 * s, INK)
+		_strip(ci, tail2, 8.2 * s, 5.4 * s, INK)
 		var pc2 := _scarf_colors(tail2.size())
 		for k in pc2.size():
 			pc2[k] = pc2[k].darkened(0.22)  # (empty for solid scarves)
-		_strip(ci, tail2, 4.6 * s, 2.6 * s, sc.darkened(0.22), pc2)
-		_strip(ci, main_tail, 7.6 * s, 4.8 * s, INK)
-		_strip(ci, main_tail, 6.0 * s, 3.4 * s, sc, _scarf_colors(main_tail.size()))
+		_strip(ci, tail2, 6.6 * s, 4.0 * s, sc.darkened(0.22), pc2)
+		_strip(ci, main_tail, 10.0 * s, 6.4 * s, INK)
+		_strip(ci, main_tail, 8.4 * s, 5.0 * s, sc, _scarf_colors(main_tail.size()))
 		if Art.Q >= 1:
 			# soft sheen along the upper edge of the cloth
 			var sheen = PackedVector2Array()
@@ -830,7 +850,7 @@ func _draw_scarf(ci: Node2D, p: Dictionary) -> void:
 					nrm = -nrm
 				sheen.append(main_tail[k] + nrm * 3.4 * s * (1.0 - 0.5 * float(k) / main_tail.size()))
 			ci.draw_polyline(sheen, Color(sc.lightened(0.45), 0.75), 1.6 * s, Art.AA)
-		ci.draw_set_transform(p.off * s, p.rot, p.sq * s)
+		_body_xf(ci, p)
 
 ## Catmull-Rom smoothing: 2 extra points per segment.
 static func _smooth(pts: PackedVector2Array) -> PackedVector2Array:
@@ -1005,7 +1025,7 @@ var _turn := 0.0
 
 func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 	var br := sin(t * 1.8)
-	ci.draw_set_transform(Vector2(0, -5.0 * s + br * 0.5), 0.0, Vector2(sx * s, s))
+	ci.draw_set_transform(Vector2(0, -5.0 * s - LEG * s + br * 0.5), 0.0, Vector2(sx * s, s))
 	var hc := Vector2(0, -86)
 	var hr := Rect2(-26, -107, 52, 42)
 	var scr := Rect2(-18, -100, 36, 28)
@@ -1017,9 +1037,9 @@ func _paint_front(ci: Node2D, add: bool, sx: float) -> void:
 			AnimalSuit.back(ci, helmet, costume, _costume_sway(), true)
 		# legs + boots
 		for lx in [-8.0, 8.0]:
-			_limb2(ci, Vector2(lx, -31), Vector2(lx * 1.1, -8), 15.0, 12.0, SHELL if lx > 0 else SHELL.lerp(SHADE, 0.35))
-			_poly(ci, Art.rrect(Rect2(lx * 1.1 - 10, -12, 20, 13), 6), foot_color)
-			ci.draw_rect(Rect2(lx * 1.1 - 10, -3.5, 20, 4), foot_color.lightened(0.6))
+			_limb2(ci, Vector2(lx, -31), Vector2(lx * 1.1, -8 + LEG), 15.0, 12.0, SHELL if lx > 0 else SHELL.lerp(SHADE, 0.35))
+			_poly(ci, Art.rrect(Rect2(lx * 1.1 - 10, -12 + LEG, 20, 13), 6), foot_color)
+			ci.draw_rect(Rect2(lx * 1.1 - 10, -3.5 + LEG, 20, 4), foot_color.lightened(0.6))
 		# scarf tails hanging down on one side, fluttering
 		var tl := PackedVector2Array()
 		for k in 8:
@@ -1224,10 +1244,20 @@ func _accessory(ci: Node2D, hc: Vector2, hr: Rect2) -> void:
 				ci.draw_circle(f + Vector2.from_angle(k * TAU / 6.0 + t * 0.5) * 5.0, 3.6, Color(1, 1, 1))
 			ci.draw_circle(f, 3.0, Color(1.0, 0.82, 0.3))
 		"headphones":
-			ci.draw_arc(hc + Vector2(0, -2), hr.size.x * 0.56, PI * 1.1, PI * 1.9, 16, INK, 5.0)
-			ci.draw_arc(hc + Vector2(0, -2), hr.size.x * 0.56, PI * 1.1, PI * 1.9, 16, TEAL, 3.0)
+			# own materials, not the suit's colour (owner, 0.8.31): a dark
+			# graphite band and cups, soft cushions, and their own light (a
+			# highlight on top, shade underneath) so they read apart from the head
+			var band := Color(0.17, 0.18, 0.23)
+			var cush := Color(1.0, 0.55, 0.35)
+			ci.draw_arc(hc + Vector2(0, -2), hr.size.x * 0.58, PI * 1.08, PI * 1.92, 18, Color(INK, 0.9), 6.0)
+			ci.draw_arc(hc + Vector2(0, -2), hr.size.x * 0.58, PI * 1.08, PI * 1.92, 18, band, 4.0)
+			ci.draw_arc(hc + Vector2(0, -3), hr.size.x * 0.58, PI * 1.25, PI * 1.6, 10, Color(1, 1, 1, 0.35), 1.5)
 			for sd in [-1.0, 1.0]:
-				_poly(ci, Art.rrect(Rect2(hc.x + sd * hr.size.x * 0.52 - 5, hc.y - 6, 10, 15), 4.0), TEAL.darkened(0.25))
+				var cup := Rect2(hc.x + sd * hr.size.x * 0.54 - 6, hc.y - 8, 12, 18)
+				_poly(ci, Art.rrect(cup, 5.0), band)
+				ci.draw_colored_polygon(Art.rrect(Rect2(cup.position.x + 2, cup.end.y - 6, cup.size.x - 4, 4), 2.0), band.darkened(0.4))
+				ci.draw_line(cup.position + Vector2(3, 3), cup.position + Vector2(3, 10), Color(1, 1, 1, 0.4), 1.5)
+				ci.draw_colored_polygon(Art.rrect(Rect2(cup.position.x + (cup.size.x - 3 if sd < 0 else -1), cup.position.y + 2, 4, cup.size.y - 4), 2.0), cush)
 		"crown":
 			var b := Vector2(hc.x - 9, hr.position.y - 1)
 			var gold := Color(1.0, 0.82, 0.3)

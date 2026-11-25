@@ -1,4 +1,20 @@
 # Changelog
+## 0.8.31 (2026-11-25) · Taller Kavi, readable daytime, clouds
+
+- **Kavi's proportions:**
+  - The upper body is lifted 11 px and the legs grow to reach the ground (thigh and shin 15 → 20.5), so his legs are now longer than his head. This applies in the side and front views and to every costume.
+  - A thin, soft silhouette outline separates him from the world (1.3 px at 70%); limb outlines are half as thick.
+  - The scarf is a thick wrap with a fold and a knot, and its tails are about 35% wider.
+  - The headphones have their own graphite band and cups with orange cushions, a highlight and shading, independent of the suit colour.
+- **Intro sound:** the 0.8.26 cue was mixed very quietly (average −32 dB, peak −19 dB). It's now at −19 dB average and −6 dB peak with a limiter; the picture is untouched.
+- **Mouse** hides during runs and Scenic View after 1.5 s without movement, and reappears when moved.
+- **Garage keyboard:** the ten tabs act as one row. Left and Right go through every tab in order, Down from any tab enters its items, and Up goes to the exchange. Down from Suits used to land on Antenna.
+- **Daytime readability:** a soft navy veil behind the menu, logo and quote; firmer text outlines; an orange selector diamond and underline with a dark edge.
+- **Smooth lighting:** the sunlit sides of temples, roofs, towns, obstacles and birds now cross-fade as the sun passes, instead of snapping from one side to the other.
+- **Clouds:** 3–7 soft, flat clouds drift slowly. They're white by day and tinted with the sunset in the evening.
+- **Greece** has whitewashed villages beside its windmills instead of tall city blocks.
+- **About page** redesigned: "CREATED BY Singh Baljeet · BADCOOL INTERACTIVE", a one-line description, and the version with "Made with Godot Engine 4.7.2".
+- Five capture runs (menus, obstacles, sky, settings, Garage) show no script errors.
 ## 0.8.30 (2026-11-25) · Trails that behave, and a world full of life
 
 - **Garage trails** (stars, hearts, petals, snowflakes) are now dropped into the world: once they leave Kavi they drift and fall where they are. They used to ride along with him and jump up to his height (owner's recording).

@@ -154,7 +154,7 @@ const BIOMES := [
 		"obstacle": Color(0.93, 0.88, 0.80),
 		"kinds": [["temple", "lighthouse", "windmill", "temple"], ["temple", "column", "windmill", "house", "cypress"], ["olive", "column", "cypress", "bush", "rock", "olive"]],
 		"stars": 0.15, "aurora": 0.0, "water": 1.0,
-		"town": "city", "life": ["cafe", "kite_kid", "bench", "waver", "fisher"], "ships": ["sail", "ferry", "sail"], "air": ["plane", "balloon"],
+		"town": "village", "life": ["cafe", "kite_kid", "bench", "waver", "fisher"], "ships": ["sail", "ferry", "sail"], "air": ["plane", "balloon"],
 	},
 	{
 		"name": "Lanternwood", "surface": "moss", "country": "Bulgaria",
