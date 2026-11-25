@@ -1,4 +1,16 @@
 # Changelog
+## 0.8.37 (2026-11-26) · A modern handheld: bigger screen, smooth edges, a real power button
+
+- **More screen:** the game now fills about 97% of the width under a thin glass bezel, with almost no margin at the top (owner: phones don't have much room at the sides).
+- **Sharp and smooth:** every part of the console (body, bezel, D-pad, buttons, pills, icons) now has anti-aliased edges at the screen's real resolution; they used to look pixelated.
+- **Modern look:**
+  - an even, rounded matte body with a soft gradient and a faint edge highlight;
+  - glass-like rounded screen corners with a light sheen;
+  - glossy layered A/B buttons;
+  - a D-pad with a top sheen;
+  - a rounded "MENU / GAME CONTROLS" tag;
+  - a dotted speaker grille.
+- **Power button:** the power light is now a button. **Hold it for about a second**: a red ring fills and "Hold to turn off" shows, then the game saves and fully quits. Letting go early does nothing, so a stray tap can't close the game. In a web browser it stays a light, because a web page can't close itself.
 ## 0.8.36 (2026-11-26) · A prettier handheld, with menu controls
 
 - **The portrait layout is a real little console now:** a rounded handheld body with a big rounded bottom-right corner; a screen bezel with a breathing power light and the "KAVI · Letters to Lia" name plate; an orange scarf stripe; a cross-shaped D-pad; tilted A/B buttons in a recess; slanted Hide and Pause buttons; and a speaker grille.

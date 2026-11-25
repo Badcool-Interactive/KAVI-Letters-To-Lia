@@ -2368,7 +2368,7 @@ func _setup_capture() -> void:
 	if "--portrait" in OS.get_cmdline_user_args():
 		# 0.8.35 portrait deck: title, a run, the deck hidden and shown again
 		save.data.tutorial_done = true
-		cap_steps = [{"do": "wait", "s": 3.0}, {"shot": "pt0-title"}, {"do": "deck_tap", "zn": "down", "down": true}, {"do": "wait", "s": 0.1}, {"do": "deck_tap", "zn": "down", "down": false},
+		cap_steps = [{"do": "wait", "s": 3.0}, {"shot": "pt0-title"}, {"do": "deck_tap", "zn": "power", "down": true}, {"do": "wait", "s": 0.45}, {"shot": "pt0a-power"}, {"do": "deck_tap", "zn": "power", "down": false}, {"do": "deck_tap", "zn": "down", "down": true}, {"do": "wait", "s": 0.1}, {"do": "deck_tap", "zn": "down", "down": false},
 			{"do": "wait", "s": 0.3}, {"do": "deck_tap", "zn": "down", "down": true}, {"do": "wait", "s": 0.1}, {"do": "deck_tap", "zn": "down", "down": false}, {"do": "wait", "s": 0.5}, {"shot": "pt0b-menu-nav"}, {"do": "endless"}, {"do": "wait", "s": 3.0}, {"shot": "pt1-run"}, {"do": "deck_tap", "zn": "jump", "down": true}, {"do": "wait", "s": 0.3}, {"shot": "pt1b-hop"}, {"do": "deck_tap", "zn": "jump", "down": false},
 			{"do": "deck", "hide": true}, {"do": "wait", "s": 0.5}, {"shot": "pt2-hidden"}, {"do": "deck", "hide": false}, {"do": "wait", "s": 0.5}, {"do": "quit"}]
 		return
@@ -2751,7 +2751,7 @@ func _capture_tick(dt: float) -> void:
 			var sh = get_tree().current_scene
 			if sh != null and sh.has_method("_zones"):
 				var z: Dictionary = sh._zones()
-				var pos: Vector2 = z.dpad + Vector2(0, -z.u * 0.9) if st.zn in ["jump", "up"] else (z.dpad + Vector2(0, z.u * 0.9) if st.zn == "down" else z[st.zn])
+				var pos: Vector2 = z.dpad + Vector2(0, -z.u * 0.9) if st.zn in ["jump", "up"] else (z.dpad + Vector2(0, z.u * 0.9) if st.zn == "down" else (sh._power_pos() if st.zn == "power" else z[st.zn]))
 				# window pixels, as a real click arrives
 				pos *= Vector2(get_window().size) / get_tree().root.get_visible_rect().size
 				var ev := InputEventMouseButton.new()
