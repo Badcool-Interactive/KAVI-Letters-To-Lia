@@ -1,4 +1,15 @@
 # Changelog
+## 0.8.30 (2026-11-25) · Trails that behave, and a world full of life
+
+- **Garage trails** (stars, hearts, petals, snowflakes) are now dropped into the world: once they leave Kavi they drift and fall where they are. They used to ride along with him and jump up to his height (owner's recording).
+- **Tailwind trail:** its anchor follows Kavi's pose smoothly (low behind him on a slide, a little higher on a dive), so it no longer snaps to an odd angle when he slides (owner's recording).
+- **Nature sounds** mixed gently under each country's world sounds (about 45% of the bed, still seamless loops):
+  - The Amber Shore: cicada swells and distant gulls.
+  - Lanternwood: crickets, leaf rustles, a far cuckoo and a soft owl.
+  - Mirrorwater: frogs and water plinks.
+  - Starfall Heights: distant sheep bells and a lone high bird.
+
+  New tool: `tools/art/add_nature.py`.
 ## 0.8.29 (2026-11-25) · A real speed trail, and "one more run" moments
 
 - **Running trail rebuilt:** it used to be loose line segments whose length depended on frame rate (a stub on 120 Hz screens, gone on slow phones) and that only appeared at Tailwind ×3. It's now a smooth, tapered swoosh behind Kavi's back, sampled 60 times a second, so it's the same length on every screen. It's in the Tailwind colour from ×1, grows with each tier, has a bright core, and glows at ×3–×4.

@@ -214,6 +214,7 @@ func _update_scarf(dt: float) -> void:
 ## ribbon. It grows with Tailwind: a faint wisp at x1-x2, a full glowing ribbon
 ## at x3-x4.
 var _trail_acc := 0.0
+var _trail_off := Vector2(-18, -34)
 
 func _update_trail() -> void:
 	var dt := 1.0 / maxf(Engine.get_frames_per_second(), 30.0)
@@ -222,7 +223,16 @@ func _update_trail() -> void:
 		if _trail.size() > 0:
 			_trail.pop_front()
 		return
-	var np = global_position + Vector2(-18, -34) * s
+	# anchor at the small of Kavi's back, following the pose smoothly: low
+	# when sliding, a touch higher in the air (0.8.30: it snapped on slides)
+	var want_off := Vector2(-18, -34)
+	match pose:
+		"slide":
+			want_off = Vector2(-24, -14)
+		"dive", "fall":
+			want_off = Vector2(-14, -40)
+	_trail_off = _trail_off.lerp(want_off, 1.0 - exp(-dt * 14.0))
+	var np = global_position + _trail_off * s
 	if _trail.size() > 0 and np.distance_to(_trail[-1]) > 260.0:
 		_trail.clear()   # teleport (respawn, new stretch)
 	_trail_acc += dt
@@ -1231,19 +1241,22 @@ func _update_bits(dt: float) -> void:
 		_bits.clear()
 		return
 	var moving := pose in ["run", "jump", "hover", "fall", "slide", "dive"] and speed > 60.0
+	# 0.8.30: bits live in WORLD space, so once dropped they stay where they
+	# fell (they used to ride along with Kavi and jump up with him)
 	if moving and randf() < dt * 14.0:
-		_bits.append({"p": Vector2(-18.0 + randf_range(-6, 6), -40.0 + randf_range(-25, 15)), "a": 0.0, "r": randf() * TAU, "s": randf_range(0.7, 1.2)})
+		var local: Vector2 = Vector2(-18.0 + randf_range(-6, 6), -40.0 + randf_range(-25, 15)) * s
+		_bits.append({"p": global_position + local, "a": 0.0, "r": randf() * TAU, "s": randf_range(0.7, 1.2), "v": Vector2(randf_range(-30, 10), randf_range(-26, -6))})
 	for b in _bits:
 		b.a += dt
-		b.p.x -= speed * dt * 0.8
-		b.p.y -= 22.0 * dt
+		b.p += b.v * dt
+		b.v.y += (30.0 if trail_kind in ["petals", "snow"] else 0.0) * dt
 		b.r += dt * 1.5
 	_bits = _bits.filter(func(b): return b.a < 1.2)
 
 func _draw_bits(ci: Node2D) -> void:
 	for b in _bits:
 		var k: float = 1.0 - b.a / 1.2
-		var p: Vector2 = b.p
+		var p: Vector2 = ci.to_local(b.p)
 		var sz: float = 5.0 * b.s * (0.6 + 0.4 * k)
 		match trail_kind:
 			"stars":
