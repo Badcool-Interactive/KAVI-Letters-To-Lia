@@ -24,6 +24,7 @@ func _initialize() -> void:
 	test_verbs()
 	test_tailwind()
 	test_save_roundtrip()
+	test_no_auto_slide()
 	print("checks: %d  failures: %d" % [checks, failures])
 	quit(1 if failures > 0 or checks < 100 else 0)
 
@@ -219,3 +220,34 @@ func test_save_roundtrip() -> void:
 	var sv2 = Save.new()
 	sv2.load_data()
 	check(sv2.data.best_endless == 1234, "save roundtrip in isolated dir")
+
+## 0.8.28 regression: with no input, Kavi must NOT duck under a sign by himself.
+func test_no_auto_slide() -> void:
+	var tr = Track.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 5
+	var o: Dictionary = Track.make(1, 900.0, 600.0, rng)   # BEAM
+	tr.obs.append(o)
+	tr.end_x = 3000.0
+	var s = Sim.new()
+	s.track = tr
+	s.v = 600.0
+	var none := {"jump_pressed": false, "jump_held": false, "down_pressed": false, "down_held": false, "gust_pressed": false, "letter_pressed": false}
+	for i in 120 * 4:
+		s.step(1.0 / 120.0, none)
+		if s.dead:
+			break
+	check(s.dead, "with no input Kavi hits the sign (no automatic slide)")
+	var s2 = Sim.new()
+	s2.track = tr
+	o.passed = false
+	o.perf = false
+	s2.v = 600.0
+	var down := none.duplicate()
+	for i in 120 * 4:
+		down.down_held = s2.x > 650.0
+		down.down_pressed = s2.x > 650.0 and s2.x < 660.0
+		s2.step(1.0 / 120.0, down)
+		if s2.dead:
+			break
+	check(not s2.dead, "holding down slides under the sign")

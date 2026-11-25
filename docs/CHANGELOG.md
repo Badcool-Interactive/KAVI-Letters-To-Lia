@@ -1,4 +1,7 @@
 # Changelog
+## 0.8.28 (2026-11-25) · No more automatic slides
+
+- **Fixed (present since the first version):** Kavi slid under every sign on his own and scored a "perfect", even with no input. The rule meant to keep him crouched while already under a sign also *started* a slide the moment he reached one. He now only stays down if the player was already sliding. A new test checks both cases: with no input he hits the sign; holding down slides under it. The fairness bot still clears every generated course.
 ## 0.8.27 (2026-11-25) · Daytime, steadier plants, lighter by default
 
 - **Day and evening:** Settings → Graphics → Time of day (Auto, Day, Evening). Auto follows the device clock (day 07:00–18:59). Each country has a daytime palette with a blue sky, a high sun and light haze; stars, lamps, windows and lighthouse beams are off, sunbeams are softer, and the world grade is lighter. Evening is unchanged.

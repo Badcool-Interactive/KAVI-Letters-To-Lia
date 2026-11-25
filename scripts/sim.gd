@@ -100,7 +100,9 @@ func step(dt: float, inp: Dictionary) -> void:
 			coyote = COYOTE
 			sliding = false
 		else:
-			var want_slide: bool = inp.down_held or _under_beam()
+			# keep sliding while still under a sign, but never START a slide on
+			# its own (0.8.28: it auto-scooted under every sign, as a "perfect")
+			var want_slide: bool = inp.down_held or (sliding and _under_beam())
 			if want_slide and not sliding:
 				_slide_start(sp)
 			sliding = want_slide
