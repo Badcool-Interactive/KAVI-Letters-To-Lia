@@ -71,6 +71,7 @@ var garage_open := false
 var debug_pose := ""     # capture director: show Kavi in a given pose on the title
 var debug_speed := 0.0
 var debug_expr := ""
+var debug_tier := 0   # capture only: force the Tailwind tier shown on Kavi
 var menu_dim := false  # stronger shade behind the menu column (Garage, Settings)
 ## Title mini-game (0.8.11): click near the paper plane to push it away from
 ## the click; steer it to Kavi and it circles him. Too many clicks too fast and
@@ -1540,7 +1541,7 @@ func _update_kite_view(dt: float) -> void:
 	kite.limbs = str(save.data.settings.get("kavi_limbs2", "jointed"))
 	kite.vy = sim.vy
 	kite.grounded = sim.on_ground or state != "run"
-	kite.tier = tw.tier()
+	kite.tier = debug_tier if debug_tier > 0 else tw.tier()
 	if _look_key == "":
 		apply_look()
 	kite.rim = pal.rim
@@ -2185,6 +2186,17 @@ func _setup_capture() -> void:
 			{"do": "wait", "s": 1.6}, {"shot": "i4"}, {"do": "wait", "s": 1.3}, {"shot": "i5"},
 			{"until_loaded": true, "max": 30.0}, {"shot": "i6-reveal"}, {"do": "wait", "s": 0.2}, {"shot": "i7a"}, {"do": "wait", "s": 0.2}, {"shot": "i7b"}, {"do": "wait", "s": 0.2}, {"shot": "i7c"}, {"do": "wait", "s": 1.2}, {"shot": "i8-title"}, {"do": "quit"}]
 		return
+	if "--trail" in OS.get_cmdline_user_args():
+		# Kavi's trail at each Tailwind tier, in a real run (autopilot).
+		save.data.tutorial_done = true
+		autopilot = true
+		cap_steps = [{"do": "story", "ch": 0}, {"do": "wait", "s": 5.0}]
+		for tr in [1, 2, 3, 4]:
+			cap_steps.append({"do": "tier", "v": tr})
+			for k in 3:
+				cap_steps.append_array([{"do": "wait", "s": 0.4}, {"shot": "t%d-%d" % [tr, k]}])
+		cap_steps.append({"do": "quit"})
+		return
 	if "--garage2" in OS.get_cmdline_user_args():
 		# New Garage items: animal suits, accessories, bags, faces and a trail.
 		save.data.tutorial_done = true
@@ -2524,6 +2536,8 @@ func _capture_tick(dt: float) -> void:
 				return
 		"skip_t":
 			state_t += st.s
+		"tier":
+			debug_tier = st.v
 		"about":
 			ui.show_about()
 		"ui":

@@ -209,17 +209,69 @@ func _update_scarf(dt: float) -> void:
 			if dl > L:
 				_scarf_pts[k] = _scarf_pts[k - 1] + d / dl * L
 
+## Running trail (0.8.29): sampled 60 times a second (not per frame), so its
+## length is the same on 30, 60 and 120 Hz screens; drawn as one smooth tapered
+## ribbon. It grows with Tailwind: a faint wisp at x1-x2, a full glowing ribbon
+## at x3-x4.
+var _trail_acc := 0.0
+
 func _update_trail() -> void:
-	if not trail_on or tier < 3 or pose in ["idle", "sit", "wave", "walk"]:
+	var dt := 1.0 / maxf(Engine.get_frames_per_second(), 30.0)
+	var on: bool = trail_on and tier >= 1 and speed > 60.0 and not (pose in ["idle", "sit", "wave", "walk", "front", "front_wave"])
+	if not on:
 		if _trail.size() > 0:
 			_trail.pop_front()
 		return
-	var np = global_position + Vector2(-26, -48) * s
-	if _trail.size() > 0 and np.distance_to(_trail[-1]) > 140.0:
-		_trail.clear()
-	_trail.append(np)
-	while _trail.size() > 14:
+	var np = global_position + Vector2(-18, -34) * s
+	if _trail.size() > 0 and np.distance_to(_trail[-1]) > 260.0:
+		_trail.clear()   # teleport (respawn, new stretch)
+	_trail_acc += dt
+	if _trail_acc >= 1.0 / 60.0 or _trail.is_empty():
+		_trail_acc = 0.0
+		_trail.append(np)
+	else:
+		_trail[-1] = np
+	var keep: int = 6 + int(tier) * 2   # 0.13 s at x1 up to 0.23 s at x4
+	while _trail.size() > keep:
 		_trail.pop_front()
+
+func _draw_trail(ci: Node2D, tc: Color) -> void:
+	var n := _trail.size()
+	if n < 3:
+		return
+	var pts := PackedVector2Array()
+	for q in _trail:
+		pts.append(ci.to_local(q))
+	var strength: float = [0.35, 0.55, 0.85, 1.0][clampi(int(tier) - 1, 0, 3)]
+	var width: float = (16.0 + 7.0 * float(tier)) * s
+	var pc := PackedColorArray([Color.WHITE, Color.WHITE, Color.WHITE, Color.WHITE])
+	var none := PackedVector2Array()
+	var prev_l := pts[0]
+	var prev_r := pts[0]
+	for k in range(1, n):
+		var u := float(k) / float(n - 1)   # 0 at the tail, 1 at Kavi
+		var d := (pts[k] - pts[k - 1])
+		var nrm := d.normalized().orthogonal() if d.length() > 0.01 else Vector2.UP
+		var hw := width * 0.5 * sqrt(u)
+		var l := pts[k] + nrm * hw
+		var r := pts[k] - nrm * hw
+		var a0 := strength * 0.55 * pow(float(k - 1) / float(n - 1), 1.5)
+		var a1 := strength * 0.55 * pow(u, 1.5)
+		pc[0] = Color(tc, a0)
+		pc[1] = Color(tc, a1)
+		pc[2] = Color(tc, a1)
+		pc[3] = Color(tc, a0)
+		ci.draw_primitive(PackedVector2Array([prev_l, l, r, prev_r]), pc, none)
+		# bright core line
+		pc[0] = Color(1, 1, 1, a0 * 0.6)
+		pc[1] = Color(1, 1, 1, a1 * 0.6)
+		pc[2] = Color(1, 1, 1, a1 * 0.6)
+		pc[3] = Color(1, 1, 1, a0 * 0.6)
+		ci.draw_primitive(PackedVector2Array([pts[k - 1] + nrm * hw * 0.25, pts[k] + nrm * hw * 0.25, pts[k] - nrm * hw * 0.25, pts[k - 1] - nrm * hw * 0.25]), pc, none)
+		prev_l = l
+		prev_r = r
+	if tier >= 3:
+		Art.glow(ci, pts[n - 1], width * 1.6, Color(tc, 0.35 * strength))
 
 # ------------------------------------------------------------------ pose
 func _pose_params() -> Dictionary:
@@ -453,11 +505,8 @@ func _paint(ci: Node2D, add: bool) -> void:
 	var p = _pose_params()
 	var tc: Color = TIER_COL[clampi(tier - 1, 0, 3)]
 	# trail ribbon (world-space history)
-	if add and _trail.size() > 2:
-		for k in range(1, _trail.size()):
-			var a = float(k) / _trail.size()
-			var w = 1.5 + a * 2.5 * (tier - 1)
-			ci.draw_line(ci.to_local(_trail[k - 1]), ci.to_local(_trail[k]), Art.hdr(Color(tc, a * 0.35), 1.3), w, Art.AA)
+	if add:
+		_draw_trail(ci, tc)
 	# ground contact shadow
 	if not add and pose in ["run", "walk", "idle", "slide", "gust", "throw", "wave", "eat", "drink", "map", "photo", "read", "stretch"]:
 		ci.draw_colored_polygon(Art.ellipse(Vector2(0, 2), Vector2(28 * s, 5 * s), 16), Color(0, 0, 0, 0.35))
