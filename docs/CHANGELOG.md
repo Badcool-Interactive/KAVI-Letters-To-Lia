@@ -1,4 +1,9 @@
 # Changelog
+## 0.8.27 (2026-11-25) · Daytime, steadier plants, lighter by default
+
+- **Day and evening:** Settings → Graphics → Time of day (Auto, Day, Evening). Auto follows the device clock (day 07:00–18:59). Each country has a daytime palette with a blue sky, a high sun and light haze; stars, lamps, windows and lighthouse beams are off, sunbeams are softer, and the world grade is lighter. Evening is unchanged.
+- **Front-row flicker, second fix:** batched shapes (foreground leaves and grass clumps, ferns, fronds and ground grass) are now drawn as small batched primitives instead of per-frame triangle arrays. In the owner's phone recording the leaf fills vanished while their outlines stayed, and fills are the per-frame polygon path. PC cost is about the same, with roughly 5% fewer draw calls. Not yet confirmed on the phone.
+- **Lighter by default:** the floating out-of-focus lights from 0.8.15 are off unless Extreme or Custom → Floating lights is chosen (owner: the game ran better before them). When on, they and the drifting motes use one soft textured quad each instead of large filled circles.
 ## 0.8.26 (2026-11-25) · Animal costumes and in-game updates
 
 - **About → Check for updates** looks up the latest stable GitHub release on demand. When KAVI is current, it shows “♥ We’re still the best!”

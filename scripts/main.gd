@@ -248,6 +248,8 @@ func _ready() -> void:
 			capture_dir = a.substr(10)
 		if a.begins_with("--hide="):
 			set_meta("hide", a.substr(7).split(","))
+		if a.begins_with("--tod="):
+			save.data.settings.time_of_day = a.substr(6)
 		if a.begins_with("--graphics="):
 			save.data.settings.graphics = a.substr(11)
 		if a.begins_with("--quality="):
@@ -513,6 +515,7 @@ func _apply_settings() -> void:
 	kite.reduced_motion = st.reduced_motion
 	apply_quality(_initial_quality())
 	_apply_graphics_options()
+	_apply_time_of_day()
 	Painter.profiling = bench.size() > 0 or int(st.get("show_fps", 0)) == 2
 	if not Painter.profiling:
 		Painter.cost_usec = 0
@@ -1862,9 +1865,8 @@ func _draw_motes(ci: Node2D, sz: Vector2) -> void:
 		var tw := 0.55 + 0.45 * sin(t * (1.5 + h2 * 2.0) + i * 2.1)
 		var r := (1.4 + 2.6 * depth)
 		var a := fade_in * tw * (0.25 + 0.5 * depth) * smoothstep(0.0, 0.25, y / sz.y)
-		ci.draw_circle(Vector2(x, y), r * 3.0, Color(warm, a * 0.05))
-		ci.draw_circle(Vector2(x, y), r * 1.8, Color(warm, a * 0.12))
-		ci.draw_circle(Vector2(x, y), r, Color(1.0, 0.97, 0.9, a))
+		Art.glow(ci, Vector2(x, y), r * 3.0, Color(warm, a * 0.35))
+		ci.draw_rect(Rect2(x - r * 0.5, y - r * 0.5, r, r), Color(1.0, 0.97, 0.9, a))
 
 ## The logo lives in the world: cream letters with an ink outline and a thin
 ## rim of the country's light, letters rising in one by one, a letterspaced
@@ -3358,7 +3360,9 @@ func _apply_graphics_options() -> void:
 	var extreme: bool = not benchmarking and st.get("graphics", "auto") == "extreme" and not st.get("custom", false)
 	get_viewport().msaa_2d = Viewport.MSAA_4X if extreme else Viewport.MSAA_DISABLED
 	world_view.rays_on = true
-	world_view.bokeh_on = true
+	# 0.8.27 (owner: the game ran better before the floating light balls):
+	# floating lights are off by default; Extreme or Custom can turn them on
+	world_view.bokeh_on = extreme
 	var default_fps := 60 if (OS.has_feature("web") or OS.has_feature("mobile")) else 0
 	Engine.max_fps = 0 if extreme else default_fps
 	if extreme:
@@ -3369,7 +3373,7 @@ func _apply_graphics_options() -> void:
 	if env:
 		env.glow_enabled = st.get("gx_glow", true)
 	world_view.rays_on = st.get("gx_rays", true)
-	world_view.bokeh_on = st.get("gx_lights", true)
+	world_view.bokeh_on = st.get("gx_lights", false)
 	var e := clampi(int(st.get("gx_effects", 1)), 0, 2)
 	fx.density = [0.35, 0.8, 1.4][e] * (0.5 if st.reduced_motion else 1.0)
 	fx.max_parts = [120, 400, 900][e]
@@ -3522,3 +3526,21 @@ func _quick_bench_tick(dt: float) -> void:
 	go_title()
 	ui._open_page("graphics")
 	ui._show_help.call_deferred("Benchmark: %.0f fps average, %.0f fps 1%% low. Picked %s (Auto)." % [r[0], r[1], names[q]])
+
+## Time of day (0.8.27): Auto follows this device's clock (day 07:00-18:59,
+## evening otherwise; no data leaves the device), or the player picks.
+func _want_day() -> bool:
+	match str(save.data.settings.get("time_of_day", "auto")):
+		"day":
+			return true
+		"evening":
+			return false
+	var h: int = Time.get_datetime_dict_from_system().hour
+	return h >= 7 and h < 19
+
+func _apply_time_of_day() -> void:
+	var d := _want_day()
+	if d == Art.day and pal.get("day", false) == d:
+		return
+	Art.set_day(d)
+	set_biome(biome, true)

@@ -749,6 +749,7 @@ const HELP := {
 	"Effects": "How many sparks, puffs and confetti appear.",
 	"Resolution": "Phones: draw at the screen's full sharpness, or at 1080p for speed.",
 	"Frame-rate cap": "The most frames per second the game will draw. Higher is smoother but uses more battery.",
+	"Time of day": "Auto follows this device's clock: day from 7 am to 7 pm, evening after. Or choose Day or Evening.",
 	"Performance overlay": "Shows frames per second while you play. Detailed adds 1% lows and timings.",
 	"Performance stats": "How smoothly the game ran since it started.",
 	"Run benchmark": "Measures 10 seconds of Scenic View at High, then picks an Auto level.",
@@ -948,6 +949,7 @@ func _page_graphics(animate := true) -> void:
 		if OS.has_feature("mobile"):
 			_cycle_row(v, "Resolution", "gx_res", [0, 1], ["Full", "1080p"], 26)
 		_cycle_row(v, "Frame-rate cap", "gx_fps", [30, 60, 90, 120, 0], ["30", "60", "90", "120", "None"], 26)
+	_cycle_row(v, "Time of day", "time_of_day", ["auto", "day", "evening"], ["Auto", "Day", "Evening"], 26)
 	_cycle_row(v, "Performance overlay", "show_fps", [0, 1, 2], ["Off", "Simple", "Detailed"], 26)
 	_row(v, "Performance stats", func(): _open_page("perf"), 26)
 	_row(v, "Run benchmark", main.start_quick_benchmark, 26)
@@ -1009,18 +1011,23 @@ func _toggle_row(v: Container, text: String, key: String, size := 32) -> void:
 	b.status = "On" if on else "Off"
 	b.status_col = Color(0.55, 1.0, 0.85, 0.95) if on else Color(1, 1, 1, 0.5)
 
+static func _same(a, b) -> bool:
+	if a is String or b is String:
+		return str(a) == str(b)
+	return absf(float(a) - float(b)) < 0.01
+
 func _cycle_row(v: Container, text: String, key: String, vals: Array, names: Array = [], size := 32) -> void:
 	var st: Dictionary = main.save.data.settings
 	var b := _row(v, text, func():
 		var i := 0
 		for k in vals.size():
-			if absf(float(vals[k]) - float(st.get(key, vals[0]))) < 0.01:
+			if _same(vals[k], st.get(key, vals[0])):
 				i = k
 		st[key] = vals[(i + 1) % vals.size()]
 		_settings_changed(), size)
 	var cur_i := 0
 	for k in vals.size():
-		if absf(float(vals[k]) - float(st.get(key, vals[0]))) < 0.01:
+		if _same(vals[k], st.get(key, vals[0])):
 			cur_i = k
 	b.status = str(names[cur_i]) if names.size() > 0 else "%d%%" % int(float(vals[cur_i]) * 100.0)
 

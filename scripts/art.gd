@@ -197,8 +197,44 @@ const BIOMES := [
 	},
 ]
 
+## Day (0.8.27, owner: the menu only ever showed evening). Each country gets a
+## bright daytime palette: blue sky, high sun, light haze, no stars. These
+## colours are chosen for the lighter day grade (see set_day).
+static var day := false
+const DAY := [
+	{"sky": [Color(0.42, 0.66, 0.94), Color(0.66, 0.83, 0.97), Color(0.97, 0.94, 0.86)], "sun": Color(1.0, 0.97, 0.86), "sun_pos": Vector2(0.72, 0.17), "sun_r": 95.0,
+		"fog": Color(0.86, 0.91, 0.96), "layers": [Color(0.66, 0.75, 0.86), Color(0.50, 0.61, 0.72), Color(0.36, 0.46, 0.55)], "ground": Color(0.22, 0.26, 0.30),
+		"rim": Color(1.0, 0.95, 0.84), "stars": 0.0, "aurora": 0.0},
+	{"sky": [Color(0.40, 0.66, 0.86), Color(0.64, 0.84, 0.88), Color(0.90, 0.96, 0.88)], "sun": Color(1.0, 0.98, 0.88), "sun_pos": Vector2(0.30, 0.16), "sun_r": 85.0,
+		"fog": Color(0.78, 0.90, 0.86), "layers": [Color(0.52, 0.70, 0.62), Color(0.36, 0.55, 0.47), Color(0.22, 0.40, 0.33)], "ground": Color(0.14, 0.24, 0.18),
+		"rim": Color(1.0, 0.98, 0.84), "stars": 0.0, "aurora": 0.0},
+	{"sky": [Color(0.46, 0.64, 0.92), Color(0.70, 0.80, 0.96), Color(0.98, 0.90, 0.86)], "sun": Color(1.0, 0.96, 0.88), "sun_pos": Vector2(0.50, 0.18), "sun_r": 95.0,
+		"fog": Color(0.88, 0.88, 0.94), "layers": [Color(0.66, 0.68, 0.84), Color(0.50, 0.52, 0.70), Color(0.36, 0.36, 0.54)], "ground": Color(0.22, 0.20, 0.28),
+		"rim": Color(1.0, 0.94, 0.90), "stars": 0.0, "aurora": 0.0},
+	{"sky": [Color(0.36, 0.58, 0.92), Color(0.62, 0.78, 0.98), Color(0.92, 0.95, 1.0)], "sun": Color(1.0, 1.0, 0.94), "sun_pos": Vector2(0.62, 0.15), "sun_r": 80.0,
+		"fog": Color(0.86, 0.90, 0.98), "layers": [Color(0.70, 0.76, 0.90), Color(0.52, 0.58, 0.76), Color(0.36, 0.42, 0.58)], "ground": Color(0.24, 0.26, 0.34),
+		"rim": Color(0.96, 0.98, 1.0), "stars": 0.0, "aurora": 0.0},
+]
+static var _day_cache := {}
+
 static func biome(i: int) -> Dictionary:
-	return BIOMES[posmod(i, BIOMES.size())]
+	var k := posmod(i, BIOMES.size())
+	if not day:
+		return BIOMES[k]
+	if not _day_cache.has(k):
+		var b: Dictionary = BIOMES[k].duplicate()
+		for key in DAY[k]:
+			b[key] = DAY[k][key]
+		b.day = true
+		_day_cache[k] = b
+	return _day_cache[k]
+
+## Switch Day on or off; the world grade is lighter in daylight.
+static func set_day(on: bool) -> void:
+	day = on
+	for m in [_grade_mix, _grade_add]:
+		if m != null:
+			m.set_shader_parameter("grade", 0.45 if on else 1.0)
 
 ## Blend two palettes (biome transitions).
 static func blend_biome(a: Dictionary, b: Dictionary, t: float) -> Dictionary:

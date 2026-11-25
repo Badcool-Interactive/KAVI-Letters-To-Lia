@@ -159,12 +159,25 @@ func _b_leaf(c: Vector2, rx: float, ry: float, rot: float) -> void:
 	_bv.append_array([c + ax * rx, c + ax * rx * 0.4 + ay * ry, c - ax * rx * 0.4 + ay * ry, c - ax * rx, c - ax * rx * 0.4 - ay * ry, c + ax * rx * 0.4 - ay * ry])
 	_bi.append_array([i, i + 1, i + 2, i, i + 2, i + 3, i, i + 3, i + 4, i, i + 4, i + 5])
 
+var _pc := PackedColorArray([Color.WHITE])
+var _p3 := PackedVector2Array([Vector2.ZERO, Vector2.ZERO, Vector2.ZERO])
+var _nouv := PackedVector2Array()
+
+## 0.8.27: batched shapes are drawn as small triangle "primitives" instead of
+## one triangle array. Primitives go through Godot's batched instance path;
+## triangle arrays create a new GPU polygon every frame, which some phone
+## drivers dropped for whole frames (the front-row leaves flickering).
 func _b_flush(ci: Node2D, col: Color) -> void:
 	if _bi.size() > 0:
-		var cols := PackedColorArray()
-		cols.resize(_bv.size())
-		cols.fill(col)
-		RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), _bi, _bv, cols)
+		_pc[0] = col
+		var i := 0
+		var n := _bi.size()
+		while i < n:
+			_p3[0] = _bv[_bi[i]]
+			_p3[1] = _bv[_bi[i + 1]]
+			_p3[2] = _bv[_bi[i + 2]]
+			ci.draw_primitive(_p3, _pc, _nouv)
+			i += 3
 	_bv.clear()
 	_bi.clear()
 
@@ -748,6 +761,8 @@ func _feature(ci: Node2D, layer: int, kind: String, p: Vector2, s: float, col: C
 			ci.draw_colored_polygon(PackedVector2Array([fl + Vector2(0, -40 * s), fl + Vector2(40 * s, -32 * s + wv), fl + Vector2(0, -22 * s)]), Color(acc, 0.8))
 
 func _draw_lights(ci: Node2D, i: int) -> void:
+	if pal.get("day", false):
+		return   # lamps, windows and lighthouse beams are off in daylight (0.8.27)
 	var fade = [0.55, 0.8, 1.0][i]
 	for b in _beams[i]:
 		# a lighthouse beam slowly sweeping round (two opposite beams)
@@ -819,6 +834,8 @@ func _draw_shafts(ci: Node2D) -> void:
 	# rays start at the sun/moon disc itself (same position as _draw_sky_light)
 	var c0 = _sun_screen()
 	var sc: Color = pal.sun
+	if pal.get("day", false):
+		sc = Color(sc, sc.a * 0.45)   # softer beams in daylight
 	var swap := 1.0 if tr_from.is_empty() else absf(_sky_k() - 0.5) * 2.0
 	var r0: float = pal.sun_r * 0.35
 	for k in 7:
@@ -843,8 +860,7 @@ func _draw_motes(ci: Node2D) -> void:
 		var sy = fposmod(Art.hash01(i, 3) * size.y - t * (8.0 + Art.hash01(i, 4) * 20.0) + sin(t * 0.7 + i) * 20.0, size.y * 0.9)
 		var r = 1.2 + Art.hash01(i, 5) * 3.0 * par
 		var a = 0.35 + 0.65 * (0.5 + 0.5 * sin(t * 2.0 + i * 1.3))
-		Art.glow(ci, Vector2(sx, sy), r * 5.0, Color(mc, 0.35 * a), 3)
-		ci.draw_circle(Vector2(sx, sy), r * 0.6, Art.hdr(Color(mc, a), 1.8))
+		Art.glow(ci, Vector2(sx, sy), r * 4.0, Color(mc, 0.45 * a), 3)
 
 # ------------------------------------------------------------------ foreground
 ## Dark framing silhouettes drawn in front of gameplay (below the ground line
@@ -955,8 +971,7 @@ func draw_bokeh(ci: Node2D) -> void:
 		var y: float = size.y * (0.15 + h2 * 0.8) + sin(t * 0.4 + i * 1.7) * 18.0
 		var r: float = 18.0 + depth * 34.0
 		var a: float = (0.035 + 0.05 * pal.stars) * (0.6 + 0.4 * sin(t * 0.7 + i * 2.3))
-		ci.draw_circle(Vector2(x, y), r, Color(warm, a * 1.6))
-		ci.draw_arc(Vector2(x, y), r * 0.92, 0.0, TAU, 20, Color(warm.lightened(0.3), a * 1.4), 2.0)
+		Art.glow(ci, Vector2(x, y), r * 1.3, Color(warm, a * 2.2))
 
 ## A curved, tapering leaf from base to tip (bend pushes the middle sideways).
 func _leaf(ci: Node2D, base: Vector2, tip: Vector2, bend: Vector2, w: float, col: Color, rim: Color) -> void:
@@ -1009,6 +1024,8 @@ const SHIP_CELL := 1500.0
 const WARM := Color(1.0, 0.80, 0.50)
 
 func _warm(k := 1.15) -> Color:
+	if pal.get("day", false):
+		return Color(WARM, 0.25)   # town windows barely show in daylight
 	return Art.hdr(WARM, k)
 
 ## Far-layer skyline: city blocks (Greece, Danube) or villages (Bulgaria,

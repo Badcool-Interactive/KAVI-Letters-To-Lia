@@ -363,10 +363,18 @@ func _grass_row(ci: Node2D, x0: float, x1: float, period: float, hmin: float, hm
 		var i := v.size()
 		v.append_array([Vector2(x - period * 0.42, 2.0), Vector2(x + period * 0.12, 2.0), Vector2(x + lean, -h)])
 		idx.append_array([i, i + 1, i + 2])
-	var cols := PackedColorArray()
-	cols.resize(v.size())
-	cols.fill(col)
-	RenderingServer.canvas_item_add_triangle_array(ci.get_canvas_item(), idx, v, cols)
+	# drawn as batched primitives (0.8.27; see world_view._b_flush)
+	var pc := PackedColorArray([col])
+	var none := PackedVector2Array()
+	ci.draw_primitive(PackedVector2Array([v[0], v[1], v[2], v[3]]), pc, none)
+	var p3 := PackedVector2Array([Vector2.ZERO, Vector2.ZERO, Vector2.ZERO])
+	var i := 6
+	while i < idx.size():
+		p3[0] = v[idx[i]]
+		p3[1] = v[idx[i + 1]]
+		p3[2] = v[idx[i + 2]]
+		ci.draw_primitive(p3, pc, none)
+		i += 3
 
 func _grass(ci: Node2D, a: float, b: float, gcol: Color) -> void:
 	var x0 := maxf(a + 6.0, view_l - 50.0)
