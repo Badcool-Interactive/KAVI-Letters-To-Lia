@@ -250,6 +250,27 @@ func _collect_rows(n: Node, rows: Array, row_of: Dictionary) -> void:
 func show_none() -> void:
 	_clear()
 
+## Scenic View picker (0.8.35): country, look and sounds, then Start.
+func show_scenic_picker() -> void:
+	_open_page("scenic")
+
+func _page_scenic(animate := true) -> void:
+	var v := _column(0.16, animate)
+	_heading(v, "Scenic View")
+	_small(v, "No obstacles, just Kavi running through Europe.", 26, Color(1.0, 0.92, 0.78))
+	_gap(v, 8)
+	_cycle_row(v, "Country", "scenic_country", [-1, 0, 1, 2, 3], ["The whole journey", "Greece", "Bulgaria", "The Danube", "Romania"])
+	_cycle_row(v, "Look", "scenic_look", ["settings", "classic", "day", "evening"], ["Like Settings", "Classic", "Day", "Evening"])
+	_cycle_row(v, "Sounds", "scenic_sound", ["all", "world", "quiet"], ["Music + world", "World only", "Quiet"])
+	_help_area(v)
+	_gap(v, 6)
+	var go := _item(v, "Start", main.start_scenic, 40)
+	_item(v, "Back", func(): main.menu_dim = false; show_title(), 34)
+	if _focus_text == "":
+		go.grab_focus.call_deferred()
+	else:
+		_refocus_or_first(v)
+
 ## Scenic View: only a small Back button; Esc also returns.
 func show_scenic() -> void:
 	_corner_button("Back  (Esc)", main.go_title, 28)
@@ -762,6 +783,9 @@ const HELP := {
 	"World sounds": "Waves, birds, wind and the river around Kavi.",
 	"Button size": "How big the touch buttons are on phones and tablets.",
 	"Left-handed controls": "Swaps the touch buttons left and right.",
+	"Country": "The whole journey goes through all four countries; or stay in one.",
+	"Look": "Like Settings uses your Time of day setting; or pick one just for Scenic View.",
+	"Sounds": "Music with the world's sounds, only the world (wind, birds, water), or quiet.",
 	"Mouse pointer": "KAVI is a soft, cute pointer in the game's colours. Normal uses your computer's own pointer.",
 	"Kind Mode": "Obstacles never end a run; Kavi just bonks and keeps going.",
 	"Hover assist over gaps": "Kavi hovers a little on his own over gaps.",
@@ -908,6 +932,7 @@ func _open_page(pg: String, animate := true) -> void:
 		"controls": _page_controls(animate)
 		"access": _page_access(animate)
 		"perf": _page_perf(animate)
+		"scenic": _page_scenic(animate)
 
 func _page_sound(animate := true) -> void:
 	var v := _column(0.16, animate)

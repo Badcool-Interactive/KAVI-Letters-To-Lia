@@ -15,6 +15,21 @@ var state = {"jump": false, "down": false, "gust": false, "letter": false}
 var pressed = {"jump": false, "down": false, "gust": false, "letter": false}
 var _touch_zone = {}
 var _flash = {"jump": 0.0, "down": 0.0, "gust": 0.0, "letter": 0.0}
+## Portrait deck (0.8.35, scripts/shell.gd): its buttons press these zones; the
+## on-screen overlay hides while the deck is showing.
+var deck_mode := false
+var _deck_held := {}
+
+func deck_press(zn: String) -> void:
+	_deck_held[zn] = true
+	_press(zn)
+
+func deck_release(zn: String) -> void:
+	_deck_held.erase(zn)
+	_recount()
+
+func flash(zn: String) -> float:
+	return _flash.get(zn, 0.0)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -52,7 +67,7 @@ func zone_at(p: Vector2) -> String:
 	return ""
 
 func handle(event: InputEvent) -> bool:
-	if not visible_controls:
+	if not visible_controls or deck_mode:
 		return false
 	if event is InputEventScreenTouch:
 		if event.pressed:
@@ -87,6 +102,8 @@ func _recount() -> void:
 		state[k] = false
 	for i in _touch_zone:
 		state[_touch_zone[i]] = true
+	for zn in _deck_held:
+		state[zn] = true
 
 func consume() -> Dictionary:
 	var p = pressed.duplicate()
@@ -96,6 +113,7 @@ func consume() -> Dictionary:
 
 func release_all() -> void:
 	_touch_zone.clear()
+	_deck_held.clear()
 	_recount()
 
 func _process(dt: float) -> void:
@@ -104,7 +122,7 @@ func _process(dt: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	if not visible_controls:
+	if not visible_controls or deck_mode:
 		return
 	var z = _zones()
 	var k: float = z.k

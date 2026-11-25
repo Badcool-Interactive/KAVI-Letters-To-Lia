@@ -403,7 +403,8 @@ func _initial_quality() -> int:
 
 func apply_quality(q: int) -> void:
 	Art.Q = clampi(q, 0, 2)
-	Art.AA = Art.Q >= 2
+	# 0.8.35 prettier Medium: smooth (anti-aliased) edges from Medium up
+	Art.AA = Art.Q >= 1
 	set_meta("quality_name", ["low", "medium", "high"][Art.Q])
 	# 0.8.19: HDR 2D is off on every platform and level (it looked different on
 	# PC and Android, and switching it mid-run flashed the screen); the moody
@@ -499,6 +500,12 @@ func _apply_audio_settings() -> void:
 	synth.music_vol = st.music
 	synth.sfx_vol = st.sfx
 	synth.world_vol = float(st.get("world", Save.DEFAULT_WORLD_VOLUME))
+	if state == "scenic":
+		match str(st.get("scenic_sound", "all")):
+			"world": synth.music_vol = 0.0
+			"quiet":
+				synth.music_vol = 0.0
+				synth.world_vol = 0.0
 	_apply_master_volume()
 
 func _apply_master_volume() -> void:
@@ -573,6 +580,9 @@ func go_title() -> void:
 	mode = "story"
 	ui.show_title()
 	synth.set_drive(0.0)
+	# back from Scenic View: your own look and volumes again
+	_apply_audio_settings()
+	_apply_time_of_day()
 
 func _new_world(b: int) -> void:
 	track = Track.new()
@@ -1689,6 +1699,8 @@ func _update_views(dt: float) -> void:
 	world_view.interactive = (state == "title" and not (garage_open or menu_dim)) or state == "scenic"
 	world_view.sun_shift = -0.30 * get_viewport_rect().size.x if state == "title" else 0.0
 	world_view.calm = move_toward(world_view.calm, 1.0 if state in ["recovery", "finale", "title", "scenic"] else 0.0, dt)
+	world_view.stagger = _stagger_on()
+	world_view.sky_stagger = world_view.stagger and state in ["run", "fail", "recovery"]
 	world_view.refresh()
 	track_view.sun_world_x = cam.position.x + (world_view.sun_position.x - size.x * 0.5) / maxf(cam.zoom.x, 0.01)
 	track_view.sun_k = world_view.sun_strength()
@@ -2158,14 +2170,22 @@ func _input(event: InputEvent) -> void:
 # ------------------------------------------------------------------ menus glue (called by ui.gd)
 ## Scenic View: no obstacles, no HUD. Kavi just runs while the four countries
 ## roll past, one full cycle every ~2.5 minutes, then it loops.
+## Scenic View picker (0.8.35, owner): choose the country (or the whole
+## journey), the look and the sounds before setting off.
 func menu_scenic() -> void:
+	synth.play("ui")
+	menu_dim = true
+	ui.show_scenic_picker()
+
+func start_scenic() -> void:
 	synth.play("ui")
 	state = "scenic"
 	state_t = 0.0
 	mode = "scenic"
 	menu_dim = false
-	_new_world(0)
-	set_biome(0, true)
+	var sc := _scenic_country()
+	_new_world(maxi(sc, 0))
+	set_biome(maxi(sc, 0), true)
 	sim.frozen = true
 	title_x = 0.0
 	zoom_target = 1.2
@@ -2173,15 +2193,20 @@ func menu_scenic() -> void:
 	touch.visible_controls = false
 	scenic_next = SCENIC_STAY
 	ui.show_scenic()
+	_apply_audio_settings()
+	_apply_time_of_day()
 	synth.set_drive(0.25)
-	_show_card(Art.biome(0).name, Art.biome(0).country, 0.6)
+	_show_card(Art.biome(maxi(sc, 0)).name, Art.biome(maxi(sc, 0)).country, 0.6)
+
+func _scenic_country() -> int:
+	return int(save.data.settings.get("scenic_country", -1))
 
 func _update_scenic(dt: float) -> void:
 	title_x += dt * SCENIC_SPEED
 	sim.x = title_x
 	kite.pose = "run"
 	kite.expr = "normal" if fmod(t, 7.0) < 5.5 else "happy"
-	if state_t >= scenic_next:
+	if state_t >= scenic_next and _scenic_country() < 0:
 		scenic_next += SCENIC_STAY
 		var b: int = (biome + 1) % 4
 		set_biome(b)
@@ -2313,6 +2338,24 @@ func _setup_capture() -> void:
 			if kind == "write_bad":
 				cap_steps.append_array([{"do": "wait", "s": 3.0}, {"shot": "life-laugh"}])
 		cap_steps.append({"do": "quit"})
+		return
+	if "--lia" in OS.get_cmdline_user_args():
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "story", "ch": 3}, {"do": "wait", "s": 2.0}, {"do": "force_finale"}]
+		for k in 8:
+			cap_steps.append_array([{"do": "wait", "s": 0.9}, {"shot": "lia%d" % k}])
+		cap_steps.append({"do": "quit"})
+		return
+	if "--scenicpick" in OS.get_cmdline_user_args():
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 2.5}, {"do": "ui_scenic"}, {"do": "wait", "s": 1.0}, {"shot": "sp0-picker"},
+			{"do": "scenic_set"}, {"do": "wait", "s": 4.0}, {"shot": "sp1-danube-day"}, {"do": "menu"}, {"do": "wait", "s": 2.0}, {"shot": "sp2-back"}, {"do": "quit"}]
+		return
+	if "--portrait" in OS.get_cmdline_user_args():
+		# 0.8.35 portrait deck: title, a run, the deck hidden and shown again
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 3.0}, {"shot": "pt0-title"}, {"do": "endless"}, {"do": "wait", "s": 3.0}, {"shot": "pt1-run"}, {"do": "deck_tap", "zn": "jump", "down": true}, {"do": "wait", "s": 0.3}, {"shot": "pt1b-hop"}, {"do": "deck_tap", "zn": "jump", "down": false},
+			{"do": "deck", "hide": true}, {"do": "wait", "s": 0.5}, {"shot": "pt2-hidden"}, {"do": "deck", "hide": false}, {"do": "wait", "s": 0.5}, {"do": "quit"}]
 		return
 	if "--presetpic" in OS.get_cmdline_user_args():
 		# Graphics page pictures (0.8.34): Scenic View after a few seconds; run
@@ -2679,6 +2722,27 @@ func _capture_tick(dt: float) -> void:
 			_end_run()
 		"trip":
 			_on_fail()
+		"deck":
+			save.data.settings.deck_hidden = st.hide
+		"ui_scenic":
+			menu_scenic()
+		"scenic_set":
+			save.data.settings.scenic_country = 2
+			save.data.settings.scenic_look = "day"
+			save.data.settings.scenic_sound = "world"
+			start_scenic()
+		"deck_tap":
+			# press a deck button through the real input path (window coordinates)
+			var sh = get_tree().current_scene
+			if sh != null and sh.has_method("_zones"):
+				var z: Dictionary = sh._zones()
+				var pos: Vector2 = z.rocker - Vector2(0, z.u * 0.85) if st.zn == "jump" else z[st.zn]
+				var ev := InputEventMouseButton.new()
+				ev.button_index = MOUSE_BUTTON_LEFT
+				ev.position = pos
+				ev.global_position = pos
+				ev.pressed = st.down
+				Input.parse_input_event(ev)
 		"menu":
 			go_title()
 		"skip_menu":
@@ -2805,7 +2869,8 @@ func _capture_tick(dt: float) -> void:
 
 func _take_shot(name: String) -> void:
 	await RenderingServer.frame_post_draw
-	var img = get_viewport().get_texture().get_image()
+	# --window-shot: the whole window (portrait deck included), not just the game
+	var img = (get_tree().root if "--window-shot" in _args() else get_viewport()).get_texture().get_image()
 	var path = capture_dir.path_join(name + ".png")
 	img.save_png(path)
 	cap_shots.append(path)
@@ -3729,8 +3794,14 @@ func _quick_bench_tick(dt: float) -> void:
 
 ## Time of day (0.8.27): Auto follows this device's clock (day 07:00-18:59,
 ## evening otherwise; no data leaves the device), or the player picks.
+func _tod_mode() -> String:
+	var look := str(save.data.settings.get("scenic_look", "settings"))
+	if state == "scenic" and look != "settings":
+		return look
+	return str(save.data.settings.get("time_of_day", "classic"))
+
 func _want_day() -> bool:
-	match str(save.data.settings.get("time_of_day", "classic")):
+	match _tod_mode():
 		"day":
 			return true
 		"evening", "classic":
@@ -3740,7 +3811,7 @@ func _want_day() -> bool:
 
 func _apply_time_of_day() -> void:
 	var d := _want_day()
-	var mode := str(save.data.settings.get("time_of_day", "classic"))
+	var mode := _tod_mode()
 	var g := 0.62 if d else (0.55 if mode == "classic" else 0.9)
 	if d == Art.day and pal.get("day", false) == d and is_equal_approx(g, Art.grade_level):
 		return
@@ -3773,6 +3844,11 @@ func _msaa_after_intro() -> void:
 ## as the environment background so it can glow, so neither msaa_2d nor
 ## msaa_3d reach it (msaa_2d only produced a "no 2D content" warning). FXAA, a
 ## screen-space filter, does smooth those edges, and it's cheap.
+## Staggered hill redraws (0.8.35): on phones and in browsers, where building
+## the drawing is the bottleneck; --stagger forces it for benchmarks on PC.
+func _stagger_on() -> bool:
+	return OS.has_feature("mobile") or OS.has_feature("web") or "--stagger" in _args()
+
 func _set_msaa(on: bool) -> void:
 	var vp := get_viewport()
 	vp.msaa_2d = Viewport.MSAA_DISABLED

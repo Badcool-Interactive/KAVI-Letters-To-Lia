@@ -85,7 +85,7 @@ func _draw_base(ci: Node2D) -> void:
 		var deep_c: Color = body.darkened(0.45)
 		ci.draw_polygon(PackedVector2Array([Vector2(a, 300), Vector2(b, 300), Vector2(b, 1000), Vector2(a, 1000)]),
 			PackedColorArray([body, body, deep_c, deep_c]))
-		if Art.Q >= 2:
+		if Art.Q >= 1:
 			# soft soil strata catching a little light
 			var lit: Color = band_top
 			for k in 2:
@@ -100,7 +100,7 @@ func _draw_base(ci: Node2D) -> void:
 					ci.draw_polyline(pts, Color(lit, 0.10 - k * 0.025), 3.0 - k * 0.6, Art.AA)
 		if Art.Q >= 1:
 			_ground_detail(ci, a, b, body)
-		if Art.Q >= 2 and pal.get("surface", "") in ["moss", "pavers"]:
+		if Art.Q >= 1 and pal.get("surface", "") in ["moss", "pavers"]:
 			_strata(ci, a, b, gcol)
 		_surface(ci, a, b, band_top)
 		# soft contact shadow under the walking surface
@@ -395,7 +395,7 @@ func _grass(ci: Node2D, a: float, b: float, gcol: Color) -> void:
 	var c0 := int(x0 / step) + 1
 	var c1 := int(x1 / step)
 	for c in range(c0, c1 + 1):
-		if Art.hash01(c, 91) > [0.14, 0.22, 0.34][Art.Q]:
+		if Art.hash01(c, 91) > [0.14, 0.28, 0.34][Art.Q]:
 			continue
 		var x := c * step + Art.hash01(c, 92) * step * 0.7
 		if x < x0 + 8.0 or x > x1 - 8.0:

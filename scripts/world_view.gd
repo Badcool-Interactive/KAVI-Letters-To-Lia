@@ -137,12 +137,41 @@ func _update_sun_vis() -> void:
 		v += clampf((top - (sp.y - r)) / (2.0 * r), 0.0, 1.0) / 3.0
 	sun_vis = lerpf(sun_vis, v, 0.25)
 
+## 0.8.35 (phone performance): with `stagger` on, the three hill layers and
+## their lights take turns redrawing (far every 3rd frame, middle and near every
+## 2nd, on alternate frames) and simply slide by their parallax in between, so
+## movement stays smooth while the CPU builds about half as many shapes.
+## Transitions and resizes always redraw.
+var stagger := false
+var sky_stagger := false
+var _frame := 0
+var _last_size := Vector2.ZERO
+var _drawn := [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
+const GROUP := {"layer0": 0, "lights0": 0, "layer1": 1, "lights1": 1, "layer2": 2, "lights2": 2}
+const CAD := [3, 2, 2]
+const PHASE := [0, 0, 1]
+
 func refresh() -> void:
 	size = get_viewport_rect().size
 	_update_transition()
 	_update_sun_vis()
+	_frame += 1
+	var force: bool = not stagger or not tr_from.is_empty() or size != _last_size
+	_last_size = size
 	for p in _painters:
-		p.queue_redraw()
+		var g: int = GROUP.get(p.tag, -1)
+		if g < 0:
+			# the sky is screen-fixed and changes slowly: every other frame in runs
+			if not (sky_stagger and not force and p.tag == "sky" and _frame % 2 == 1):
+				p.queue_redraw()
+			continue
+		var off := Vector2(cam_x * PAR[g], cam_y * PAR[g] * 0.25)
+		if force or _frame % CAD[g] == PHASE[g]:
+			_drawn[g] = off
+			p.position = Vector2.ZERO
+			p.queue_redraw()
+		else:
+			p.position = _drawn[g] - off
 
 # ------------------------------------------------------------------ batching
 ## Many tiny leaves as ONE draw call: collect triangles, then flush.
@@ -438,7 +467,7 @@ func _draw_layer(ci: Node2D, i: int) -> void:
 	var c1 = int(floor((off + size.x + 700.0) / cw))
 	for c in range(c0, c1 + 1):
 		var r = Art.hash01(c, 101 + i * 31)
-		if r > DENS[i] * [0.55, 0.8, 1.0][Art.Q]:
+		if r > DENS[i] * [0.55, 0.92, 1.0][Art.Q]:
 			continue
 		var lx = c * cw + Art.hash01(c, 13 + i) * cw * 0.7
 		var w := _mix(par, lx - off)
@@ -1078,7 +1107,7 @@ func _draw_town(ci: Node2D, off: float, col: Color) -> void:
 	var c1 = int(floor((off + size.x + 300.0) / TOWN_CELL))
 	var win0 := _warm(1.1)
 	for c in range(c0, c1 + 1):
-		if Art.hash01(c, 601) > [0.25, 0.40, 0.55][Art.Q]:
+		if Art.hash01(c, 601) > [0.25, 0.48, 0.55][Art.Q]:
 			continue
 		var x = c * TOWN_CELL + Art.hash01(c, 602) * TOWN_CELL * 0.4
 		var w := _mix(PAR[0], x - off)
@@ -1127,7 +1156,7 @@ func _draw_town(ci: Node2D, off: float, col: Color) -> void:
 			if Art.Q == 0:
 				continue
 			# windows: a handful per building, a few slowly blink on/off
-			var nw := int(bw * bh / (260.0 if village else 420.0) / (1.0 if Art.Q >= 2 else 1.8))
+			var nw := int(bw * bh / (260.0 if village else 420.0) / (1.0 if Art.Q >= 1 else 1.8))
 			for k in nw:
 				var on = sin(t * 0.25 + Art.hash01(sd, 40 + k) * 40.0) > -0.75
 				if not on:
@@ -1184,7 +1213,7 @@ func _draw_life(ci: Node2D, off: float, col: Color) -> void:
 	var s: float = SCALE[2] * 1.75
 	var base_col: Color = col
 	for c in range(c0, c1 + 1):
-		if Art.hash01(c, 701) > [0.25, 0.40, 0.60][Art.Q]:
+		if Art.hash01(c, 701) > [0.25, 0.50, 0.60][Art.Q]:
 			continue
 		var lx = c * LIFE_CELL + 80.0 + Art.hash01(c, 703) * LIFE_CELL * 0.6
 		var p = Vector2(lx - off, _ridge_y(2, lx) + 3.0)

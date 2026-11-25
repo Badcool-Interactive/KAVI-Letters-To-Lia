@@ -1,4 +1,22 @@
 # Changelog
+## 0.8.35 (2026-11-26) · Portrait mode, Scenic picker, prettier Medium, new Lia, smoother phones
+
+- **Portrait mode, Game Boy style:** when the window or phone is taller than wide, the game shows as a screen at the top with a controller deck below:
+  - a Hop/Scoot rocker, a big Gust button, a Letter button showing your letters left, and Pause and Hide;
+  - Hide tucks the deck away (remembered) and a "Show controls" pill brings it back;
+  - it works on PC too: make the window tall;
+  - phones can now rotate between landscape and portrait (Android's rotation lock is respected);
+  - landscape looks exactly as before; the game is drawn through a new display shell (`scripts/shell.gd`) at the window's real pixel size.
+- **Scenic View picker:** choose the country (the whole journey, or Greece, Bulgaria, the Danube or Romania), the look (like Settings, Classic, Day or Evening) and the sounds (music and world, world only, or quiet). Leaving Scenic View restores your own settings.
+- **Prettier Medium:** smooth (anti-aliased) edges on Kavi, the hills and the obstacles, which used to be jaggy. It also gets soil layers in the ground, more grass, more trees and props, lit village windows and more background people. The Graphics page pictures were re-rendered.
+- **Smoother on phones and in browsers:** the three hill layers take turns redrawing (far every 3rd frame, middle and near every 2nd) and slide smoothly in between; during runs the sky redraws every other frame. On this PC that cuts the per-frame drawing work by about 20% (8.1 → 6.5 ms at High). Not yet measured on the phone.
+- **Lia v4:** redrawn to match Kavi's current style while keeping her approved identity:
+  - a bob-shaped lilac-white helmet with a fluffy white cap, four big lilac flowers and one on a curled stem;
+  - a deep plum screen with tall soft eyes, a sparkle and blush;
+  - a white blouse dress with an embroidered hem, and a deep purple shawl with Romanian stepped diamonds, a rosette brooch and a swaying lilac fringe;
+  - jointed white legs with lilac knees and boots, mitten hands, and a sketchbook with a spiral binding and a heart doodle;
+  - she waves when she's happy and hops a little with heart eyes. Shown in the reunion.
+- **Known:** closing the game in its first ~5 seconds (while music is still loading) prints audio "leaked" lines in a terminal. It's harmless and also happens in 0.8.34; closing later is clean.
 ## 0.8.34 (2026-11-25) · Funny fails, naps and sulks, big Graphics previews, KAVI app ID
 
 - **Fixed (owner's error list):** checking suits printed hundreds of "Invalid polygon data, triangulation failed". The **Teapot** suit's spout was drawn as a shape that crossed over itself; it's redrawn, and a new scan tries every one of the 140+ Garage items with zero errors.
