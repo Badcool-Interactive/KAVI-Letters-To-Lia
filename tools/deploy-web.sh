@@ -12,8 +12,7 @@ D="$(mktemp -d)"; trap 'rm -rf "$D"' EXIT
 cp -r build/web/. "$D/"
 touch "$D/.nojekyll"
 python3 tools/prepare-pages.py "$D" project.godot
-# Page title and link previews say KAVI (project config/name stays VOLT/RUN on
-# purpose: it names the desktop save folder).
+# Page title and link previews say KAVI.
 URL="https://singh679.github.io/volt-run-luminous/"
 sed -i "s|<title>[^<]*</title>|<title>KAVI: Letters to Lia</title><meta name=\"description\" content=\"A cozy 2D runner: Kavi, a little courier robot, carries letters across Europe to his friend Lia. Play free in your browser.\"><meta property=\"og:title\" content=\"KAVI: Letters to Lia\"><meta property=\"og:description\" content=\"A cozy 2D runner. Play free in your browser.\"><meta property=\"og:image\" content=\"${URL}index.png\"><meta property=\"og:url\" content=\"${URL}\">|" "$D/index.html"
 cd "$D" && git init -q -b gh-pages && git add -A && git commit -qm "Web build $(date -u +%F)"

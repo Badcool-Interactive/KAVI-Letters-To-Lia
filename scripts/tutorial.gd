@@ -2,7 +2,7 @@ extends RefCounted
 ## Interactive tutorial ("learn by doing"). A short hand-built practice course.
 ## The solver bot knows the exact moment each move works; at that moment the
 ## game freezes on a prompt and resumes as soon as the player does the move.
-## Failing never ends the tutorial: Kite pops back and the prompt repeats.
+## Failing never ends the tutorial: Kavi pops back and the prompt repeats.
 
 const Track = preload("res://scripts/track.gd")
 const Sim = preload("res://scripts/sim.gd")

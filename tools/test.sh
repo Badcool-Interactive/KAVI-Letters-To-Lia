@@ -3,8 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 GODOT="${GODOT_BIN:-$(cd ../.. && pwd)/tools/bin/path/godot}"
-ISO="$(mktemp -d /tmp/volt-test-XXXXXX)"
-export XDG_DATA_HOME="$ISO" VOLT_TEST_ISOLATED="$ISO"
+ISO="$(mktemp -d /tmp/kavi-test-XXXXXX)"
+export XDG_DATA_HOME="$ISO" KAVI_TEST_ISOLATED="$ISO"
 "$GODOT" --headless --path . --import >/dev/null 2>&1 || true
 set +e
 "$GODOT" --headless --path . --script res://tests/run_tests.gd

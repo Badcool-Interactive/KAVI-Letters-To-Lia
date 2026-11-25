@@ -13,6 +13,15 @@ const STAMPS_PER_SPARK := 50   # buy 1 Spark for 50 Stamps
 const STAMPS_FOR_SPARK := 25   # sell 1 Spark for 25 Stamps
 
 const CATS := ["suit", "paint", "visor", "face", "scarf", "antenna", "extra", "bag", "trail", "letter"]
+## One line per Garage tab (0.8.33, owner: "what do Letters change?").
+const CAT_HELP := {
+	"suit": "Whole costumes Kavi wears over his body.", "paint": "The colour of his shell and trims.",
+	"visor": "The glow colour of his screen face.", "face": "The shape of his eyes on the screen.",
+	"scarf": "His scarf colour and pattern.", "antenna": "The little ornament on his antenna.",
+	"extra": "Accessories: glasses, a bow, a flower, headphones, a crown.", "bag": "His courier bag.",
+	"trail": "What he leaves behind while running: stars, hearts, petals, snow.",
+	"letter": "The colour of the paper-plane letters he throws (C key / small button).",
+}
 const CAT_NAMES := {
 	"suit": "Suits", "paint": "Paint", "visor": "Visor", "face": "Faces", "scarf": "Scarves",
 	"antenna": "Antenna", "extra": "Extras", "bag": "Bags", "trail": "Trails", "letter": "Letters",

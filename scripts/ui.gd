@@ -256,7 +256,7 @@ func show_scenic() -> void:
 
 # ------------------------------------------------------------------ in-world menu
 ## A text menu item with no box: hover/focus brightens it, shows a small glowing
-## diamond (Kavi's antenna kite) and draws a hairline under the text.
+## diamond (Kavi's antenna) and draws a hairline under the text.
 class MenuItem extends Button:
 	var accent := Color(1.0, 0.82, 0.55)
 	var status := ""
@@ -580,6 +580,7 @@ func show_garage(cat := "scarf", animate := true) -> void:
 		tab.on_focus = _garage_tab.bind(category)
 		_g_tabs[category] = tab
 	_gap(v, 4)
+	_g_help = _small(v, Looks.CAT_HELP.get(cat, ""), 22, Color(0.75, 0.95, 1.0, 0.85))
 	_g_scroll = ScrollContainer.new()
 	_g_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_g_scroll.follow_focus = true
@@ -604,10 +605,14 @@ func _garage_wallet() -> void:
 		_g_wallet[1].text = "%d Sparks" % int(main.save.data.sparks)
 
 ## Focusing a tab shows its items at once.
+var _g_help: Label
+
 func _garage_tab(c: String) -> void:
 	if c == _g_cat or not is_instance_valid(_g_list):
 		return
 	_g_cat = c
+	if is_instance_valid(_g_help):
+		_g_help.text = Looks.CAT_HELP.get(c, "")
 	_g_scroll.scroll_vertical = 0
 	for k in _g_tabs:
 		_g_tabs[k].selected = k == c
@@ -640,6 +645,10 @@ func _garage_fill(focus_name := "", animate := true) -> void:
 			var have := int(data[Looks.wallet_key(it)])
 			b.status_col = (Color(1.0, 0.86, 0.5) if Looks.wallet_key(it) == "stamps" else Color(0.65, 0.95, 1.0)) if have >= int(it.cost) else Color(1, 1, 1, 0.4)
 		b.on_focus = main.apply_look.bind(cat, i)
+		if cat == "letter":
+			b.on_focus = func():
+				main.apply_look(cat, i)
+				main.letter_preview(it.get("letter", Color.WHITE))
 		if focus_name == it.name:
 			focus_btn = b
 		rows.append(b)
@@ -771,7 +780,7 @@ const HELP := {
 	"Effects": "How many sparks, puffs and confetti appear.",
 	"Resolution": "Phones: draw at the screen's full sharpness, or at 1080p for speed.",
 	"Frame-rate cap": "The most frames per second the game will draw. Higher is smoother but uses more battery.",
-	"Time of day": "Auto follows this device's clock: day from 7 am to 7 pm, evening after. Or choose Day or Evening.",
+	"Time of day": "Classic: the original colourful sunsets. Auto follows your clock (day 7 am to 7 pm). Or always Day or Evening.",
 	"Performance overlay": "Shows frames per second while you play. Detailed adds 1% lows and timings.",
 	"Performance stats": "How smoothly the game ran since it started.",
 	"Run benchmark": "Measures 10 seconds of Scenic View at High, then picks an Auto level.",
@@ -971,7 +980,7 @@ func _page_graphics(animate := true) -> void:
 		if OS.has_feature("mobile"):
 			_cycle_row(v, "Resolution", "gx_res", [0, 1], ["Full", "1080p"], 26)
 		_cycle_row(v, "Frame-rate cap", "gx_fps", [30, 60, 90, 120, 0], ["30", "60", "90", "120", "None"], 26)
-	_cycle_row(v, "Time of day", "time_of_day", ["auto", "day", "evening"], ["Auto", "Day", "Evening"], 26)
+	_cycle_row(v, "Time of day", "time_of_day", ["classic", "auto", "day", "evening"], ["Classic", "Auto", "Day", "Evening"], 26)
 	_cycle_row(v, "Performance overlay", "show_fps", [0, 1, 2], ["Off", "Simple", "Detailed"], 26)
 	_row(v, "Performance stats", func(): _open_page("perf"), 26)
 	_row(v, "Run benchmark", main.start_quick_benchmark, 26)

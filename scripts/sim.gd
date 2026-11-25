@@ -1,5 +1,5 @@
 extends RefCounted
-## Deterministic Kite simulation (120 Hz). Shared by the game and the
+## Deterministic Kavi simulation (120 Hz). Shared by the game and the
 ## fairness bot so "the bot can clear it" means "a player can clear it".
 
 const G := 3000.0
@@ -332,7 +332,7 @@ func _next_of(types: Array) -> Variant:
 			return o
 	return null
 
-## Put Kite back on solid ground before `px` (story checkpoints).
+## Put Kavi back on solid ground before `px` (story checkpoints).
 func respawn(px: float) -> void:
 	x = px
 	y = 0.0

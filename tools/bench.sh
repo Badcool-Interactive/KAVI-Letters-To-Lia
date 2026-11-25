@@ -4,8 +4,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 GODOT="${GODOT_BIN:-$(cd ../.. && pwd)/tools/bin/path/godot}"
-OUT="${1:-/tmp/volt-bench.json}"; shift || true
-ISO="$(mktemp -d /tmp/volt-bench-XXXXXX)"
+OUT="${1:-/tmp/kavi-bench.json}"; shift || true
+ISO="$(mktemp -d /tmp/kavi-bench-XXXXXX)"
 DISP=":$((90 + RANDOM % 9))"
 Xvfb "$DISP" -screen 0 1920x1080x24 >/dev/null 2>&1 &
 XPID=$!

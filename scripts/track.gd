@@ -202,7 +202,7 @@ func bot_run(placed: Array, x0: float, seg_end: float, sp: float) -> int:
 		s.step(1.0 / 120.0, inp)
 		for e in s.events:
 			if e.type == "rescue":
-				# Scripted: the stranger carries Kite past it.
+				# Scripted: the stranger carries Kavi past it.
 				var r: Dictionary = e.o
 				r.passed = true
 				s.x = r.x + r.w + 40.0

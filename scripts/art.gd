@@ -91,12 +91,14 @@ static func grade_material(additive := false) -> ShaderMaterial:
 			sh.code = "shader_type canvas_item;\nrender_mode blend_add;\n" + GRADE_CODE
 			_grade_add = ShaderMaterial.new()
 			_grade_add.shader = sh
+			_grade_add.set_shader_parameter("grade", grade_level)
 		return _grade_add
 	if _grade_mix == null:
 		var sh2 := Shader.new()
 		sh2.code = "shader_type canvas_item;\n" + GRADE_CODE
 		_grade_mix = ShaderMaterial.new()
 		_grade_mix.shader = sh2
+		_grade_mix.set_shader_parameter("grade", grade_level)
 	return _grade_mix
 
 ## Global render quality: 0 low, 1 medium, 2 high. AA = antialiased lines.
@@ -140,7 +142,7 @@ static func hdr(c: Color, k: float) -> Color:
 static func mixc(a: Color, b: Color, t: float) -> Color:
 	return a.lerp(b, clampf(t, 0.0, 1.0))
 
-## Biome palettes. "Luminous future": dark layered silhouettes, one strong
+## Biome palettes. evening look: dark layered silhouettes, one strong
 ## light source, glowing life. Original locations inspired by the route.
 const BIOMES := [
 	{
@@ -230,11 +232,18 @@ static func biome(i: int) -> Dictionary:
 	return _day_cache[k]
 
 ## Switch Day on or off; the world grade is lighter in daylight.
-static func set_day(on: bool) -> void:
+## Look presets (0.8.33, owner: night was too dark, day too bright; bring back
+## the original pretty colours): Classic = the original evening palettes with
+## a lighter, more colourful grade; Evening = the moody version; Day = daylight
+## palettes with a slightly deeper grade than before (less washed out).
+static var grade_level := 1.0
+
+static func set_day(on: bool, grade := -1.0) -> void:
 	day = on
+	grade_level = grade if grade >= 0.0 else (0.62 if on else 0.9)
 	for m in [_grade_mix, _grade_add]:
 		if m != null:
-			m.set_shader_parameter("grade", 0.45 if on else 1.0)
+			m.set_shader_parameter("grade", grade_level)
 
 ## Blend two palettes (biome transitions).
 static func blend_biome(a: Dictionary, b: Dictionary, t: float) -> Dictionary:

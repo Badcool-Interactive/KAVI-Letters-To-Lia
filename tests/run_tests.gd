@@ -13,7 +13,7 @@ var checks := 0
 
 func _initialize() -> void:
 	var data_dir := OS.get_user_data_dir()
-	if not OS.has_environment("VOLT_TEST_ISOLATED") or not data_dir.begins_with(OS.get_environment("VOLT_TEST_ISOLATED")):
+	if not OS.has_environment("KAVI_TEST_ISOLATED") or not data_dir.begins_with(OS.get_environment("KAVI_TEST_ISOLATED")):
 		push_error("Refusing to run: user data dir is not isolated (%s)" % data_dir)
 		quit(2)
 		return

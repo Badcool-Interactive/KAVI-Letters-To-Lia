@@ -1,7 +1,26 @@
 extends RefCounted
 ## Local save data (user://). Tests run with an isolated user-data dir.
 
-const PATH := "user://volt_run_save.json"
+const PATH := "user://kavi_save.json"
+## Older builds were called VOLT/RUN: their save lived in user://volt_run_save.json
+## inside the "VOLT-RUN" folder. On first launch the old save is COPIED over
+## (never moved or deleted), so nobody loses progress after the rename.
+const LEGACY_IN_USER := "user://volt_run_save.json"
+const LEGACY_DESKTOP_DIR := "godot/app_userdata/VOLT-RUN/volt_run_save.json"
+
+func _migrate_legacy() -> void:
+	if FileAccess.file_exists(PATH):
+		return
+	var candidates := [LEGACY_IN_USER, OS.get_data_dir().path_join(LEGACY_DESKTOP_DIR)]
+	for src in candidates:
+		if FileAccess.file_exists(src):
+			var txt := FileAccess.get_file_as_string(src)
+			if txt != "":
+				var f := FileAccess.open(PATH, FileAccess.WRITE)
+				if f != null:
+					f.store_string(txt)
+					f.close()
+				return
 const DEFAULT_WORLD_VOLUME := 0.45
 
 var data := {
@@ -41,7 +60,7 @@ var data := {
 		"gx_glow": true,
 		"gx_rays": true,
 		"gx_lights": false,
-		"time_of_day": "auto",
+		"time_of_day": "classic",
 		"gx_effects": 1,
 		"gx_res": 0,
 		"gx_fps": 60,
@@ -55,7 +74,10 @@ var data := {
 var isolated := false
 
 func load_data() -> void:
-	if isolated or not FileAccess.file_exists(PATH):
+	if isolated:
+		return
+	_migrate_legacy()
+	if not FileAccess.file_exists(PATH):
 		return
 	var f := FileAccess.open(PATH, FileAccess.READ)
 	if f == null:

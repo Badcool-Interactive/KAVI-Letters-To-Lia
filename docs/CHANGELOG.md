@@ -1,4 +1,23 @@
 # Changelog
+## 0.8.33 (2026-11-25) · KAVI everywhere, Classic colours, Kavi comes alive on the menu
+
+- **The name is KAVI: Letters to Lia everywhere:**
+  - The project name, the window and the OS audio mixer entry (it showed "VOLT/RUN · Sound").
+  - Windows company "BADCOOL INTERACTIVE"; the APK is now `build/kavi-debug.apk`.
+  - Code comments no longer mention VOLT/RUN, Kite or Lumi.
+  - Saves now live in `BADCOOL INTERACTIVE/KAVI/kavi_save.json`. On first launch an old VOLT/RUN save is copied over (never moved or deleted); tested with a sample save.
+  - The Android package ID stays `studio.badcool.voltrun`: it's invisible to players, and changing it would make phones treat KAVI as a different app and lose its data.
+  - The GitHub repo name waits on the owner's organization.
+- **Time of day → Classic** (new default): the original colourful sunset palettes with a lighter grade. Evening is a little less dark (grade 0.9) and Day a little less washed out (grade 0.62).
+- **Kavi on the menu has a life** (a new activity every 9–14 s):
+  - He sits and watches the view.
+  - He writes in his notebook with a comic speech bubble showing the line. About a third of the time it's a terrible try ("Roses are red, robots are... metal?"), followed by a nervous sweat face, a laugh and "Haha... I'll try again!".
+  - He checks his map, nods along to music with floating notes when he wears headphones, and dozes off after a minute.
+- **New faces:** laugh (>w<), wink, sleepy (with a drifting z), music, sweat (^^;), starry eyes and think.
+- **Humanoid torso:** broad shoulders narrowing to a waist, with a separate hip piece, in the side and front views (owner: "limbs attached to a drum").
+- **Garage:** a one-line explanation of what each tab changes. Picking a Letters colour makes Kavi throw a preview paper plane in that colour.
+- **Garage trails** (stars, hearts, petals, snow) are bigger (9 px), more frequent, last longer and have a soft dark edge, so they read on bright daytime skies.
+- **Extreme graphics:** checked again with the owner's exact save at 2560×1496; the MSAA warning didn't reproduce.
 ## 0.8.32 (2026-11-25) · Extreme really smooths edges, no warning
 
 - **Fixed:** on Extreme, Godot printed "2D MSAA is enabled while there is no 2D content". The world is drawn as the glow environment's background (canvas layers up to 4), which goes through the 3D pipeline, so 2D MSAA never touched it, and 3D MSAA doesn't either (both checked in captures). Extreme now uses FXAA, a screen-space filter that does smooth the world's edges (verified on a hill silhouette). It switches on only after the intro, and the warning is gone. The Extreme help text now says "smoothed edges (FXAA)".

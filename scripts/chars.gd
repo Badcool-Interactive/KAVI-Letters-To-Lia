@@ -1,5 +1,5 @@
 extends RefCounted
-## Supporting cast drawn procedurally: Lumi, kind strangers, hover-bikers.
+## Supporting cast drawn procedurally: Lia, kind strangers, hover-bikers.
 ## Each function draws at the origin (feet), facing right; `add` = emissive pass.
 
 const Art = preload("res://scripts/art.gd")
@@ -21,7 +21,7 @@ static func _heart(ci: Node2D, c: Vector2, r: float, col: Color) -> void:
 ## round head with an oval screen face (eyes, blush, mouth), a lilac flower
 ## crown, an A-line body with a Romanian-embroidered shawl, real arms holding
 ## her sketchbook, chunky little boots.
-static func lumi(ci: Node2D, at: Vector2, add: bool, t: float, mood := "normal", facing := -1.0, sc := 1.1) -> void:
+static func lia(ci: Node2D, at: Vector2, add: bool, t: float, mood := "normal", facing := -1.0, sc := 1.1) -> void:
 	ci.draw_set_transform(at, 0.0, Vector2(facing * sc, sc))
 	var lil = Color(0.95, 0.92, 1.0)
 	var shade = Color(0.76, 0.68, 0.92)

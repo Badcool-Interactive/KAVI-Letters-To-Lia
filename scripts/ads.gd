@@ -1,6 +1,6 @@
 extends RefCounted
 ## Rewarded-ad service. STUB ONLY: no ad SDK is integrated.
-## VOLT-RUN-PLAN §9: voluntary rewarded ads only (max 3/day), never during
+## Studio plan §9: voluntary rewarded ads only (max 3/day), never during
 ## gameplay, story or after a failure. Before wiring a real SDK: Families
 ## Policy, COPPA/GDPR age handling, certified SDK list and a legal review.
 ## A real provider must implement the same three methods.

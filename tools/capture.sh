@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 GODOT="${GODOT_BIN:-$(cd ../.. && pwd)/tools/bin/path/godot}"
 OUT="${1:-$PWD/captures/$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$OUT"
-ISO="$(mktemp -d /tmp/volt-cap-XXXXXX)"
+ISO="$(mktemp -d /tmp/kavi-cap-XXXXXX)"
 DISP=":$((90 + RANDOM % 9))"
 Xvfb "$DISP" -screen 0 1920x1080x24 >/dev/null 2>&1 &
 XPID=$!

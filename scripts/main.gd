@@ -1,5 +1,5 @@
 extends Node2D
-## VOLT/RUN game orchestrator: modes, segments, recovery breaks, junctions,
+## KAVI: Letters to Lia game orchestrator: modes, segments, recovery breaks, junctions,
 ## rescues, finale, camera, HUD, menus and the capture director.
 
 const Art = preload("res://scripts/art.gd")
@@ -235,8 +235,7 @@ func _ready() -> void:
 	font_body = _load_font("res://assets/fonts/Nunito.ttf", 800)
 	_game_audio_bus = AudioServer.get_bus_index(Synth.GAME_BUS)
 	_build_scene()
-	# Display title (window / browser tab). project config/name stays "VOLT/RUN"
-	# because it names the save folder on desktop.
+	# Window / browser tab title
 	get_window().title = "%s: %s" % [HERO, GAME_SUB]
 	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 	get_tree().auto_accept_quit = false   # window close goes through _quit_cleanly
@@ -755,7 +754,7 @@ func _enter_run() -> void:
 	synth.set_drive(1.0)
 
 func _segment_finished() -> void:
-	# called when Kite passes seg_end
+	# called when Kavi passes seg_end
 	if mode == "tutorial":
 		finish_tutorial()
 		return
@@ -1493,6 +1492,10 @@ func _process(delta: float) -> void:
 			sim.x = title_x
 			kite.pose = debug_pose if debug_pose != "" else "idle"
 			kite.expr = debug_expr if debug_expr != "" else ("normal" if fmod(t, 6.0) < 5.0 else "happy")
+			if debug_pose == "" and not garage_open and not menu_dim:
+				_title_life(real_dt)
+			else:
+				_life = {}
 			if garage_open and debug_pose == "":
 				if ui._g_cat == "face":
 					kite.expr = "normal"
@@ -1708,7 +1711,7 @@ func _update_hints(dt: float) -> void:
 	}.get(key, "")
 	hint_t = 4.5
 
-# ------------------------------------------------------------------ cast (NPCs, Lumi, bikers)
+# ------------------------------------------------------------------ cast (NPCs, Lia, bikers)
 func _draw_cast(ci: Node2D, add: bool) -> void:
 	if state == "recovery" and activity.get("npc", "") != "":
 		Chars.npc(ci, Vector2(npc_x, 0), add, t, activity.npc, state_t > 2.0 and state_t < 4.0)
@@ -1717,7 +1720,7 @@ func _draw_cast(ci: Node2D, add: bool) -> void:
 		Chars.biker(ci, Vector2(r.bx, r.by), add, t, r.v, r.lean, 1.0 if state_t > 2.9 and state_t < 5.0 else 0.0)
 	if state == "finale":
 		var k = state_t
-		Chars.lumi(ci, Vector2(finale.lx, 0), add, t, "heart" if k > 4.0 else ("happy" if k > 2.5 else "normal"), -1.0)
+		Chars.lia(ci, Vector2(finale.lx, 0), add, t, "heart" if k > 4.0 else ("happy" if k > 2.5 else "normal"), -1.0)
 		if add and k > 4.0:
 			for i in 6:
 				var hp = Vector2(finale.lx - 60.0 + sin(t + i) * 50.0, -150.0 - fmod(t * 50.0 + i * 40.0, 220.0))
@@ -1864,6 +1867,7 @@ func _draw_hud(ci: Node2D) -> void:
 	_draw_perf_overlay(ci)
 
 func _draw_title(ci: Node2D, sz: Vector2) -> void:
+	_draw_letter_preview(ci)
 	# soft darkening behind the menu column for readability (no box)
 	var shade := Color(0.01, 0.02, 0.05)
 	# back to the lighter 0.8.12 shade (owner: the darker one made the game feel
@@ -1882,6 +1886,7 @@ func _draw_title(ci: Node2D, sz: Vector2) -> void:
 		return
 	_draw_motes(ci, sz)
 	_draw_plane_game(ci)
+	_draw_bubble(ci)
 	_draw_logo(ci, Vector2(sz.x * 0.29, sz.y * 0.25), state_t, 1.0)
 
 ## Title ambience (0.8.10): warm motes of light drifting up through the scene,
@@ -2230,6 +2235,9 @@ func _setup_capture() -> void:
 	if "--trail" in OS.get_cmdline_user_args():
 		# Kavi's trail at each Tailwind tier, in a real run (autopilot).
 		save.data.tutorial_done = true
+		for a in _args():
+			if a.begins_with("--wear-trail="):
+				save.data.wear.trail = int(a.substr(13))
 		autopilot = true
 		cap_steps = [{"do": "story", "ch": 0}, {"do": "wait", "s": 5.0}]
 		for tr in [1, 2, 3, 4]:
@@ -2263,6 +2271,16 @@ func _setup_capture() -> void:
 			{"do": "custom_on"}, {"do": "wait", "s": 1.0}, {"shot": "st3-custom"},
 			{"do": "page", "p": "perf"}, {"do": "wait", "s": 1.0}, {"shot": "st4-perf"},
 			{"do": "page", "p": "access"}, {"do": "wait", "s": 1.0}, {"shot": "st5-access"}, {"do": "quit"}]
+		return
+	if "--life" in OS.get_cmdline_user_args():
+		# Title idle life: force each activity and shoot it.
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 3.0}]
+		for kind in ["watch", "write", "write_bad", "map", "music", "doze"]:
+			cap_steps.append_array([{"do": "life", "kind": kind}, {"do": "wait", "s": 3.4}, {"shot": "life-" + kind}])
+			if kind == "write_bad":
+				cap_steps.append_array([{"do": "wait", "s": 3.0}, {"shot": "life-laugh"}])
+		cap_steps.append({"do": "quit"})
 		return
 	if "--about" in OS.get_cmdline_user_args():
 		save.data.tutorial_done = true
@@ -2579,6 +2597,18 @@ func _capture_tick(dt: float) -> void:
 			state_t += st.s
 		"tier":
 			debug_tier = st.v
+		"life":
+			var kd: String = st.kind
+			if kd == "music":
+				save.data.wear.extra = 4
+				apply_look()
+			_life = {"kind": "write" if kd == "write_bad" else kd, "t": 0.0, "dur": 30.0, "said": false}
+			_bubble = {}
+			if kd == "write_bad":
+				_life.said = true
+				_life.bad = true
+				_life.t = 2.6
+				_say(BAD_TRIES[0], 3.2)
 		"about":
 			ui.show_about()
 		"ui":
@@ -3588,19 +3618,21 @@ func _quick_bench_tick(dt: float) -> void:
 ## Time of day (0.8.27): Auto follows this device's clock (day 07:00-18:59,
 ## evening otherwise; no data leaves the device), or the player picks.
 func _want_day() -> bool:
-	match str(save.data.settings.get("time_of_day", "auto")):
+	match str(save.data.settings.get("time_of_day", "classic")):
 		"day":
 			return true
-		"evening":
+		"evening", "classic":
 			return false
 	var h: int = Time.get_datetime_dict_from_system().hour
 	return h >= 7 and h < 19
 
 func _apply_time_of_day() -> void:
 	var d := _want_day()
-	if d == Art.day and pal.get("day", false) == d:
+	var mode := str(save.data.settings.get("time_of_day", "classic"))
+	var g := 0.62 if d else (0.55 if mode == "classic" else 0.9)
+	if d == Art.day and pal.get("day", false) == d and is_equal_approx(g, Art.grade_level):
 		return
-	Art.set_day(d)
+	Art.set_day(d, g)
 	set_biome(biome, true)
 
 ## Mouse hides during runs, like a video player: it reappears when moved and
@@ -3634,3 +3666,138 @@ func _set_msaa(on: bool) -> void:
 	vp.msaa_2d = Viewport.MSAA_DISABLED
 	vp.msaa_3d = Viewport.MSAA_DISABLED
 	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if on else Viewport.SCREEN_SPACE_AA_DISABLED
+
+# ------------------------------------------------------------------ title life (0.8.33)
+## Owner: on the menu Kavi isn't running, so he shouldn't always stand ready.
+## Every 9-14 s he picks something to do: sit and watch the view, write in his
+## notebook (a comic speech bubble shows the line; sometimes it's a terrible
+## try and he laughs it off), check the map, nod along to music when he wears
+## headphones, or doze off. The paper-plane mini-game and the Garage take over
+## whenever they're active.
+const BAD_TRIES := [
+	"Roses are red, robots are... metal?",
+	"Lia, you are like a stamp. Wait, no.",
+	"Ode to a sock. Hmm. Let's not.",
+	"The moon is round. Also cheese? No.",
+	"Beep boop, I love... um... soup?",
+	"My heart goes ding! Like a bell. A loud one.",
+]
+var _life := {}
+var _bubble := {}
+
+func _title_life(dt: float) -> void:
+	if plane_happy_t > 0.0:
+		return
+	if _life.is_empty() or float(_life.t) >= float(_life.dur):
+		var opts := ["watch", "write", "map", "idle", "write"]
+		if str(save.data.wear.get("extra", 0)) != "0" and Looks.item("extra", int(save.data.wear.get("extra", 0))).get("extra", "") == "headphones":
+			opts.append("music")
+			opts.append("music")
+		if state_t > 60.0:
+			opts.append("doze")
+		var pick: String = opts.pick_random()
+		if not _life.is_empty() and pick == _life.kind:
+			pick = "idle"
+		_life = {"kind": pick, "t": 0.0, "dur": randf_range(9.0, 14.0), "said": false}
+		_bubble = {}
+	_life.t += dt
+	var k: float = _life.t
+	match str(_life.kind):
+		"watch":
+			kite.pose = "sit"
+			kite.expr = "calm" if fmod(k, 7.0) < 5.5 else "happy"
+		"write":
+			kite.pose = "read"
+			kite.expr = "think" if k < 2.5 else kite.expr
+			if k >= 2.5 and not _life.said:
+				_life.said = true
+				if randf() < 0.35:
+					_life.bad = true
+					_say(BAD_TRIES.pick_random(), 3.2)
+				else:
+					_say(POEMS.pick_random(), 4.5)
+			if _life.said:
+				if _life.get("bad", false):
+					kite.expr = "sweat" if k < 5.7 else "laugh"
+					if k >= 5.7 and _bubble.get("text", "") != "Haha... I'll try again!":
+						_say("Haha... I'll try again!", 2.4)
+				else:
+					kite.expr = "happy"
+		"map":
+			kite.pose = "map"
+			kite.expr = "think" if fmod(k, 5.0) < 3.5 else "happy"
+		"music":
+			kite.pose = "idle"
+			kite.expr = "music"
+			kite.position.y += 0.0
+		"doze":
+			kite.pose = "sit"
+			kite.expr = "sleepy"
+		_:
+			pass
+	if not _bubble.is_empty():
+		_bubble.t += dt
+		if _bubble.t > _bubble.life:
+			_bubble = {}
+
+func _say(text: String, life: float) -> void:
+	_bubble = {"text": text, "t": 0.0, "life": life}
+
+## Comic speech bubble above Kavi (screen space), plus music notes.
+func _draw_bubble(ci: Node2D) -> void:
+	if state != "title" or garage_open or menu_dim:
+		return
+	var kp := _kite_screen() + Vector2(0, -150)
+	if not _life.is_empty() and _life.kind == "music":
+		for i in 3:
+			var ph := fmod(t * 0.5 + i / 3.0, 1.0)
+			var np := _kite_screen() + Vector2(40 + ph * 30.0 + sin(t * 3.0 + i) * 8.0, -120 - ph * 70.0)
+			var nc := Color(1.0, 0.95, 0.8, 1.0 - ph)
+			ci.draw_circle(np, 5.0, nc)
+			ci.draw_line(np + Vector2(4.5, 0), np + Vector2(4.5, -16), nc, 2.0)
+			ci.draw_line(np + Vector2(4.5, -16), np + Vector2(11, -12), nc, 2.0)
+	if _bubble.is_empty():
+		return
+	var a := clampf(_bubble.t / 0.2, 0.0, 1.0) * clampf((_bubble.life - _bubble.t) / 0.3, 0.0, 1.0)
+	var pop := 1.0 + 0.15 * exp(-_bubble.t * 10.0)
+	var fs := 22
+	var maxw := 420.0
+	var tw := minf(font_body.get_string_size(_bubble.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x, maxw)
+	var lines := ceili(font_body.get_string_size(_bubble.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x / maxw)
+	var bw := tw + 40.0
+	var bh := 26.0 * lines + 26.0
+	var c := kp + Vector2(bw * 0.35, -bh * 0.5)
+	ci.draw_set_transform(c, 0.0, Vector2(pop, pop))
+	var r := Rect2(-bw * 0.5, -bh * 0.5, bw, bh)
+	ci.draw_colored_polygon(Art.rrect(r.grow(3.0), 18.0), Color(0.05, 0.06, 0.12, 0.85 * a))
+	ci.draw_colored_polygon(Art.rrect(r, 16.0), Color(1.0, 0.98, 0.94, a))
+	var tail := PackedVector2Array([Vector2(-bw * 0.32, bh * 0.5 - 2), Vector2(-bw * 0.18, bh * 0.5 - 2), Vector2(-bw * 0.40, bh * 0.5 + 18)])
+	ci.draw_colored_polygon(tail, Color(1.0, 0.98, 0.94, a))
+	ci.draw_multiline_string(font_body, Vector2(-tw * 0.5, -bh * 0.5 + 30.0), _bubble.text, HORIZONTAL_ALIGNMENT_CENTER, tw, fs, -1, Color(0.12, 0.12, 0.20, a))
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+## Garage letter preview (0.8.33): picking a letter colour makes Kavi throw one,
+## so you can see what the Letters tab changes.
+var _letter_prev := {}
+
+func letter_preview(col: Color) -> void:
+	_letter_prev = {"t": 0.0, "col": col}
+	synth.play("letter", 1.0, -6.0)
+
+func _draw_letter_preview(ci: Node2D) -> void:
+	if _letter_prev.is_empty():
+		return
+	_letter_prev.t += get_process_delta_time()
+	var k: float = _letter_prev.t / 1.4
+	if k >= 1.0 or not garage_open:
+		_letter_prev = {}
+		return
+	var start := _kite_screen() + Vector2(40, -30)
+	var p := start + Vector2(k * 520.0, -sin(k * PI) * 160.0 - k * 60.0)
+	var ang := atan2(-cos(k * PI) * 160.0 * PI / 1.4 - 60.0, 520.0)
+	ci.draw_set_transform(p, ang, Vector2(2.2, 2.2))
+	var c: Color = _letter_prev.col
+	ci.draw_colored_polygon(PackedVector2Array([Vector2(17, 0), Vector2(-13, -10), Vector2(-6, 0), Vector2(-13, 10)]), Color(0.05, 0.06, 0.12, 0.6))
+	ci.draw_colored_polygon(PackedVector2Array([Vector2(16, 0), Vector2(-12, -9), Vector2(-6, 0), Vector2(-12, 9)]), c)
+	ci.draw_line(Vector2(16, 0), Vector2(-6, 0), c.darkened(0.3), 1.5)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

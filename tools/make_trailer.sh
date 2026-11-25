@@ -8,7 +8,7 @@ set -euo pipefail
 RAW="$1"; OUT="$2"
 export PATH="$(cd "$(dirname "$0")/../../.." && pwd)/tools/bin/path:$PATH"
 FONT=/usr/share/fonts/truetype/Poppins-Bold.ttf
-TMP="$(mktemp -d /tmp/volt-trl-XXXXXX)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d /tmp/kavi-trl-XXXXXX)"; trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$OUT"
 calc() { awk "BEGIN{v=$1; printf(v==int(v)?\"%d\":\"%.2f\", v)}"; }
 # Movie-writer frames are double-gamma: convert sRGB back to linear.
@@ -28,7 +28,7 @@ seg() { # name start dur caption geometry(land|short)
     vf="$FIX,format=yuv420p"
     [ -n "$cap" ] && vf="$vf,$(caption "$cap" "$d" "h*0.36" 76)"
   else
-    # 1080x1080 window around Kite over a blurred full-frame background.
+    # 1080x1080 window around Kavi over a blurred full-frame background.
     vf="split[a][b];[a]$FIX,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,gblur=sigma=30,eq=brightness=-0.12[bg];[b]$FIX,crop=1080:1080:120:0[fg];[bg][fg]overlay=0:420,format=yuv420p"
     vf="$vf,drawtext=fontfile=$FONT:text='KAVI':fontsize=120:fontcolor=white:shadowcolor=black@0.6:shadowx=4:shadowy=4:x=(w-text_w)/2:y=170"
     [ -n "$cap" ] && vf="$vf,$(caption "$cap" "$d" "1600" 64)"
@@ -48,7 +48,7 @@ endcard() { # geometry, frame time for background
 $txt:fontsize=$(calc "150*$fs/1"):text='KAVI':y=h*0.30,\
 $txt:fontsize=$(calc "54*$fs/1"):text='Letters to Lia':y=h*0.30+$(calc "190*$fs/1"),\
 $txt:fontsize=$(calc "64*$fs/1"):text='Play free in your browser':y=h*0.58,\
-$txt:fontsize=$(calc "48*$fs/1"):text='badcoolstudio.itch.io/voltrun':fontcolor=0xFFD27A:y=h*0.58+$(calc "90*$fs/1"),\
+$txt:fontsize=$(calc "48*$fs/1"):text='singh679.github.io/volt-run-luminous':fontcolor=0xFFD27A:y=h*0.58+$(calc "90*$fs/1"),\
 $txt:fontsize=$(calc "38*$fs/1"):text='Badcool Studio':y=h*0.88,format=yuv420p,fade=in:0:12,fade=out:st=4.4:d=0.6[v];\
 [1:a]afade=in:d=0.5,afade=out:st=4.0:d=1.0[a]" -map "[v]" -map "[a]" -t 5 "${ENC[@]}" "$TMP/end-$g.mp4"
   echo "file '$TMP/end-$g.mp4'" >> "$TMP/$g.txt"
