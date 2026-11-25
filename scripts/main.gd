@@ -3281,6 +3281,7 @@ func _update_loading(dt: float) -> void:
 			_estimate_quality()
 			_load_layer.queue_free()
 			_load_layer = null
+			_msaa_after_intro.call_deferred()
 			_intro_video = null
 			loading = false
 			_restore_intro_cursor()
@@ -3413,7 +3414,9 @@ func _apply_graphics_options() -> void:
 	var st: Dictionary = save.data.settings
 	var benchmarking := not _qb.is_empty()
 	var extreme: bool = not benchmarking and st.get("graphics", "auto") == "extreme" and not st.get("custom", false)
-	get_viewport().msaa_2d = Viewport.MSAA_4X if extreme else Viewport.MSAA_DISABLED
+	# MSAA only once the world is on screen: switching it on while the intro
+	# hides the 2D world made Godot warn "2D MSAA ... no 2D content" (0.8.32)
+	_set_msaa(extreme and not loading)
 	world_view.rays_on = true
 	# 0.8.27 (owner: the game ran better before the floating light balls):
 	# floating lights are off by default; Extreme or Custom can turn them on
@@ -3617,3 +3620,17 @@ func _update_mouse_hide(dt: float) -> void:
 	if want_hidden != _mouse_hidden:
 		_mouse_hidden = want_hidden
 		Input.mouse_mode = Input.MOUSE_MODE_HIDDEN if want_hidden else Input.MOUSE_MODE_VISIBLE
+
+func _msaa_after_intro() -> void:
+	var st: Dictionary = save.data.settings
+	_set_msaa(st.get("graphics", "auto") == "extreme" and not st.get("custom", false) and _qb.is_empty())
+
+## Extreme's smooth edges (0.8.32). The world (canvas layers up to 4) is drawn
+## as the environment background so it can glow, so neither msaa_2d nor
+## msaa_3d reach it (msaa_2d only produced a "no 2D content" warning). FXAA, a
+## screen-space filter, does smooth those edges, and it's cheap.
+func _set_msaa(on: bool) -> void:
+	var vp := get_viewport()
+	vp.msaa_2d = Viewport.MSAA_DISABLED
+	vp.msaa_3d = Viewport.MSAA_DISABLED
+	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if on else Viewport.SCREEN_SPACE_AA_DISABLED

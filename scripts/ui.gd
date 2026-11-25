@@ -762,7 +762,7 @@ const HELP := {
 	"Low": "Lightest. Fewer details, no glow. For older phones.",
 	"Medium": "Good balance. Most details, glow on. Phones draw at 1080p.",
 	"High": "Everything on, full sharpness.",
-	"Extreme": "High plus smooth edges on every shape, more effects and no frame-rate cap. Can heat up phones.",
+	"Extreme": "High plus smoothed edges (FXAA), more effects and no frame-rate cap. Can heat up phones.",
 	"Custom": "Choose each graphics option yourself.",
 	"Scenery detail": "How many trees, houses, stars and little details fill the world.",
 	"Glow": "Soft glow around lights, the sun and Kavi's face.",

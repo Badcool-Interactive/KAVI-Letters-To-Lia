@@ -1,4 +1,7 @@
 # Changelog
+## 0.8.32 (2026-11-25) · Extreme really smooths edges, no warning
+
+- **Fixed:** on Extreme, Godot printed "2D MSAA is enabled while there is no 2D content". The world is drawn as the glow environment's background (canvas layers up to 4), which goes through the 3D pipeline, so 2D MSAA never touched it, and 3D MSAA doesn't either (both checked in captures). Extreme now uses FXAA, a screen-space filter that does smooth the world's edges (verified on a hill silhouette). It switches on only after the intro, and the warning is gone. The Extreme help text now says "smoothed edges (FXAA)".
 ## 0.8.31 (2026-11-25) · Taller Kavi, readable daytime, clouds
 
 - **Kavi's proportions:**
