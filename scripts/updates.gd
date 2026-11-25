@@ -96,7 +96,10 @@ func _release_received(release: Variant) -> void:
 		_show("error", "Couldn’t read the release version.")
 		return
 	if latest <= current:
-		_show("current", "♥  We’re still the best!")
+		var status := "♥  We’re still the best!"
+		if latest < current:
+			status += " This preview is ahead of GitHub’s v%s." % tag.trim_prefix("v")
+		_show("current", status)
 		return
 	version = tag.trim_prefix("v")
 	if OS.has_feature("web"):
@@ -227,7 +230,7 @@ func _install_android() -> void:
 	var runtime = Engine.get_singleton("AndroidRuntime")
 	var java = Engine.get_singleton("JavaClassWrapper")
 	if runtime == null or java == null:
-		_show("error", "The Android installer couldn’t open. Use Downloads and updates.")
+		_show("error", "The Android installer couldn’t open. Use Latest published release.")
 		return
 	var activity = runtime.getActivity()
 	var intent_class = java.wrap("android.content.Intent")
@@ -244,7 +247,7 @@ func _install_android() -> void:
 		return
 	var uri = provider.getUriForFile(activity, package_name + ".fileprovider", file_class.File(_path))
 	if uri == null:
-		_show("error", "Android couldn’t open the APK. Use Downloads and updates.")
+		_show("error", "Android couldn’t open the APK. Use Latest published release.")
 		return
 	var intent = intent_class.Intent(intent_class.ACTION_VIEW)
 	intent.setDataAndType(uri, "application/vnd.android.package-archive")
@@ -256,15 +259,15 @@ func _launch_desktop_helper() -> void:
 	var target := OS.get_executable_path()
 	var names: Array = TARGET_NAMES.get(OS.get_name(), [])
 	if OS.has_feature("editor") or target.get_file() not in names:
-		_show("error", "Use Downloads and updates for this copy of KAVI.")
+		_show("error", "Use Latest published release for this copy of KAVI.")
 		return
 	var original_digest := FileAccess.get_sha256(target)
 	if not _is_digest(original_digest) or (OS.has_feature("linux") and FileAccess.set_unix_permissions(_path, USER_EXEC) != OK):
-		_show("error", "KAVI couldn’t prepare to restart. Use Downloads and updates.")
+		_show("error", "KAVI couldn’t prepare to restart. Use Latest published release.")
 		return
 	var args := PackedStringArray(["--headless", "--", INSTALL_ARG, target, str(OS.get_process_id()), _asset.digest, original_digest])
 	if OS.create_process(_path, args) < 0:
-		_show("error", "KAVI couldn’t restart. Use Downloads and updates.")
+		_show("error", "KAVI couldn’t restart. Use Latest published release.")
 		return
 	_show("installing", "Restarting KAVI…")
 	restart_requested.emit()
@@ -306,7 +309,7 @@ static func run_desktop_helper(args: PackedStringArray) -> int:
 	if result != OK:
 		var failure := FileAccess.open(CACHE.path_join("install-failed.txt"), FileAccess.WRITE)
 		if failure != null:
-			failure.store_string("The update couldn’t replace this copy of KAVI. Use Downloads and updates.")
+			failure.store_string("The update couldn’t replace this copy of KAVI. Use Latest published release.")
 			failure.close()
 	return int(OS.create_process(target, PackedStringArray()) < 0 or result != OK)
 

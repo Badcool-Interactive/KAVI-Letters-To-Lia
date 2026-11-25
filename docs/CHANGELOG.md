@@ -5,6 +5,9 @@
 - If an update is available, desktop and Android download the platform build and verify its size and GitHub SHA-256 digest. Desktop can restart into the verified update. Android opens its own installer for confirmation. The hosted web build offers a reload once its new version is ready on GitHub Pages.
 - **Full animal costumes** give the eight recent suits and the original Kitty and Bunny their own body palettes, shaped face glass and animal details. The new suits are Tiger, Axolotl, Bat, Red Panda, Otter and Turtle. Kavi’s eyes, expressions and selected face style stay with him.
 - Existing cosmetic choices and save indices are preserved.
+- **Latest published release** in About opens GitHub's public release. Check for updates identifies a local preview that's ahead of GitHub.
+- **Studio intro** has an original five-second stereo cue timed to the ident. Its volume follows the Master slider. The mouse stays hidden during the video, any loading hold, and the reveal. Game audio fades in afterwards.
+- **World audio** has new stereo loops with breaking surf, spaced forest calls, river riffles and moving mountain gusts. The sound mix moves smoothly into and out of Scenic View and Pause.
 
 ## 0.8.25 (2026-11-25) · Settings, world audio and the Garage
 

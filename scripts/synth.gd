@@ -3,6 +3,7 @@ extends Node
 ## music loops (calm pad + drive layer) rendered on a worker thread.
 ## Tailwind "perfect" notes play in the biome's key and climb with the tier.
 
+const GAME_BUS := &"Game"
 const RATE := 22050
 const BPM := 96.0
 
@@ -17,7 +18,8 @@ var sfx := {}
 var music_vol := 0.8
 var sfx_vol := 0.9
 var world_vol := 0.7   # ambient world sounds (0.8.25)
-var world_level := 0.6 # how present the world sounds are in the current scene (main sets it)
+var world_level := 0.6  # target presence in the current scene
+var _world_presence := 0.6
 var _amb: Array = []   # two players for crossfading between countries
 var _amb_cur := 0
 var _amb_b := -1
@@ -34,20 +36,21 @@ var _task := -1
 var _pending_biome := -1
 var _note_step := 0
 
+func _new_game_player() -> AudioStreamPlayer:
+	var player := AudioStreamPlayer.new()
+	player.bus = GAME_BUS
+	add_child(player)
+	return player
+
 func _ready() -> void:
-	_pad = AudioStreamPlayer.new()
-	_drv = AudioStreamPlayer.new()
-	add_child(_pad)
-	add_child(_drv)
+	_pad = _new_game_player()
+	_drv = _new_game_player()
 	for i in 10:
-		var p := AudioStreamPlayer.new()
-		add_child(p)
-		_pool.append(p)
+		_pool.append(_new_game_player())
 	_build_sfx()
 	for i in 2:
-		var a := AudioStreamPlayer.new()
+		var a := _new_game_player()
 		a.volume_db = -80.0
-		add_child(a)
 		_amb.append(a)
 
 # ------------------------------------------------------------------ playback
@@ -103,7 +106,8 @@ func _update_world(dt: float) -> void:
 	if _amb.is_empty():
 		return
 	_amb_mix = minf(_amb_mix + dt / 2.5, 1.0)
-	var base := maxf(world_vol * world_level, 0.0)
+	_world_presence = lerpf(_world_presence, world_level, 1.0 - exp(-dt * 3.0))
+	var base := maxf(world_vol * _world_presence, 0.0)
 	var cur: AudioStreamPlayer = _amb[_amb_cur]
 	var old: AudioStreamPlayer = _amb[1 - _amb_cur]
 	cur.volume_db = linear_to_db(maxf(base * sin(_amb_mix * PI * 0.5), 0.0001))

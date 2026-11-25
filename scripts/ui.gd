@@ -725,7 +725,7 @@ const HELP := {
 	"Controls": "Button size and which hand the touch buttons are for.",
 	"Accessibility": "Options that make the game gentler or calmer.",
 	"About KAVI": "Version, where to get updates, and who made the game.",
-	"Master volume": "Everything at once.",
+	"Master volume": "Everything at once, including the studio intro.",
 	"Music": "The soundtrack of each country.",
 	"Sound effects": "Hops, perfects, menus and the little world toys.",
 	"World sounds": "Waves, birds, wind and the river around Kavi.",
@@ -1347,7 +1347,7 @@ func show_about() -> void:
 	_about_update_action = _item(v, "", main.updates.apply, 32)
 	_update_about_status()
 	_item(v, "Play in your browser", func(): OS.shell_open(LINK_PLAY), 32)
-	_item(v, "Downloads and updates", func(): OS.shell_open(LINK_DOWNLOADS), 32)
+	_item(v, "Latest published release", func(): OS.shell_open(LINK_DOWNLOADS), 32)
 	_item(v, "Source on GitHub", func(): OS.shell_open(LINK_SOURCE), 32)
 	_small(v, "github.com/singh679/volt-run-luminous", 22, Color(1, 1, 1, 0.55))
 	_gap(v, 10)

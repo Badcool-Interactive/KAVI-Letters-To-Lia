@@ -232,6 +232,7 @@ func _ready() -> void:
 	ads.save = save
 	font = _load_font("res://assets/fonts/Fredoka.ttf", 600)
 	font_body = _load_font("res://assets/fonts/Nunito.ttf", 800)
+	_game_audio_bus = AudioServer.get_bus_index(Synth.GAME_BUS)
 	_build_scene()
 	# Display title (window / browser tab). project config/name stays "VOLT/RUN"
 	# because it names the save folder on desktop.
@@ -482,8 +483,8 @@ func _apply_pending_quality() -> void:
 	if down and state != "title":
 		_toast("Graphics: " + str(get_meta("quality_name")) + " (smoother)", Vector2(get_viewport_rect().size.x * 0.5, get_viewport_rect().size.y * 0.2), Color(1, 1, 1, 0.7), 28)
 
-## Volumes: master x (intro fade-in) on the master bus; music, effects and
-## world sounds inside the synth.
+## The Master slider controls the ident and the game. The Game bus fades
+## independently, so the logo can play while music, effects and ambience wait.
 func _apply_audio_settings() -> void:
 	var st: Dictionary = save.data.settings
 	synth.music_vol = st.music
@@ -492,13 +493,17 @@ func _apply_audio_settings() -> void:
 	_apply_master_volume()
 
 func _apply_master_volume() -> void:
-	var k := 1.0
-	if _audio_in_t < 0.0:
-		k = 0.0
-	elif _audio_in_t <= 2.5:
-		var f := clampf(_audio_in_t / 2.5, 0.0, 1.0)
-		k = f * f * (3.0 - 2.0 * f)
-	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(float(save.data.settings.get("master", 1.0)) * k, 0.0001)))
+	var gain := clampf(float(save.data.settings.get("master", 1.0)), 0.0, 1.0)
+	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(gain, 0.0001)))
+	AudioServer.set_bus_mute(0, gain == 0.0)
+
+func _apply_intro_audio_gain() -> void:
+	if _game_audio_bus < 0:
+		return
+	var fade := clampf(_audio_in_t / 2.5, 0.0, 1.0)
+	var gain := fade * fade * (3.0 - 2.0 * fade)
+	AudioServer.set_bus_volume_db(_game_audio_bus, linear_to_db(maxf(gain, 0.0001)))
+	AudioServer.set_bus_mute(_game_audio_bus, gain == 0.0)
 
 func _apply_settings() -> void:
 	var st: Dictionary = save.data.settings
@@ -1259,7 +1264,9 @@ func _shutdown() -> void:
 	if is_instance_valid(_intro_video):
 		_intro_video.stop()
 		_intro_video.stream = null
-	synth.shutdown()
+	if is_instance_valid(synth):
+		synth.shutdown()
+	_restore_intro_cursor()
 	Input.set_custom_mouse_cursor(null, Input.CURSOR_ARROW)
 	Input.set_custom_mouse_cursor(null, Input.CURSOR_POINTING_HAND)
 	Art.release_statics()
@@ -2910,6 +2917,8 @@ func _setup_cursor() -> void:
 ## Over something clickable in the scene (sky toys, the paper plane) the
 ## cursor shows the glowing pointer, like it does over menu items.
 func _update_cursor_hover() -> void:
+	if loading:
+		return
 	var want := false
 	if state in ["title", "scenic"] and not (garage_open or menu_dim):
 		var m := get_viewport().get_mouse_position()
@@ -3038,7 +3047,10 @@ var _est_gpu: Array = []
 var _est_dt: Array = []
 var _slow_load := 0.0        # capture testing: pretend loading takes this long
 var _clean_quit_frames := -1   # test: quit through the real clean path after N frames
-var _audio_in_t := 99.0      # < 0: muted under the intro; 0..2.5: fading in
+var _game_audio_bus := -1
+var _audio_in_t := 99.0      # < 0: game muted under the intro; 0..2.5: fading in
+var _intro_cursor_hidden := false
+var _pre_intro_mouse_mode := Input.MOUSE_MODE_VISIBLE
 var _intro_log := {"frames": [], "steps": []}   # debug builds save this to user://intro_timing.json
 
 ## After the intro the whole game's sound rises over 2.5 s with a soft curve,
@@ -3047,7 +3059,7 @@ func _update_audio_in(dt: float) -> void:
 	if _audio_in_t < 0.0 or _audio_in_t > 2.5:
 		return
 	_audio_in_t += dt
-	_apply_master_volume()
+	_apply_intro_audio_gain()
 
 ## Slim silver-platinum bar with a soft moving sheen.
 class SilverBar extends Control:
@@ -3078,8 +3090,16 @@ func _intro_fit(c: Control) -> void:
 		(c as TextureRect).expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		(c as TextureRect).stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 
+func _restore_intro_cursor() -> void:
+	if _intro_cursor_hidden:
+		Input.mouse_mode = _pre_intro_mouse_mode
+		_intro_cursor_hidden = false
+
 func _start_loading() -> void:
 	loading = true
+	_pre_intro_mouse_mode = Input.mouse_mode
+	_intro_cursor_hidden = true
+	Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--clean-quit-after="):
 			_clean_quit_frames = int(a.substr(19))
@@ -3087,7 +3107,7 @@ func _start_loading() -> void:
 			_slow_load = float(a.substr(12))
 	# game sound stays silent under the intro, then rises gently (see _update_audio_in)
 	_audio_in_t = -1.0
-	_apply_master_volume()
+	_apply_intro_audio_gain()
 	_load_layer = CanvasLayer.new()
 	_load_layer.layer = 128
 	add_child(_load_layer)
@@ -3121,6 +3141,7 @@ func _start_loading() -> void:
 	if stream != null:
 		_intro_video = VideoStreamPlayer.new()
 		_intro_video.stream = stream
+		_intro_video.bus = &"Master"
 		_intro_video.expand = true
 		_intro_video.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_load_root.add_child(_intro_video)
@@ -3205,6 +3226,7 @@ func _update_loading(dt: float) -> void:
 			_load_layer = null
 			_intro_video = null
 			loading = false
+			_restore_intro_cursor()
 		return
 	if _load_i >= _load_steps.size() and is_instance_valid(_intro_video) and not _intro_video.is_playing() and not _intro_done and not _video_started:
 		_video_started = true
