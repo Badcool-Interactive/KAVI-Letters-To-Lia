@@ -61,7 +61,7 @@ var data := {
 		"slow_speed": false,
 		"reduced_motion": false,
 		"shake": true,
-		"cursor": "system",
+		"pointer": "kavi",
 		"music": 0.8,
 		"sfx": 0.9,
 		"left_handed": false,

@@ -3089,15 +3089,16 @@ func _sky_react(kind: String, pos: Vector2, quiet: bool) -> void:
 
 var _cursor_hand := false
 
-## 0.8.34 (owner found the big custom pointer annoying): the computer's own
-## pointer by default; Settings > Controls > Mouse pointer > KAVI gives a
-## smaller (32 px) game-coloured one.
+## 0.8.34: the owner found the old 48 px pointer annoying and asked for a soft,
+## cute one that isn't huge: a 32 px rounded arrow and mitten hand
+## (tools/art/make_cursor_soft.py), on by default. Settings > Controls >
+## Mouse pointer > Normal gives the computer's own pointer.
 var _cursor_kind := ""
 
 func _setup_cursor() -> void:
 	if OS.has_feature("mobile"):
 		return
-	var want := str(save.data.settings.get("cursor", "system"))
+	var want := str(save.data.settings.get("pointer", "kavi"))
 	if want == _cursor_kind:
 		return
 	_cursor_kind = want
@@ -3105,13 +3106,12 @@ func _setup_cursor() -> void:
 		Input.set_custom_mouse_cursor(null, Input.CURSOR_ARROW)
 		Input.set_custom_mouse_cursor(null, Input.CURSOR_POINTING_HAND)
 		return
-	for e in [["arrow", Input.CURSOR_ARROW], ["point", Input.CURSOR_POINTING_HAND]]:
-		var tex: Texture2D = load("res://assets/cursor/%s.png" % e[0])
-		if tex == null:
-			continue
-		var img := tex.get_image()
-		img.resize(32, 32, Image.INTERPOLATE_LANCZOS)
-		Input.set_custom_mouse_cursor(ImageTexture.create_from_image(img), e[1], Vector2(3, 2))
+	var arrow: Texture2D = load("res://assets/cursor/arrow.png")
+	var point: Texture2D = load("res://assets/cursor/point.png")
+	if arrow != null:
+		Input.set_custom_mouse_cursor(arrow, Input.CURSOR_ARROW, Vector2(3, 2))
+	if point != null:
+		Input.set_custom_mouse_cursor(point, Input.CURSOR_POINTING_HAND, Vector2(11, 1))
 
 ## Over something clickable in the scene (sky toys, the paper plane) the
 ## cursor shows the glowing pointer, like it does over menu items.

@@ -4,7 +4,7 @@
 # The request goes in user://bench_request.txt (Android launchers drop CLI args);
 # the game runs it in save-isolated mode and writes user://bench_NAME.json.
 ADB="/home/BADCOOL-242/Documents/Codex/2026-11-17/referenced-chatgpt-conversation-this-is-an/work/android-tools/sdk/platform-tools/adb"
-PKG=studio.badcool.kavi
+PKG=interactive.badcool.kavi
 NAME=$1; shift
 REQ="--bench=user://bench_$NAME.json"
 for a in "$@"; do REQ="$REQ\n$a"; done

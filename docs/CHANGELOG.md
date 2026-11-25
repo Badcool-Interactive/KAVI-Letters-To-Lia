@@ -19,9 +19,9 @@
 - **Garage sulk:** after 9–14 tries (or 50 s), a chair pops in and he sits with crossed arms: "I wanna see Liaaaa!", "When are we going to Liaaa???", "Pleeease press Play!"… Trying something new gets him back up.
 - **Speech bubbles** are drawn above menus and the results board, follow the Garage zoom, and stay on screen.
 - **Graphics page:** a big panel where Kavi stood shows the focused preset **by day and in the evening** (960×540 pictures, cross-fading as you move along the presets). New tool: `tools/make-preset-pics.sh`.
-- **Mouse pointer:** the computer's normal pointer by default (owner found the big custom one annoying). Settings → Controls → Mouse pointer → KAVI gives a smaller 32 px game-coloured arrow.
+- **Mouse pointer:** a new soft, cute KAVI pointer, on by default: a 32 px rounded arrow (cream with a thin navy outline, a soft shadow and an orange scarf stripe) and a mitten hand with an orange cuff and a pink heart for clickable things. FossaCursors was the mood reference; the art is original, drawn by `tools/art/make_cursor_soft.py`. The old pointer was 48 px. Settings → Controls → Mouse pointer → Normal uses your computer's own pointer.
 - **App ID and folders:**
-  - The Android package is now `studio.badcool.kavi` (was `studio.badcool.voltrun`). Phones install it as a new app, so progress on the phone starts fresh (owner OK: still in development); the old app can be uninstalled.
+  - The Android package is now `interactive.badcool.kavi` (was `studio.badcool.voltrun`), after BADCOOL INTERACTIVE. Phones install it as a new app, so progress on the phone starts fresh (owner OK: still in development); the old app can be uninstalled.
   - On PC, the old `volt_run_save.json` is now moved into the KAVI folder as `old_volt_run_save.json` after your progress is copied (verified byte for byte before the original is removed).
   - The other files in the old `VOLT-RUN` folder (`volt_settings.cfg`, caches) belong to the legacy VOLT/RUN project, which studio rules keep read-only, so they stay where they are.
 ## 0.8.33 (2026-11-25) · KAVI everywhere, Classic colours, Kavi comes alive on the menu

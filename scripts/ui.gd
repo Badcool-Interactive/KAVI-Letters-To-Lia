@@ -762,7 +762,7 @@ const HELP := {
 	"World sounds": "Waves, birds, wind and the river around Kavi.",
 	"Button size": "How big the touch buttons are on phones and tablets.",
 	"Left-handed controls": "Swaps the touch buttons left and right.",
-	"Mouse pointer": "Normal uses your computer's own pointer. KAVI is a small game-coloured arrow.",
+	"Mouse pointer": "KAVI is a soft, cute pointer in the game's colours. Normal uses your computer's own pointer.",
 	"Kind Mode": "Obstacles never end a run; Kavi just bonks and keeps going.",
 	"Hover assist over gaps": "Kavi hovers a little on his own over gaps.",
 	"Relaxed speed (82%)": "The whole game runs a bit slower.",
@@ -927,7 +927,7 @@ func _page_controls(animate := true) -> void:
 	_cycle_row(v, "Button size", "controls_scale", [0.8, 1.0, 1.2, 1.4])
 	_toggle_row(v, "Left-handed controls", "left_handed")
 	if not OS.has_feature("mobile"):
-		_cycle_row(v, "Mouse pointer", "cursor", ["system", "kavi"], ["Normal", "KAVI"])
+		_cycle_row(v, "Mouse pointer", "pointer", ["kavi", "system"], ["KAVI", "Normal"])
 	_help_area(v)
 	_gap(v, 6)
 	_item(v, "Back", show_settings, 34)
