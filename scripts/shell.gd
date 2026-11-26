@@ -28,6 +28,8 @@ const BODY_BOT := Color(0.09, 0.09, 0.17)
 const PLASTIC := Color(0.22, 0.22, 0.35)
 const BEZEL := Color(0.05, 0.05, 0.10)
 const POWER_HOLD := 0.9
+const DECK_U := 6.8       # deck height in deck units (chip, pad + buttons, pills)
+const MAX_TALL := 1.5     # tallest game screen, height / width (fills a 20:9 phone)
 const ORANGE := Color(1.0, 0.48, 0.22)
 const TEAL := Color(0.30, 0.86, 0.82)
 const PINK := Color(1.0, 0.45, 0.70)
@@ -75,6 +77,16 @@ func _ready() -> void:
 	game = MAIN.instantiate()
 	sub.add_child(game)
 
+## Deck size unit (button radius scale): set by the phone's width.
+static func _deck_u(S: Vector2) -> float:
+	return S.x * 0.095
+
+func _max_tall() -> float:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--max-tall="):
+			return float(a.get_slice("=", 1))
+	return MAX_TALL
+
 func _deck_hidden() -> bool:
 	if game == null or not ("save" in game) or game.save == null:
 		return false
@@ -91,12 +103,23 @@ func _layout() -> void:
 	var r := Rect2(Vector2.ZERO, S)
 	if portrait:
 		# the screen sits inside a bezel, a little in from the console's edges
+		# 0.8.38: the controls sit at the bottom like a keyboard (thumb
+		# reach) and the screen grows taller into the space above them, up
+		# to MAX_TALL (height / width); the game simply sees more world.
 		var gw := S.x * 0.965
-		var gh := gw * 9.0 / 16.0
 		var gx := (S.x - gw) * 0.5
-		r = Rect2(gx, (S.y - gh) * 0.42, gw, gh) if _deck_hidden() else Rect2(gx, S.x * 0.03, gw, gh)
+		var top := S.x * 0.03
+		var strip := S.x * 0.078       # bezel strip under the screen (power + name)
+		var deck_h := _deck_u(S) * DECK_U
+		var room := S.y - top - strip - S.x * 0.02 - (0.0 if _deck_hidden() else deck_h)
+		if _deck_hidden():
+			room -= S.x * 0.14            # the "Show controls" pill
+		var gh := clampf(room, gw * 9.0 / 16.0, gw * _max_tall())
+		r = Rect2(gx, (S.y - gh) * 0.42, gw, gh) if _deck_hidden() else Rect2(gx, top, gw, gh)
+		deck_rect = Rect2(0, S.y - deck_h, S.x, deck_h)
+	else:
+		deck_rect = Rect2()
 	game_rect = r
-	deck_rect = Rect2(0, r.end.y + S.x * 0.075, S.x, S.y - r.end.y - S.x * 0.075) if portrait else Rect2()
 	_aa = S.x / maxf(win.x, 1.0) * 1.1
 	view.position = r.position
 	view.size = r.size
@@ -169,16 +192,19 @@ func _key(code: int, pressed: bool, echo := false) -> void:
 	Input.parse_input_event(k)
 
 func _zones() -> Dictionary:
+	# laid out in deck units from the top: chip 0.25-0.67, pad + buttons
+	# around 2.95, Hide / Pause pills at 5.35, a little room for the
+	# phone's gesture bar below
 	var d := deck_rect
-	var u: float = minf(d.size.y * 0.13, d.size.x * 0.095)
-	var cy := d.position.y + d.size.y * 0.36
+	var u := _deck_u(get_viewport_rect().size)
+	var cy := d.position.y + u * 2.95
 	return {
 		"u": u,
 		"dpad": Vector2(d.position.x + d.size.x * 0.26, cy),
 		"b": Vector2(d.position.x + d.size.x * 0.64, cy + u * 0.55),
 		"a": Vector2(d.position.x + d.size.x * 0.82, cy - u * 0.55),
-		"hide": Rect2(d.position.x + d.size.x * 0.5 - u * 1.85, d.position.y + d.size.y * 0.70, u * 1.6, u * 0.55),
-		"pause": Rect2(d.position.x + d.size.x * 0.5 + u * 0.25, d.position.y + d.size.y * 0.70, u * 1.6, u * 0.55),
+		"hide": Rect2(d.position.x + d.size.x * 0.5 - u * 1.85, d.position.y + u * 5.35, u * 1.6, u * 0.55),
+		"pause": Rect2(d.position.x + d.size.x * 0.5 + u * 0.25, d.position.y + u * 5.35, u * 1.6, u * 0.55),
 	}
 
 func _zone_at(p: Vector2) -> String:
@@ -375,7 +401,7 @@ func _draw() -> void:
 	_pill(z.hide, "HIDE", 1.0, _pressed("hide"), font, u)
 	_pill(z.pause, "PAUSE", k, _pressed("pause"), font, u)
 	# speaker: a neat grid of small holes
-	var sp := Vector2(deck_rect.end.x - u * 1.9, deck_rect.end.y - u * 1.25)
+	var sp := Vector2(deck_rect.end.x - u * 1.9, deck_rect.position.y + u * 5.3)
 	for row in 3:
 		for col in 5:
 			_disc(sp + Vector2(col * u * 0.26 + (row % 2) * u * 0.13, row * u * 0.24), u * 0.05, Color(0, 0, 0, 0.5))

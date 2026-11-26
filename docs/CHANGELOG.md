@@ -1,4 +1,12 @@
 # Changelog
+## 0.8.38 (2026-11-26) · Controls at the bottom, a much bigger game screen
+
+- **Controls moved down** (owner: "way too high up ... as if we are using a keyboard"): the D-pad, A/B and Hide/Pause now sit at the bottom of the phone, where thumbs rest, instead of right under the screen.
+- **A bigger game screen** (owner: "most of the screen looks empty"): the screen now grows down to the controls, up to 1.5 times taller than wide. The game doesn't stretch; it simply shows more sky and world above Kavi. On a 20:9 phone the empty middle band is gone; on a shorter 16:9 phone the screen is about square.
+- Hiding the controls gives the same tall screen, centred, with the "Show controls" pill below.
+- Landscape (phone turned sideways, PC, web) is unchanged.
+- Checked in 1080×2400 and 1080×1920 windows: title, menu navigation with the D-pad, a run with hop, Scenic View picker, Garage (the full suit list now fits), Settings, results with a fail scene, and hidden controls.
+- Not checked on a real phone yet: the taller screen draws about 2.5× more pixels, so watch the frame rate on Medium/High.
 ## 0.8.37 (2026-11-26) · A modern handheld: bigger screen, smooth edges, a real power button
 
 - **More screen:** the game now fills about 97% of the width under a thin glass bezel, with almost no margin at the top (owner: phones don't have much room at the sides).
