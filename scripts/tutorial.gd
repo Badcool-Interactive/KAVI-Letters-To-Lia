@@ -6,7 +6,7 @@ extends RefCounted
 
 const Track = preload("res://scripts/track.gd")
 const Sim = preload("res://scripts/sim.gd")
-enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE }
+enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE, CART, FLOCK, TOWER }
 
 const SPEED := 430.0
 const TOTAL_LESSONS := 10

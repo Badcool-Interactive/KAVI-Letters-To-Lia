@@ -19,8 +19,9 @@ const SWOOP_T := 0.75
 const SWOOP_MULT := 1.32
 const COYOTE := 0.09
 const BUFFER := 0.13
+const CART_WAKE := 1150.0   # a cart starts rolling when it's next and this close
 
-enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE }
+enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE, CART, FLOCK, TOWER }
 
 var track
 var x := 0.0
@@ -141,17 +142,23 @@ func step(dt: float, inp: Dictionary) -> void:
 	if inp.letter_pressed and letters > 0 and letter_cd <= 0.0:
 		_letter(sp)
 	_update_planes(dt, sp)
+	_move_carts(dt)
 
 	# ---- collisions and clears
 	_collide()
 
 func _jump(sp: float) -> void:
-	var o = _next_of([HURDLE, GAP, WIDE_GAP, BLOOM])
+	var o = _next_of([HURDLE, GAP, WIDE_GAP, BLOOM, CART, TOWER])
 	if o != null and not o.perf:
 		var d: float = o.x - (x + HALF_W)
 		match o.t:
 			HURDLE:
 				o.perf = d >= sp * 0.05 and d <= sp * 0.17
+			CART:
+				var closing: float = sp + (o.cv if o.get("rolling", false) else 0.0)
+				o.perf = d >= closing * 0.05 and d <= closing * 0.17
+			TOWER:
+				o.perf = d >= sp * 0.16 and d <= sp * 0.30
 			GAP, WIDE_GAP:
 				o.perf = d >= -HALF_W - 6.0 and d <= sp * 0.09
 	on_ground = false
@@ -166,8 +173,8 @@ func _jump(sp: float) -> void:
 	_emit("jump")
 
 func _slide_start(sp: float) -> void:
-	var o = _next_of([BEAM])
-	if o != null and not o.perf:
+	var o = _next_of([BEAM, FLOCK])
+	if o != null and not o.perf and not o.open:
 		var d: float = o.x - (x + HALF_W)
 		o.perf = d >= -4.0 and d <= sp * 0.18
 	_emit("slide")
@@ -211,13 +218,13 @@ func _gust() -> void:
 	var i: int = track.first_index_after(x - HALF_W)
 	for k in range(i, mini(i + 4, track.obs.size())):
 		var o: Dictionary = track.obs[k]
-		if o.t != GATE or o.open:
+		if not (o.t == GATE or o.t == FLOCK) or o.open:
 			continue
 		var d: float = o.x - (x + HALF_W)
 		if d >= -12.0 and d <= GUST_RANGE:
 			o.open = true
 			o.perf = d <= 130.0
-			_emit("gate_open", {"o": o, "perfect": o.perf})
+			_emit("gate_open" if o.t == GATE else "flock_scatter", {"o": o, "perfect": o.perf})
 
 func _letter(sp: float) -> void:
 	letters -= 1
@@ -267,10 +274,12 @@ func _collide() -> void:
 			break
 		var hit := false
 		match o.t:
-			HURDLE:
+			HURDLE, CART, TOWER:
 				hit = r > o.x and l < o.x + o.w and y > -o.h
 			BEAM:
 				hit = r > o.x and l < o.x + o.w and top < -o.h
+			FLOCK:
+				hit = not o.open and r > o.x and l < o.x + o.w and top < -o.h
 			GATE:
 				hit = not o.open and r > o.x and l < o.x + o.w
 			BLOOM:
@@ -296,12 +305,31 @@ func _collide() -> void:
 				_emit("clear", {"o": o, "perfect": o.perf and not o.get("bonked", false)})
 
 static func Sim_name(t: int) -> String:
-	return ["hurdle", "beam", "gap", "wide_gap", "gate", "bell", "bloom", "rescue"][t]
+	return ["hurdle", "beam", "gap", "wide_gap", "gate", "bell", "bloom", "rescue", "cart", "flock", "tower"][t]
 
 static func _extent(o: Dictionary) -> float:
 	if o.t == BLOOM:
 		return o.wall_x + o.wall_w - o.x
 	return o.w
+
+## Runaway carts (0.8.40): a cart waits until it is the next obstacle and on
+## screen, then rolls toward Kavi, so the hop comes sooner than it looks.
+## Passed carts keep rolling away behind him.
+func _move_carts(dt: float) -> void:
+	var nxt: int = track.first_index_after(x - HALF_W)
+	var i: int = track.first_index_after(x - HALF_W - 900.0)
+	for k in range(i, mini(nxt + 2, track.obs.size())):
+		var o: Dictionary = track.obs[k]
+		if o.t != CART:
+			continue
+		if not o.get("rolling", false):
+			if k == nxt and o.x - x < CART_WAKE:
+				o.rolling = true
+				_emit("cart", {"o": o})
+			else:
+				continue
+		o.x -= o.cv * dt
+		o.roll += o.cv * dt
 
 func _fail(reason: String) -> void:
 	dead = true
@@ -312,7 +340,7 @@ func _under_beam() -> bool:
 	var i: int = track.first_index_after(x - HALF_W - 4.0)
 	for k in range(i, mini(i + 3, track.obs.size())):
 		var o: Dictionary = track.obs[k]
-		if o.t == BEAM and x + HALF_W > o.x and x - HALF_W < o.x + o.w:
+		if (o.t == BEAM or (o.t == FLOCK and not o.open)) and x + HALF_W > o.x and x - HALF_W < o.x + o.w:
 			return true
 	return false
 
@@ -348,5 +376,8 @@ func respawn(px: float) -> void:
 		if o.x > px - 10.0:
 			o.passed = false
 			o.perf = false
-			if o.t == GATE or o.t == BELL:
+			if o.t == GATE or o.t == BELL or o.t == FLOCK:
 				o.open = false
+			if o.has("x0"):
+				o.x = o.x0
+				o.rolling = false

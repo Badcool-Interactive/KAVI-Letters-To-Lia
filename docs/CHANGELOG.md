@@ -1,4 +1,42 @@
 # Changelog
+## 0.8.40 (2026-11-26) · New obstacles, real music, a livelier world, web fixes
+
+**New obstacles** (owner: "make more obstacles and make it fun"). Each uses the buttons you already know in a new way, and every layout is still checked by the solver bot:
+- **Runaway fruit cart:** waits until it's next, then rolls toward Kavi with spinning wheels and dust, so you hop a little earlier than it looks. From story chapter 1 and the start of Endless.
+- **Pigeon flock:** pigeons flutter at head height. Scoot under them (they lift as you pass) or **Gust** them away ("SHOO!"). Two ways to solve one obstacle. From chapter 2 and Endless stretch 2.
+- **Parcel tower:** a tall, wobbly stack with a cat napping on top. A tap-hop isn't enough: **hold Hop** (and keep holding to hover). A perfect one says "SKY HOP!". From chapter 2 and Endless stretch 3.
+- Each one shows a one-time hint the first time you meet it, in every mode.
+- New combos mix them with the old obstacles (e.g. pigeons then a hurdle, a cart then a sign).
+
+**Music, rebuilt** (owner: "you need sound to be engaged, or else it's meh"):
+- Every country has a real ~38-second song (verse, verse, a middle part, verse) instead of a 10-second loop of plain tones.
+- It's made of three layers that always play in sync:
+  - soft chords in menus;
+  - drums, bass and a plucked guitar-like arpeggio when you run;
+  - a **melody with echo and a shaker that joins as your Tailwind climbs** (half at x2, full at x3+). Playing well makes the music bigger.
+- Drum fills lead into each new section.
+- Still 100% made by code (original); now stored as OGG files (2.6 MB, smaller than the old 3.5 MB of WAV loops).
+
+**A livelier world** (owner: the world sounds were "meh"). On top of each country's sound loop, little live moments now happen at random times, pitches and volumes, so the world never repeats exactly:
+- Amber Shore: gull calls and wave swells;
+- Lanternwood: a woodpecker and a cuckoo;
+- Mirrorwater: splashes and a distant church bell;
+- Starfall Heights: cowbells and an eagle's cry.
+
+**New sounds:** a rumbling, clacking cart; pigeon wing-flaps with a little coo.
+
+**Web fixes** (from the CrazyGames check; most apply to every web version):
+- **P pauses** and **Backspace goes back**, everywhere. In a browser, Esc first leaves fullscreen, so web players had no reliable pause key. The in-run key hints now say "P / Esc".
+- **Readable small text in small windows:** menu text never drops below about 13 real pixels (CrazyGames tests at 907×510 and 800×450).
+- The About page hides "Play online" on the website (you're already there).
+- **CrazyGames build only:**
+  - no outside links (Downloads, Source code, Check for updates are hidden), per their rules;
+  - it sends CrazyGames' "gameplay started/stopped" signals through their SDK (gameplay events only: no ads, no login, no player data);
+  - text selection is off (`user-select: none`), as they ask.
+
+**Tests:** the fairness test now covers all 11 obstacle types: 2,855 obstacles, 0 removed. All 225 checks pass, and the game boots clean.
+
+**Not checked by ear yet:** the music and sounds were checked for loudness and length only. A preview of two songs (all layers) is in `~/Documents/KAVI-0.8.40-music-preview.ogg`.
 ## 0.8.39 (2026-11-26) · New home: Badcool Interactive on GitHub
 
 - **The game moved:** the code now lives at **github.com/Badcool-Interactive/KAVI-Letters-To-Lia**, and the browser version at **https://badcool-interactive.github.io/KAVI-Letters-To-Lia/**. The owner created the Badcool Interactive organisation and renamed his account.

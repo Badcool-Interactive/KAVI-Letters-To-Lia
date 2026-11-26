@@ -3,7 +3,7 @@ extends Node2D
 
 const Art = preload("res://scripts/art.gd")
 const Painter = preload("res://scripts/painter.gd")
-enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE }
+enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE, CART, FLOCK, TOWER }
 
 var track
 var sim
@@ -128,6 +128,9 @@ func _draw_base(ci: Node2D) -> void:
 			BELL: _bell(ci, o)
 			BLOOM: _bloom(ci, o)
 			RESCUE: _rescue(ci, o)
+			CART: _cart(ci, o)
+			FLOCK: _flock(ci, o)
+			TOWER: _tower(ci, o)
 	if sim != null:
 		for p in sim.planes:
 			_plane(ci, Vector2(p.x, p.y), Vector2(p.vx, p.vy))
@@ -700,6 +703,113 @@ func _snowman(ci: Node2D, o: Dictionary) -> void:
 	for k in 2:
 		ci.draw_circle(c2 + Vector2(0, -r2 * 0.1 + k * r2 * 0.45), 2.6, INK)
 
+## Runaway fruit cart (0.8.40): rolls toward Kavi, wheels turning, fruit
+## jiggling, a little dust behind. Handles at the back (right).
+func _cart(ci: Node2D, o: Dictionary) -> void:
+	var wood := _wood()
+	var roll: float = o.get("roll", 0.0)
+	var rolling: bool = o.get("rolling", false)
+	var jig := sin(roll * 0.09) * 2.0 if rolling else 0.0
+	var top: float = -o.h + 18.0
+	var body := Rect2(o.x, top + jig * 0.3, o.w, o.h - 40.0)
+	# fruit heap first so the box rim covers its base
+	var fruit: Array = [Color(1.0, 0.55, 0.12), Color(0.95, 0.25, 0.22), Color(0.98, 0.80, 0.20)]
+	var fc: Color = fruit[int(Art.hash01(int(o.seed), 5) * 3.0) % 3]
+	var n := int(o.w / 15.0)
+	for row in 2:
+		for k in n - row:
+			var fx: float = o.x + 9.0 + (k + row * 0.5) * ((o.w - 18.0) / maxf(n - 1, 1))
+			var fy: float = top - 4.0 - row * 11.0 + jig + sin(k * 1.7 + roll * 0.05) * (1.5 if rolling else 0.0)
+			ci.draw_circle(Vector2(fx, fy), 8.0, INK)
+			ci.draw_circle(Vector2(fx, fy), 6.5, fc.darkened(Art.hash01(k + row * 9, int(o.seed)) * 0.15))
+			ci.draw_circle(Vector2(fx - 2.0, fy - 2.5), 2.0, Color(1, 1, 1, 0.45))
+	_solid(ci, Art.rrect(body, 5.0), wood, 3.0, true)
+	for k in 3:
+		var py: float = body.position.y + 8.0 + k * (body.size.y - 16.0) / 2.0
+		ci.draw_line(Vector2(o.x + 5, py), Vector2(o.x + o.w - 5, py), wood.darkened(0.25), 2.0, Art.AA)
+	# handles sticking out at the back
+	ci.draw_line(Vector2(o.x + o.w - 4, body.position.y + 10), Vector2(o.x + o.w + 26, body.position.y - 8), INK, 6.0, Art.AA)
+	ci.draw_line(Vector2(o.x + o.w - 4, body.position.y + 10), Vector2(o.x + o.w + 26, body.position.y - 8), wood, 3.0, Art.AA)
+	# wheels with turning spokes
+	for wx in [o.x + 17.0, o.x + o.w - 17.0]:
+		var c := Vector2(wx, -13.0)
+		ci.draw_circle(c, 14.5, INK)
+		ci.draw_circle(c, 11.5, wood.darkened(0.15))
+		var a := -roll / 13.0
+		for sp in 3:
+			var d := Vector2(cos(a + sp * PI / 3.0), sin(a + sp * PI / 3.0)) * 10.0
+			ci.draw_line(c - d, c + d, INK, 2.0, Art.AA)
+		ci.draw_circle(c, 3.0, INK)
+	if rolling:
+		# dust puffs kicked up behind
+		for k in 3:
+			var ph := fposmod(t * 2.2 + k * 0.33, 1.0)
+			ci.draw_circle(Vector2(o.x + o.w + 4.0 + ph * 40.0, -6.0 - ph * 14.0), 4.0 + ph * 8.0, Color(pal.fog, 0.35 * (1.0 - ph)))
+
+## Pigeons fluttering on the path at head height (0.8.40). They lift as Kavi
+## scoots underneath, and burst away if he Gusts them.
+func _flock(ci: Node2D, o: Dictionary) -> void:
+	var n := maxi(int(o.w / 34.0), 3)
+	var under: float = clampf(((sim.x if sim != null else -1e9) - (o.x + 10.0)) / 260.0, 0.0, 1.0)
+	var gone: float = clampf(o.open_t / 0.9, 0.0, 1.0) if o.open else 0.0
+	var grey := Color(0.70, 0.72, 0.82).lerp(pal.rim, 0.12)
+	var S := 1.75
+	for k in n:
+		var hx := Art.hash01(int(o.seed) + k, 11)
+		var hy := Art.hash01(int(o.seed) + k, 12)
+		var base := Vector2(o.x + 18.0 + (o.w - 36.0) * (float(k) + hx * 0.5) / maxf(n - 0.5, 1.0), -o.h - 18.0 - hy * 40.0)
+		var lift := under * (70.0 + hy * 40.0) + gone * (260.0 + hy * 120.0)
+		var p := base + Vector2(gone * (120.0 + hx * 160.0) + sin(t * 3.0 + k) * 3.0, -lift + sin(t * 7.0 + k * 1.3) * 4.0)
+		var flap := 0.5 + 0.5 * sin(t * (16.0 + hx * 6.0) + k * 2.0)
+		var a := 1.0 - gone * 0.9
+		var col := Color(grey.darkened(hy * 0.18), a)
+		var ink := Color(INK, a)
+		# body, tail, head, beak, eye, iridescent neck, flapping wing
+		ci.draw_colored_polygon(PackedVector2Array([p + Vector2(8, -2) * S, p + Vector2(17, -5) * S, p + Vector2(17, 1) * S]), ink)
+		ci.draw_colored_polygon(Art.ellipse(p, Vector2(12, 8) * S, 12), ink)
+		ci.draw_colored_polygon(Art.ellipse(p, Vector2(10.5, 6.5) * S, 12), col)
+		ci.draw_circle(p + Vector2(-10, -5) * S, 5.5 * S, ink)
+		ci.draw_circle(p + Vector2(-10, -5) * S, 4.3 * S, col.lightened(0.12))
+		ci.draw_circle(p + Vector2(-11, -6) * S, 1.4 * S, ink)
+		ci.draw_colored_polygon(PackedVector2Array([p + Vector2(-14.5, -5) * S, p + Vector2(-19, -3.5) * S, p + Vector2(-14.5, -2.5) * S]), Color(1.0, 0.72, 0.3, a))
+		ci.draw_arc(p + Vector2(-7, -1) * S, 4.0 * S, PI * 0.15, PI * 0.95, 8, Color(0.45, 0.85, 0.72, 0.8 * a), 2.0 * S, Art.AA)
+		var tip := p + Vector2(3.0, -6.0 - 14.0 * flap) * S
+		var wing := PackedVector2Array([p + Vector2(-3, -2) * S, p + Vector2(9, -1) * S, tip])
+		ci.draw_colored_polygon(wing, col.darkened(0.2))
+		ci.draw_polyline(PackedVector2Array([wing[0], wing[2], wing[1]]), ink, 2.5, Art.AA)
+
+## A tall, wobbly parcel tower with a cat napping on top (0.8.40): hold Hop.
+func _tower(ci: Node2D, o: Dictionary) -> void:
+	_wobble_begin(ci, o, Vector2(o.x + o.w * 0.5, 0.0), 0.08)
+	var seed := int(o.seed)
+	var h: float = o.h
+	var y := 4.0
+	var sizes := [0.40, 0.33, 0.27]
+	for k in 3:
+		var ph: float = h * sizes[k]
+		var inset: float = o.w * (0.04 * k) + (Art.hash01(seed, 20 + k) - 0.5) * 6.0
+		_parcel(ci, Rect2(o.x + inset, y - ph, o.w - inset * 2.0, ph), seed + k * 5)
+		y -= ph
+	# striped "this way up" tape on the middle parcel
+	var my := -h * 0.55
+	ci.draw_line(Vector2(o.x + 6, my), Vector2(o.x + o.w - 6, my), Color(0.92, 0.32, 0.30, 0.85), 4.0, Art.AA)
+	# a little cat napping on top, tail swishing
+	var c := Vector2(o.x + o.w * 0.5, -h - 7.0)
+	var fur := Color(0.95, 0.62, 0.32).lerp(pal.rim, 0.12)
+	ci.draw_colored_polygon(Art.ellipse(c, Vector2(16, 9), 12), INK)
+	ci.draw_colored_polygon(Art.ellipse(c, Vector2(14, 7.5), 12), fur)
+	var hd := c + Vector2(-12, -5)
+	ci.draw_circle(hd, 7.5, INK)
+	ci.draw_circle(hd, 6.0, fur)
+	for e in [-1.0, 1.0]:
+		ci.draw_colored_polygon(PackedVector2Array([hd + Vector2(e * 2.0 - 3.0, -4), hd + Vector2(e * 4.0, -11), hd + Vector2(e * 6.0 - 0.5, -3)]), fur.darkened(0.1))
+	ci.draw_line(hd + Vector2(-4, 0), hd + Vector2(-1, 0.5), INK, 1.5, Art.AA)
+	ci.draw_line(hd + Vector2(1, 0.5), hd + Vector2(4, 0), INK, 1.5, Art.AA)
+	var sw := sin(t * 2.4 + seed) * 0.5
+	ci.draw_polyline(PackedVector2Array([c + Vector2(13, 2), c + Vector2(20, -2 + sw * 6.0), c + Vector2(24, -9 + sw * 10.0)]), INK, 4.5, Art.AA)
+	ci.draw_polyline(PackedVector2Array([c + Vector2(13, 2), c + Vector2(20, -2 + sw * 6.0), c + Vector2(24, -9 + sw * 10.0)]), fur, 2.5, Art.AA)
+	_wobble_end(ci)
+
 func _hurdle_parcels(ci: Node2D, o: Dictionary) -> void:
 	var seed := int(o.x)
 	if o.h > 95.0:
@@ -964,6 +1074,21 @@ func _draw_add(ci: Node2D) -> void:
 					_chevron(ci, Vector2(o.x + 80 + k * 160.0, -o.h - 34), 1.0, ROSE)
 			GAP:
 				pass
+			CART:
+				_chevron(ci, Vector2(o.x + o.w * 0.5, -o.h - 52), -1.0, AMBER)
+				if o.get("rolling", false):
+					# speed lines trailing behind the rolling cart
+					for k in 3:
+						var ly: float = -o.h * (0.3 + 0.25 * k)
+						var lx: float = o.x + o.w + 10.0 + fposmod(t * 300.0 + k * 40.0, 60.0)
+						ci.draw_line(Vector2(lx, ly), Vector2(lx + 34.0, ly), Color(AMBER, 0.35), 3.0, Art.AA)
+			FLOCK:
+				if not o.open:
+					_chevron(ci, Vector2(o.x + o.w * 0.5, -o.h - 150), 1.0, ROSE)
+					Art.glow(ci, Vector2(o.x + o.w * 0.5, -o.h - 40), 60.0, Color(LEAF, 0.12), 3)
+			TOWER:
+				_chevron(ci, Vector2(o.x + o.w * 0.5, -o.h - 40), -1.0, AMBER)
+				_chevron(ci, Vector2(o.x + o.w * 0.5, -o.h - 62), -1.0, AMBER)
 			GATE:
 				if not o.open:
 					var hub = Vector2(o.x + o.w * 0.5, -o.h * 0.45)

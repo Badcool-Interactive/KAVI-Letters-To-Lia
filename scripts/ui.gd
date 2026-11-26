@@ -149,7 +149,7 @@ func _label(v: Container, text: String, size := 36, col := Color(1, 0.98, 0.94))
 	l.text = text
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", _readable(size))
 	l.add_theme_color_override("font_color", col)
 	if size < 44 and font_body != null:
 		l.add_theme_font_override("font", font_body)
@@ -355,7 +355,7 @@ class MenuItem extends Button:
 func _item(v: Container, text: String, cb: Callable, size := 40) -> MenuItem:
 	var b := MenuItem.new()
 	b.text = text
-	b.add_theme_font_size_override("font_size", size)
+	b.add_theme_font_size_override("font_size", _readable(size))
 	b.pressed.connect(func():
 		main.synth.play("ui")
 		cb.call())
@@ -387,10 +387,21 @@ func _column(top := 0.24, animate := true) -> VBoxContainer:
 		_appear(c)
 	return v
 
+## 0.8.40: small text stays readable in small windows (CrazyGames tests at
+## 907x510 and 800x450): never below ~13 real pixels, capped at 34.
+func _readable(size: int) -> int:
+	if size >= 34:
+		return size
+	var vp := get_viewport()
+	if vp == null:
+		return size
+	var ratio: float = float(get_window().size.y) / maxf(vp.get_visible_rect().size.y, 1.0)
+	return clampi(int(ceil(13.0 / maxf(ratio, 0.05))), size, 34)
+
 func _small(v: Container, text: String, size := 24, col := Color(1, 1, 1, 0.55)) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", _readable(size))
 	l.add_theme_color_override("font_color", col)
 	l.add_theme_constant_override("outline_size", 8)
 	l.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.05, 0.75))
@@ -1460,19 +1471,25 @@ func show_about() -> void:
 	var godot_v: String = Engine.get_version_info().string.get_slice("-", 0)
 	_small(v, "Version %s   ·   Made with Godot Engine %s" % [str(ProjectSettings.get_setting("application/config/version", "?")), godot_v], 22, Color(1, 1, 1, 0.6))
 	_gap(v, 8)
-	var first := _item(v, "Check for updates", main.updates.check, 30)
-	_about_update_status = _small(v, "", 24, Color(1, 1, 1, 0.88))
-	_about_update_action = _item(v, "", main.updates.apply, 30)
-	_update_about_status()
-	var links := HBoxContainer.new()
-	links.add_theme_constant_override("separation", 12)
-	v.add_child(links)
-	_item(links, "Play online", func(): OS.shell_open(LINK_PLAY), 26)
-	_item(links, "Downloads", func(): OS.shell_open(LINK_DOWNLOADS), 26)
-	_item(links, "Source code", func(): OS.shell_open(LINK_SOURCE), 26)
-	_gap(v, 8)
-	_item(v, "Back", show_settings, 32)
-	first.grab_focus.call_deferred()
+	# 0.8.40: game portals (CrazyGames) forbid outside links and updates are
+	# theirs to handle; on our own website "Play online" is where you are.
+	var portal := OS.has_feature("portal")
+	var first: Control = null
+	if not portal:
+		first = _item(v, "Check for updates", main.updates.check, 30)
+		_about_update_status = _small(v, "", 24, Color(1, 1, 1, 0.88))
+		_about_update_action = _item(v, "", main.updates.apply, 30)
+		_update_about_status()
+		var links := HBoxContainer.new()
+		links.add_theme_constant_override("separation", 12)
+		v.add_child(links)
+		if not OS.has_feature("web"):
+			_item(links, "Play online", func(): OS.shell_open(LINK_PLAY), 26)
+		_item(links, "Downloads", func(): OS.shell_open(LINK_DOWNLOADS), 26)
+		_item(links, "Source code", func(): OS.shell_open(LINK_SOURCE), 26)
+		_gap(v, 8)
+	var back := _item(v, "Back", show_settings, 32)
+	(first if first != null else back).grab_focus.call_deferred()
 
 ## Results score counts up with soft ticks, then lands with a chime (0.8.29).
 func _count_up(l: Label, target: int, best: bool) -> void:

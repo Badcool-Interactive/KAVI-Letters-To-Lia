@@ -35,7 +35,7 @@ func check(cond: bool, msg: String) -> void:
 		print("FAIL: ", msg)
 
 func all_types() -> Array:
-	return [Track.HURDLE, Track.BEAM, Track.GAP, Track.WIDE_GAP, Track.GATE, Track.BELL, Track.BLOOM]
+	return [Track.HURDLE, Track.BEAM, Track.GAP, Track.WIDE_GAP, Track.GATE, Track.BELL, Track.BLOOM, Track.CART, Track.FLOCK, Track.TOWER]
 
 ## The bot must clear every generated segment end to end on the real sim.
 func test_fairness() -> void:

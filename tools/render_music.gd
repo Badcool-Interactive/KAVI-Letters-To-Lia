@@ -1,16 +1,19 @@
 extends SceneTree
-## Pre-renders the procedural music loops to assets/music/*.wav so phones and
-## browsers load them instantly instead of synthesising at runtime.
-## Run: godot --headless --path . --script res://tools/render_music.gd
+## Renders each country's song (synth.gd compose(): pad, drive, lead layers)
+## to WAV in a temp folder; tools/render-music.sh then encodes them to OGG in
+## assets/music/. Run: tools/render-music.sh
 const Synth = preload("res://scripts/synth.gd")
 
 func _initialize() -> void:
-	var s = Synth.new()
+	var out := OS.get_environment("KAVI_MUSIC_TMP")
+	if out == "":
+		out = "/tmp/kavi-music"
+	DirAccess.make_dir_recursive_absolute(out)
 	for b in Synth.KEYS.size():
-		s._render_music(b)
-		var pair: Array = s._cache[b]
-		pair[0].save_to_wav("res://assets/music/b%d_pad.wav" % b)
-		pair[1].save_to_wav("res://assets/music/b%d_drive.wav" % b)
-		print("rendered biome ", b)
-	s.free()
+		var t0 := Time.get_ticks_msec()
+		var layers: Array = Synth.compose(b)
+		var names := ["pad", "drive", "lead"]
+		for i in 3:
+			Synth._wav_rate(layers[i], Synth.MRATE, false).save_to_wav("%s/b%d_%s.wav" % [out, b, names[i]])
+		print("rendered country ", b, " in ", (Time.get_ticks_msec() - t0) / 1000.0, " s")
 	quit()

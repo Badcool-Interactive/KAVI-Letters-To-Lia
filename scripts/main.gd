@@ -20,7 +20,7 @@ const UI = preload("res://scripts/ui.gd")
 const Looks = preload("res://scripts/looks.gd")
 const Tutorial = preload("res://scripts/tutorial.gd")
 
-enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE }
+enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE, CART, FLOCK, TOWER }
 const PX_PER_M := 40.0
 
 # ------------------------------------------------------------------ nodes
@@ -215,6 +215,8 @@ func _read_device_request() -> void:
 	DirAccess.remove_absolute(path)
 
 const Updates = preload("res://scripts/updates.gd")
+const PortalSdk = preload("res://scripts/portal_sdk.gd")
+var portal_sdk = PortalSdk.new()
 var updates := Updates.new()
 
 func _ready() -> void:
@@ -242,6 +244,7 @@ func _ready() -> void:
 	RenderingServer.viewport_set_measure_render_time(get_viewport().get_viewport_rid(), true)
 	get_tree().auto_accept_quit = false   # window close goes through _quit_cleanly
 	_setup_cursor()
+	portal_sdk.init()
 	input_mode = "touch" if DisplayServer.is_touchscreen_available() else "keys"
 	if OS.has_feature("web") or OS.has_feature("mobile"):
 		Engine.max_fps = 60
@@ -679,10 +682,11 @@ func menu_tutorial() -> void:
 
 func _story_params(ch: int, stg: String, rt: String) -> Dictionary:
 	var base_v: float = [500.0, 540.0, 580.0, 620.0][ch] * speed_mult()
-	var types: Array = [[HURDLE, BEAM, GAP], [HURDLE, BEAM, GAP, WIDE_GAP, GATE, BLOOM],
-		[HURDLE, BEAM, GAP, WIDE_GAP, GATE, BLOOM, BELL], [HURDLE, BEAM, GAP, WIDE_GAP, GATE, BLOOM, BELL]][ch]
+	# 0.8.40: runaway carts from chapter 1, pigeons + parcel towers from 2
+	var types: Array = [[HURDLE, BEAM, GAP, CART], [HURDLE, BEAM, GAP, WIDE_GAP, GATE, BLOOM, CART, FLOCK, TOWER],
+		[HURDLE, BEAM, GAP, WIDE_GAP, GATE, BLOOM, BELL, CART, FLOCK, TOWER], [HURDLE, BEAM, GAP, WIDE_GAP, GATE, BLOOM, BELL, CART, FLOCK, TOWER]][ch]
 	if ch == 0 and stg == "route":
-		types = [HURDLE, BEAM, GAP, WIDE_GAP]
+		types = [HURDLE, BEAM, GAP, WIDE_GAP, CART]
 	var p = {"v": base_v, "secs": 50.0, "diff": [0.1, 0.25, 0.35, 0.45][ch], "types": types, "combos": ch >= 2}
 	if stg == "route":
 		if rt == "wild":
@@ -735,9 +739,11 @@ func _daily_key() -> String:
 
 func _endless_params(n: int, rt: String) -> Dictionary:
 	var v = minf(540.0 + 34.0 * n, 960.0) * speed_mult()
-	var types: Array = [HURDLE, BEAM, GAP]
-	if n >= 1: types += [WIDE_GAP, GATE]
-	if n >= 2: types += [BLOOM]
+	var types: Array = [HURDLE, BEAM, GAP, CART]
+	if "--newobs" in OS.get_cmdline_user_args():
+		return {"v": v, "secs": 55.0, "diff": 0.5, "types": [CART, FLOCK, TOWER, HURDLE], "combos": false}
+	if n >= 1: types += [WIDE_GAP, GATE, FLOCK]
+	if n >= 2: types += [BLOOM, TOWER]
 	if n >= 3: types += [BELL]
 	var p = {"v": v, "secs": 55.0, "diff": minf(0.1 + 0.13 * n, 0.95), "types": types, "combos": n >= 2}
 	if rt == "wild":
@@ -1196,8 +1202,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if touch.handle(event):
 		get_viewport().set_input_as_handled()
 		return
-	if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE):
+	if event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and event.keycode in [KEY_ESCAPE, KEY_BACKSPACE]):
 		_back_pressed()
+		get_viewport().set_input_as_handled()
+		return
+	# 0.8.40: P pauses too. In a browser, Esc first leaves fullscreen, so
+	# web players need a pause key that always reaches the game.
+	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_P and state in ["run", "recovery", "rescue", "paused"]:
+		toggle_pause()
 		get_viewport().set_input_as_handled()
 		return
 	if state == "recovery" and _is_press(event, ["jump"]):
@@ -1404,6 +1416,13 @@ func _on_event(e: Dictionary) -> void:
 			fx.burst(Vector2(e.o.x + 20.0, -200), Color(0.5, 1.0, 0.6), 24, 380, 0.6, 5)
 			if e.perfect:
 				_perfect("PERFECT GUST", Color(0.5, 1.0, 0.6))
+		"flock_scatter":
+			synth.play("flap", 1.0, -2.0)
+			fx.burst(Vector2(e.o.x + e.o.w * 0.5, -e.o.h - 40.0), Color(0.85, 0.87, 0.95), 18, 420, 0.8, 4, 200, PI * 0.8, -PI * 0.4)
+			if e.perfect:
+				_perfect("SHOO!", Color(0.5, 1.0, 0.6))
+		"cart":
+			synth.play("cart", 1.0, -3.0)
 		"letter":
 			synth.play("letter", 1.0, -4.0)
 		"bell":
@@ -1421,14 +1440,18 @@ func _on_event(e: Dictionary) -> void:
 			var o: Dictionary = e.o
 			o.clear_t = t
 			score += 25.0 * tw.tier()
-			if e.perfect and o.t in [HURDLE, BEAM]:
+			if o.t == FLOCK and not o.open:
+				synth.play("flap", 1.15, -5.0)
+			if e.perfect and o.t in [HURDLE, BEAM, CART, TOWER, FLOCK]:
 				# confetti from the obstacle itself (0.8.18)
-				var top_y: float = -o.h - (60.0 + TrackView.BEAM_AIR if o.t == BEAM else 0.0)
+				var top_y: float = -o.h - (60.0 + TrackView.BEAM_AIR if o.t == BEAM else (40.0 if o.t == FLOCK else 0.0))
 				var cols := [TrackView.AMBER, TrackView.ROSE, TrackView.CYAN, Color(1, 1, 1)]
 				for ci2 in 4:
 					fx.burst(Vector2(o.x + o.w * 0.5, top_y), cols[ci2], 6, 380.0, 0.9, 5.0, 520.0, PI * 0.9, -PI * 0.5)
-			if e.perfect and o.t in [HURDLE, GAP, WIDE_GAP, BEAM]:
-				_perfect("PERFECT", TrackView.AMBER if o.t == HURDLE else (TrackView.ROSE if o.t == BEAM else TrackView.CYAN))
+			if e.perfect and o.t in [HURDLE, GAP, WIDE_GAP, BEAM, CART, FLOCK]:
+				_perfect("PERFECT", TrackView.AMBER if o.t in [HURDLE, CART] else (TrackView.ROSE if o.t in [BEAM, FLOCK] else TrackView.CYAN))
+			if e.perfect and o.t == TOWER:
+				_perfect("SKY HOP!", TrackView.AMBER)
 			if o.t in [WIDE_GAP] and not e.perfect:
 				_toast("nice glide", _kite_screen() + Vector2(0, -150), Color(0.6, 1, 1), 30)
 		"bonk":
@@ -1490,6 +1513,9 @@ func _process(delta: float) -> void:
 		_update_loading(real_dt)
 	_update_audio_in(real_dt)
 	_update_mouse_hide(real_dt)
+	portal_sdk.set_playing(not loading and state in ["run", "recovery", "rescue", "junction"])
+	# 0.8.40: the melody layer joins as Tailwind climbs (x2 half, x3+ full)
+	synth.set_lead(clampf((tw.tier() - 1) / 2.0, 0.0, 1.0) if state in ["run", "recovery", "rescue", "junction"] else 0.0)
 	synth.world_level = {"scenic": 1.0, "title": 0.55, "recovery": 0.9, "finale": 0.7, "paused": 0.25}.get(state, 0.6)
 	_fg_debug_tick(real_dt)
 	_perf_tick(real_dt)
@@ -1714,7 +1740,7 @@ func _update_views(dt: float) -> void:
 	for o in track.obs:
 		if o.open:
 			o.open_t += dt
-		if o.x > track_view.view_r:
+		if o.x > track_view.view_r + 900.0:
 			break
 	track_view.refresh()
 	fx.tick(dt)
@@ -1735,7 +1761,7 @@ func _update_views(dt: float) -> void:
 	touch.letters = sim.letters
 
 func _update_hints(dt: float) -> void:
-	if state != "run" or mode != "story" or track == null:
+	if state != "run" or not (mode in ["story", "endless", "daily"]) or track == null:
 		return
 	var i: int = track.first_index_after(sim.x)
 	if i >= track.obs.size():
@@ -1744,6 +1770,9 @@ func _update_hints(dt: float) -> void:
 	if o.x - sim.x > 1100.0 or o.t == RESCUE:
 		return
 	var key: String = Track.NAMES[o.t]
+	# the 0.8.40 newcomers get a one-time hint in every mode
+	if mode != "story" and not (key in ["cart", "flock", "tower"]):
+		return
 	if (save.data.seen_hints as Array).has(key):
 		return
 	(save.data.seen_hints as Array).append(key)
@@ -1756,6 +1785,9 @@ func _update_hints(dt: float) -> void:
 		"gate": "GUST  ·  press GUST (X) to blow the gate open. Closer = PERFECT.",
 		"bell": "LETTER  ·  press LETTER (C): the paper plane rings the bell and drops the bridge.",
 		"bloom": "DIVE  ·  jump, then press DOWN in the air to slam the bloom. It bounces you sky-high.",
+		"cart": "RUNAWAY CART  ·  it rolls toward you, so HOP a little earlier than usual.",
+		"flock": "PIGEONS  ·  SCOOT under them (DOWN), or GUST (X) to shoo them away.",
+		"tower": "PARCEL TOWER  ·  HOLD UP for a big hop, and keep holding to hover over the top.",
 	}.get(key, "")
 	hint_t = 4.5
 
@@ -2046,7 +2078,7 @@ func _draw_logo(ci: Node2D, c: Vector2, time: float, scale_k: float) -> void:
 
 ## Keyboard players see a hint bar at the bottom instead of touch buttons.
 func _key_hints(ci: Node2D, sz: Vector2) -> void:
-	var items := [["W / Up / Space", "Hop · hold to hover"], ["S / Down", "Scoot · dive in air"], ["X", "Gust"], ["C", "Letter"], ["Esc", "Pause"]]
+	var items := [["W / Up / Space", "Hop · hold to hover"], ["S / Down", "Scoot · dive in air"], ["X", "Gust"], ["C", "Letter"], ["P / Esc", "Pause"]]
 	var fs := 24
 	var widths := []
 	var total := 0.0
@@ -2428,6 +2460,16 @@ func _setup_capture() -> void:
 		cap_steps = [{"do": "wait", "s": 4.5}, {"shot": "q0"}]
 		for k in 3:
 			cap_steps.append_array([{"do": "skip_t", "s": 12.0}, {"do": "wait", "s": 1.5}, {"shot": "q%d" % (k + 1)}])
+		cap_steps.append({"do": "quit"})
+		return
+	if "--newobs" in OS.get_cmdline_user_args():
+		# 0.8.40 obstacles: cart rolling in, under the pigeons, over the tower
+		save.data.tutorial_done = true
+		autopilot = true
+		cap_steps = [{"do": "endless"}, {"do": "wait", "s": 2.0}]
+		for k in 2:
+			for w in [["near_cart", 520.0, "cart"], ["near_cart", 120.0, "cart-hop"], ["near_flock", 420.0, "flock"], ["near_flock", 260.0, "flock-gust"], ["near_tower", 150.0, "tower"]]:
+				cap_steps.append_array([{"do": "until", "what": w[0], "d": w[1]}, {"shot": "o%d-%s" % [k, w[2]]}, {"do": "wait", "s": 0.4}])
 		cap_steps.append({"do": "quit"})
 		return
 	if "--heights" in OS.get_cmdline_user_args():
@@ -2816,6 +2858,13 @@ func _capture_tick(dt: float) -> void:
 					ok = sim.sliding and sim._under_beam()
 				"hurdle":
 					ok = not sim.on_ground and sim.vy > -40.0 and sim.vy < 60.0
+				_:
+					# "near_cart" etc.: that obstacle is the next one, `d` px ahead
+					if str(st.what).begins_with("near_"):
+						var i: int = track.first_index_after(sim.x - 22.0)
+						if i < track.obs.size():
+							var o: Dictionary = track.obs[i]
+							ok = Track.NAMES[o.t] == str(st.what).substr(5) and o.x - sim.x < float(st.get("d", 360.0))
 			if not ok and cap_wait < 40.0:
 				return
 		"wait":

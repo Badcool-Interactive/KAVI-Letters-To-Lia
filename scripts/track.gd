@@ -5,8 +5,8 @@ extends RefCounted
 
 const Sim = preload("res://scripts/sim.gd")
 
-enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE }
-const NAMES := ["hurdle", "beam", "gap", "wide_gap", "gate", "bell", "bloom", "rescue"]
+enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE, CART, FLOCK, TOWER }
+const NAMES := ["hurdle", "beam", "gap", "wide_gap", "gate", "bell", "bloom", "rescue", "cart", "flock", "tower"]
 
 var obs: Array = []      # Dictionaries sorted by x
 var motes: Array = []    # {x, y, taken}
@@ -87,6 +87,21 @@ static func make(t: int, x: float, sp: float, rng: RandomNumberGenerator) -> Dic
 			o.wall_h = 300.0
 		RESCUE:
 			o.w = sp * 2.6
+		CART:
+			# a runaway fruit cart (0.8.40): rolls toward Kavi once it's next
+			o.w = rng.randf_range(78, 92)
+			o.h = rng.randf_range(62, 72)
+			o.cv = rng.randf_range(150, 230)
+			o.x0 = x
+			o.roll = 0.0
+		FLOCK:
+			# pigeons on the path: scoot under, or Gust them away
+			o.w = rng.randf_range(120, 170)
+			o.h = 64.0 # clearance, like a sign
+		TOWER:
+			# a tall parcel tower: hold Hop to clear it
+			o.w = rng.randf_range(54, 66)
+			o.h = rng.randf_range(118, 136)
 	return o
 
 ## Generates one segment of `secs` seconds at speed `sp` starting at `x0`.
@@ -124,6 +139,10 @@ func gen_segment(x0: float, secs: float, sp: float, diff: float, types: Array,
 			if step is float:
 				t += step
 				continue
+			if step == CART:
+				t += 0.55
+			elif step == TOWER:
+				t += 0.25
 			var o := make(step, x0 + t * sp, sp, rng)
 			placed.append(o)
 			hist.append(step)
@@ -151,6 +170,13 @@ func _pick_phrase(rng: RandomNumberGenerator, types: Array, diff: float, combos:
 			c.append([BEAM, 0.45, GATE])
 		if types.has(BLOOM):
 			c.append([GAP, 0.7, BLOOM])
+		if types.has(FLOCK):
+			c.append([FLOCK, 0.55, HURDLE])
+			c.append([HURDLE, 0.6, FLOCK])
+		if types.has(TOWER):
+			c.append([BEAM, 0.6, TOWER])
+		if types.has(CART):
+			c.append([CART, 0.6, BEAM])
 		c.append([HURDLE, 0.6, HURDLE])
 		return c[rng.randi() % c.size()]
 	return [types[rng.randi() % types.size()]]
@@ -183,6 +209,8 @@ static func _shift(o: Dictionary, dx: float) -> void:
 		o.bell_x += dx
 	if o.has("wall_x"):
 		o.wall_x += dx
+	if o.has("x0"):
+		o.x0 += dx
 
 ## Replays the segment with the solver bot. Returns the index of the first
 ## obstacle that caused a failure, or -1 when the whole segment is clear.
@@ -232,6 +260,23 @@ static func bot_input(s) -> Dictionary:
 			if s.on_ground and d <= sp * 0.12 and d > -30.0:
 				inp.jump_pressed = true
 				inp.jump_held = true
+		CART:
+			var closing: float = sp + (o.cv if o.get("rolling", false) else 0.0)
+			if s.on_ground and d <= closing * 0.11 and d > -30.0:
+				inp.jump_pressed = true
+				inp.jump_held = true
+		TOWER:
+			if s.on_ground and d <= sp * 0.22 and d > -30.0:
+				inp.jump_pressed = true
+			# hold through the top so the hover carries Kavi over
+			if (s.on_ground and inp.jump_pressed) or (not s.on_ground and s.x - Sim.HALF_W < o.x + o.w + 10.0):
+				inp.jump_held = true
+		FLOCK:
+			if not o.open and d < 200.0 and s.gust_cd <= 0.0:
+				inp.gust_pressed = true
+			elif not o.open and s.on_ground and d < sp * 0.14:
+				inp.down_held = true
+				inp.down_pressed = not s.sliding
 		BEAM:
 			if s.on_ground and d < sp * 0.14:
 				inp.down_held = true
@@ -279,6 +324,13 @@ static func _landing_in_hole(s, sp: float) -> bool:
 func _place_motes(placed: Array, x0: float, seg_end: float, sp: float, rng: RandomNumberGenerator) -> void:
 	for o in placed:
 		match o.t:
+			TOWER:
+				for k in 5:
+					var f := float(k) / 4.0
+					motes.append({"x": o.x - 90.0 + (o.w + 200.0) * f, "y": -90.0 - sin(f * PI) * 190.0, "taken": false})
+			FLOCK:
+				for k in 3:
+					motes.append({"x": o.x + o.w * (0.2 + 0.3 * k), "y": -26.0, "taken": false})
 			HURDLE, GAP, WIDE_GAP:
 				# arc along an ideal jump
 				var n := 5
