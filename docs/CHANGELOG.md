@@ -1,5 +1,5 @@
 # Changelog
-## 0.8.39 (2026-11-27) · New home: Badcool Interactive on GitHub
+## 0.8.39 (2026-11-26) · New home: Badcool Interactive on GitHub
 
 - **The game moved:** the code now lives at **github.com/Badcool-Interactive/KAVI-Letters-To-Lia**, and the browser version at **https://badcool-interactive.github.io/KAVI-Letters-To-Lia/**. The owner created the Badcool Interactive organisation and renamed his account.
 - All links inside the game point to the new home: About page (Play in browser, Downloads, Source), the update checker, and "Reload KAVI" on the web version. Before, the web version's update button would have opened the old, dead address.
