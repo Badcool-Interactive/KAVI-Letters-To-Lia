@@ -9,7 +9,7 @@ const Sim = preload("res://scripts/sim.gd")
 enum { HURDLE, BEAM, GAP, WIDE_GAP, GATE, BELL, BLOOM, RESCUE, CART, FLOCK, TOWER }
 
 const SPEED := 430.0
-const TOTAL_LESSONS := 10
+const TOTAL_LESSONS := 13
 
 var waiting := ""        # "", "jump", "down", "gust", "letter", "hover"
 var wait_t := 0.0
@@ -27,7 +27,9 @@ static func build(track) -> float:
 	var sp := SPEED
 	# [type, seconds of running before it]
 	var seq := [[HURDLE, 3.0], [HURDLE, 2.4], [BEAM, 2.6], [GAP, 2.6], [WIDE_GAP, 2.8],
-		[GATE, 2.8], [BELL, 3.4], [BLOOM, 3.0], [HURDLE, 3.0], [-1, 0.0], [HURDLE, 2.6], [GAP, 2.2]]
+		[GATE, 2.8], [BELL, 3.4], [BLOOM, 3.0], [HURDLE, 3.0], [-1, 0.0], [HURDLE, 2.6], [GAP, 2.2],
+		# 0.8.41 (owner): the newer obstacles get a lesson too
+		[CART, 3.4], [FLOCK, 3.0], [TOWER, 3.0]]
 	var placed: Array = []
 	var t := 0.0
 	for step in seq:
@@ -62,6 +64,12 @@ func _set_text(need: String, o: Dictionary, sim) -> void:
 			elif o.t == BLOOM:
 				title = "HOP toward the flower"
 				sub = "Get airborne first: " + k.call("press W / Space", "tap the top of the left pad")
+			elif o.t == CART:
+				title = "RUNAWAY CART!"
+				sub = "It rolls toward you, so hop a little early: " + k.call("W / Space", "tap the top of the left pad")
+			elif o.t == TOWER:
+				title = "BIG HOP"
+				sub = k.call("Press and HOLD W / Space", "Tap and HOLD the top of the left pad") + " to clear the tall parcel tower"
 		"hover":
 			title = "HOLD to HOVER"
 			sub = k.call("Keep holding W / Space", "Keep your thumb on the top of the left pad") + ": the thrusters glide over wide gaps"
@@ -78,6 +86,9 @@ func _set_text(need: String, o: Dictionary, sim) -> void:
 		"gust":
 			title = "GUST"
 			sub = k.call("Press X", "Tap the big right button") + ": blow the gate open"
+			if o.t == FLOCK:
+				title = "SHOO!"
+				sub = k.call("Press X", "Tap the big right button") + " to Gust the pigeons away (or scoot under them)"
 		"letter":
 			title = "LETTER"
 			sub = k.call("Press C", "Tap the small right button") + ": the paper plane rings the bell"

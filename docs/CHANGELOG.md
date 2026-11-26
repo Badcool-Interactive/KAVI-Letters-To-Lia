@@ -1,4 +1,49 @@
 # Changelog
+## 0.8.41 (2026-11-27) · Sound style, a real boot sound, the new obstacles in the tutorial, an arcade handheld
+
+**Sound** (owner feedback on 0.8.40):
+- **Sound style: Modern / OG** (Settings › Sound):
+  - Modern = the 0.8.40 songs plus the live world moments;
+  - OG = the original short music loops and the original boot sound, without the live world moments.
+- **The loud "clicking" after the boot screen:** most likely the new woodpecker, the first random world moment, which used to play about 6 s after start, right when the menu appears.
+  - The woodpecker is now a soft wooden "tok" instead of a sharp click.
+  - World moments wait 20 s before the first one and play a bit quieter.
+- **Sound board:** every sound is a separate file in `~/Documents/KAVI-sounds` (effects, music layers, world loops, boot sounds; README inside). The owner can point at the exact one that bugs him.
+- **A real BADCOOL boot sound** (Modern style). An original sound logo timed to the boot video:
+  - a soft chime for each letter of BADCOOL as it appears, climbing a scale and moving left to right with the letters;
+  - an airy rise into a warm "hit" when the logo completes;
+  - a sparkle for "INTERACTIVE".
+  - Made by `tools/art/make_ident_sound.py`. The video is now silent and its sound plays alongside it, so either style can be used.
+- **The website now has boot sound:** browsers block sound until you click once, so the web version opens on "Click or tap to start", then plays the boot video with sound.
+
+**Tutorial:** three new lessons for the newer obstacles, 13 in all:
+- **RUNAWAY CART!** (hop a little early);
+- **SHOO!** (Gust the pigeons, or scoot under);
+- **BIG HOP** (hold to clear the parcel tower).
+
+**The handheld** (phones held upright):
+- **No Quit in the menu:** the power button is how you turn it off.
+- **A bigger menu, closer to Kavi:** on the tall screen the title menu is about 1.4× bigger, wider and lower. The KAVI logo moves up and grows a little.
+- **Arcade marquee on top:** the top border now earns its place, with a neon "KAVI · LETTERS TO LIA" sign and four **Tailwind lights** (lit by your tier in a run, a slow chase in menus).
+- **Score display:** an LCD with 7-segment digits next to the power button.
+  - Menus: Stamps, Sparks and Hi-score (these left the menu).
+  - In a run: Score, metres and Stamps.
+- **Almost no side border:** the screen now reaches nearly edge to edge.
+- **Livelier buttons:**
+  - the D-pad sits in a round well, and pressed arms glow;
+  - A/B light up with a coloured halo when pressed;
+  - a glowing accent line and a status dot in the mode tag;
+  - speaker holes that softly glow with the music;
+  - an embossed BADCOOL mark.
+- **Vibration:**
+  - a tiny buzz on every handheld button press;
+  - a stronger one when the power button turns the game off;
+  - a bump when Kavi trips.
+  - On by default, with an on/off switch in Settings › Controls (phones and web). Android gets the vibrate permission.
+
+**Checks:** all 225 pass, including fairness with all 11 obstacle types; the game boots clean; the tutorial finishes with all 13 lessons (captured). Portrait captures at 1080×2400 show the new console.
+
+**Not checked:** vibration on a real phone, the boot sound and the woodpecker fix by ear, and the web click-to-start in a real browser tab.
 ## 0.8.40 (2026-11-26) · New obstacles, real music, a livelier world, web fixes
 
 **New obstacles** (owner: "make more obstacles and make it fun"). Each uses the buttons you already know in a new way, and every layout is still checked by the solver bot:

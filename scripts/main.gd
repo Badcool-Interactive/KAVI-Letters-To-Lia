@@ -503,6 +503,7 @@ func _apply_audio_settings() -> void:
 	synth.music_vol = st.music
 	synth.sfx_vol = st.sfx
 	synth.world_vol = float(st.get("world", Save.DEFAULT_WORLD_VOLUME))
+	synth.set_style("modern" if OS.has_feature("portal") else str(st.get("sound_style", "modern")))
 	if state == "scenic":
 		match str(st.get("scenic_sound", "all")):
 			"world": synth.music_vol = 0.0
@@ -663,7 +664,7 @@ func finish_tutorial() -> void:
 	touch.highlight = ""
 	save.data.tutorial_done = true
 	# The story's first-time hints would repeat what was just learned.
-	save.data.seen_hints = ["hurdle", "beam", "gap", "wide_gap", "gate", "bell", "bloom"]
+	save.data.seen_hints = ["hurdle", "beam", "gap", "wide_gap", "gate", "bell", "bloom", "cart", "flock", "tower"]
 	save.save()
 	synth.play("tier")
 	_toast("YOU'RE READY!", Vector2(get_viewport_rect().size.x * 0.5, get_viewport_rect().size.y * 0.3), Color(0.6, 1.0, 0.9), 72)
@@ -1304,6 +1305,9 @@ func _shutdown() -> void:
 	if is_instance_valid(_intro_video):
 		_intro_video.stop()
 		_intro_video.stream = null
+	if is_instance_valid(_ident_audio):
+		_ident_audio.stop()
+		_ident_audio.stream = null
 	if is_instance_valid(synth):
 		synth.shutdown()
 	_restore_intro_cursor()
@@ -1460,6 +1464,8 @@ func _on_event(e: Dictionary) -> void:
 		"rescue":
 			_start_rescue(e.o)
 		"fail":
+			if bool(save.data.settings.get("vibration", true)):
+				Input.vibrate_handheld(90, 0.8)
 			_on_fail()
 
 ## "One more run" moments (0.8.29): passing your best mid-run gets a fanfare
@@ -1513,6 +1519,10 @@ func _process(delta: float) -> void:
 		_update_loading(real_dt)
 	_update_audio_in(real_dt)
 	_update_mouse_hide(real_dt)
+	# rebuild the title menu when the handheld appears/disappears (phone turned)
+	if not loading and state == "title" and not garage_open and not menu_dim and ui.title_key != "" \
+			and ui.title_key != ui.layout_key():
+		ui.show_title()
 	portal_sdk.set_playing(not loading and state in ["run", "recovery", "rescue", "junction"])
 	# 0.8.40: the melody layer joins as Tailwind climbs (x2 half, x3+ full)
 	synth.set_lead(clampf((tw.tier() - 1) / 2.0, 0.0, 1.0) if state in ["run", "recovery", "rescue", "junction"] else 0.0)
@@ -1966,7 +1976,11 @@ func _draw_title(ci: Node2D, sz: Vector2) -> void:
 		return
 	_draw_motes(ci, sz)
 	_draw_plane_game(ci)
-	_draw_logo(ci, Vector2(sz.x * 0.29, sz.y * 0.25), state_t, 1.0)
+	# 0.8.41: on the tall handheld screen the logo sits higher and bigger
+	if sz.y > sz.x * 0.8:
+		_draw_logo(ci, Vector2(sz.x * 0.30, sz.y * 0.15), state_t, 1.25)
+	else:
+		_draw_logo(ci, Vector2(sz.x * 0.29, sz.y * 0.25), state_t, 1.0)
 
 ## Title ambience (0.8.10): warm motes of light drifting up through the scene,
 ## twinkling, nudged a little by the mouse (parallax by depth).
@@ -2176,6 +2190,11 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_mouse_idle = 0.0
 	if loading:
+		if _web_gate and (event is InputEventMouseButton or event is InputEventScreenTouch or event is InputEventKey) and event.is_pressed():
+			_web_gate = false
+			if is_instance_valid(_web_gate_label):
+				_web_gate_label.queue_free()
+			Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
 		# the studio intro always plays in full (owner, 0.8.22)
 		get_viewport().set_input_as_handled()
 		return
@@ -2573,7 +2592,7 @@ func _setup_capture() -> void:
 			# ~63 s raw take for the YouTube trailer and Short (cut in ffmpeg).
 			# No tutorial tips or key bar: the video adds its own captions.
 			set_meta("clean_trailer", true)
-			save.data.seen_hints = ["hurdle", "beam", "gap", "wide_gap", "gate", "bell", "bloom"]
+			save.data.seen_hints = ["hurdle", "beam", "gap", "wide_gap", "gate", "bell", "bloom", "cart", "flock", "tower"]
 			cap_steps = [
 				{"do": "wait", "s": 3.5},
 				{"do": "story", "ch": 0}, {"do": "wait", "s": 8.0},
@@ -3370,6 +3389,13 @@ var _load_fade := -1.0
 var _load_progress := 0.0
 var _intro_done := false     # the video has finished (or was skipped)
 var _video_started := false
+## 0.8.41: the boot sound is its own track (Modern: the new BADCOOL sound
+## logo; OG: the video's original sound), played in sync with the silent video.
+var _ident_audio: AudioStreamPlayer
+## Browsers only allow sound after the player clicks or taps once, so the web
+## build waits on "Click or tap to start" before the boot video.
+var _web_gate := false
+var _web_gate_label: Label
 var _video_t0 := 0.0
 var _intro_skip := false
 var _hold_t := 0.0           # time spent breathing after the video
@@ -3482,6 +3508,20 @@ func _start_loading() -> void:
 		# black frames first), so it plays smoothly from its very first frame
 	else:
 		_intro_done = true
+	if OS.has_feature("web") and capture_dir == "":
+		_web_gate = true
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		_web_gate_label = Label.new()
+		_web_gate_label.text = "Click or tap to start"
+		_web_gate_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_web_gate_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_web_gate_label.add_theme_font_size_override("font_size", 40)
+		_web_gate_label.add_theme_color_override("font_color", Color(0.86, 0.88, 0.91))
+		if font != null:
+			_web_gate_label.add_theme_font_override("font", font)
+		_web_gate_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_load_root.add_child(_web_gate_label)
+		_web_gate_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_load_bar = SilverBar.new()
 	_load_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_load_root.add_child(_load_bar)
@@ -3559,10 +3599,20 @@ func _update_loading(dt: float) -> void:
 			loading = false
 			_restore_intro_cursor()
 		return
-	if _load_i >= _load_steps.size() and is_instance_valid(_intro_video) and not _intro_video.is_playing() and not _intro_done and not _video_started:
+	if _load_i >= _load_steps.size() and is_instance_valid(_intro_video) and not _intro_video.is_playing() and not _intro_done and not _video_started and not _web_gate:
 		_video_started = true
 		_video_t0 = _load_t
 		_intro_video.play()
+		var og: bool = str(save.data.settings.get("sound_style", "modern")) == "og"
+		var snd_path := "res://assets/intro/ident_og.ogg" if og else "res://assets/intro/ident_modern.ogg"
+		if ResourceLoader.exists(snd_path):
+			_ident_audio = AudioStreamPlayer.new()
+			_ident_audio.bus = &"Master"
+			_ident_audio.stream = load(snd_path)
+			add_child(_ident_audio)
+			_ident_audio.play()
+	if _web_gate and is_instance_valid(_web_gate_label):
+		_web_gate_label.modulate.a = 0.55 + 0.45 * sin(_load_t * 3.0)
 	if _load_i < _load_steps.size():
 		var ts := Time.get_ticks_usec()
 		_load_steps[_load_i].call()

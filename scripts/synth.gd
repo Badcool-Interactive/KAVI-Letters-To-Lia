@@ -34,7 +34,8 @@ var _drv: AudioStreamPlayer
 var _lead: AudioStreamPlayer
 var lead := 0.0
 var _lead_target := 0.0
-var _evt_t := 6.0
+var _evt_t := 20.0   # first world moment well after the menu appears
+var style := "modern"  # "modern" (0.8.40 songs + world moments) or "og" (original loops)
 var _pool: Array = []
 var _cache := {}
 var _task := -1
@@ -150,14 +151,14 @@ func _update_world(dt: float) -> void:
 	_evt_t -= dt
 	if _evt_t <= 0.0:
 		_evt_t = randf_range(5.0, 12.0)
-		if base > 0.05 and _amb_b >= 0:
+		if base > 0.05 and _amb_b >= 0 and style != "og":
 			var pool: Array = [["gull", "gull", "wave"], ["woodpecker", "cuckoo"], ["splash", "churchbell", "splash"], ["cowbell", "eagle", "cowbell"]][_amb_b % 4]
 			var name: String = pool[randi() % pool.size()]
 			for p in _pool:
 				if not p.playing:
 					p.stream = sfx[name]
 					p.pitch_scale = randf_range(0.9, 1.1)
-					p.volume_db = linear_to_db(maxf(base * randf_range(0.35, 0.75), 0.0001))
+					p.volume_db = linear_to_db(maxf(base * randf_range(0.25, 0.55), 0.0001))
 					p.play()
 					break
 
@@ -212,6 +213,18 @@ func set_biome(b: int) -> void:
 func set_drive(on: float) -> void:
 	_drive_target = on
 
+## Sound style (0.8.41, owner): switch between the 0.8.40 songs and the
+## original loops; restarts the current country's music in the new style.
+func set_style(s: String) -> void:
+	if s == style:
+		return
+	style = s
+	_cache.clear()
+	if biome >= 0:
+		var b := biome
+		biome = -1
+		set_biome(b)
+
 ## 0..1: how much of the melody layer plays (main maps Tailwind to this).
 func set_lead(level: float) -> void:
 	_lead_target = clampf(level, 0.0, 1.0)
@@ -236,17 +249,21 @@ func _start_music(b: int) -> void:
 	var layers: Array = _cache[b]
 	_pad.stream = layers[0]
 	_drv.stream = layers[1]
-	_lead.stream = layers[2]
+	_lead.stream = layers[2] if layers.size() > 2 else null
 	_pad.play()
 	_drv.play()
-	_lead.play()
+	if _lead.stream != null:
+		_lead.play()
+	else:
+		_lead.stop()
 
 ## Loads the loops pre-rendered by tools/render_music.gd (instant, no hitch
 ## on phones or in browsers). Falls back to runtime synthesis if missing.
 func _load_prerendered(b: int) -> void:
 	var paths: Array = []
-	for kind in ["pad", "drive", "lead"]:
-		var path := "res://assets/music/b%d_%s.ogg" % [b % KEYS.size(), kind]
+	var og := style == "og"
+	for kind in (["pad", "drive"] if og else ["pad", "drive", "lead"]):
+		var path := ("res://assets/music/og/b%d_%s.ogg" if og else "res://assets/music/b%d_%s.ogg") % [b % KEYS.size(), kind]
 		if not ResourceLoader.exists(path):
 			return
 		paths.append(path)
@@ -319,7 +336,7 @@ func _build_sfx() -> void:
 	sfx.flap = _wav(_flap(0.7))
 	sfx.gull = _wav(_cries(1500.0, 1000.0, 3, 0.22, 0.26))
 	sfx.wave = _wav(_swell(2.6, 0.30))
-	sfx.woodpecker = _wav(_knocks(1150.0, 9, 1.0 / 17.0, 0.30))
+	sfx.woodpecker = _wav(_knocks(820.0, 7, 1.0 / 14.0, 0.13))
 	sfx.cuckoo = _wav(_two_note(660.0, 550.0, 0.26, 0.22))
 	sfx.splash = _wav(_splash(0.6))
 	sfx.churchbell = _wav(_bell_tone(294.0, 3.0, 0.35))
@@ -397,7 +414,8 @@ static func _knocks(f: float, count: int, step: float, amp: float) -> PackedFloa
 		var g := 1.0 - c * 0.06
 		for i in int(0.04 * RATE):
 			var t := float(i) / RATE
-			b[off + i] += (sin(TAU * f * t) * 0.7 + randf_range(-1, 1) * 0.3) * exp(-t * 120.0) * amp * g
+			# woody "tok": a soft attack, mostly tone, very little noise (0.8.41)
+			b[off + i] += (sin(TAU * f * t) * 0.9 + sin(TAU * f * 1.6 * t) * 0.25 + randf_range(-1, 1) * 0.06) * minf(t / 0.002, 1.0) * exp(-t * 75.0) * amp * g
 	return b
 
 static func _two_note(f0: float, f1: float, dur: float, amp: float) -> PackedFloat32Array:

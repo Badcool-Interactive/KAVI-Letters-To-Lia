@@ -62,6 +62,8 @@ var data := {
 		"reduced_motion": false,
 		"shake": true,
 		"pointer": "kavi",
+		"sound_style": "modern",
+		"vibration": true,
 		"deck_hidden": false,
 		"scenic_country": -1,
 		"scenic_look": "settings",

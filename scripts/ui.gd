@@ -74,6 +74,7 @@ func _make_primary(b: Button) -> void:
 		b.add_theme_color_override(k, INK)
 
 func _clear() -> void:
+	title_key = ""
 	if _box:
 		_box.queue_free()
 		_box = null
@@ -387,6 +388,44 @@ func _column(top := 0.24, animate := true) -> VBoxContainer:
 		_appear(c)
 	return v
 
+## The title menu remembers the layout it was built for (handheld or not,
+## tall or not); main rebuilds it when that changes (phone turned).
+var title_key := ""
+
+func layout_key() -> String:
+	return str(main.get_meta("deck_active", false)) + str(is_tall())
+
+## True when the game screen is much taller than 16:9 (the portrait handheld).
+func is_tall() -> bool:
+	var vp := get_viewport_rect().size
+	return vp.y > vp.x * 0.8
+
+## 0.8.41 (owner: too much space between Kavi and the menu, make it bigger):
+## on tall screens the title menu is drawn larger, wider and lower, closer to
+## Kavi. The column moves into a scaled wrapper (the open animation still
+## runs on the outer container).
+func _tall_menu(v: VBoxContainer) -> void:
+	if not is_tall():
+		return
+	var vp := get_viewport_rect().size
+	var k := clampf(1.0 + (vp.y / vp.x - 0.8) * 0.6, 1.0, 1.4)
+	var outer := v.get_parent() as Control
+	var w := Control.new()
+	w.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	outer.add_child(w)
+	w.position = Vector2.ZERO
+	w.size = vp / k
+	w.scale = Vector2(k, k)
+	v.reparent(w, false)
+	v.anchor_left = 0.44
+	v.anchor_right = 0.97
+	v.anchor_top = 0.42
+	v.anchor_bottom = 0.95
+	v.offset_left = 0
+	v.offset_right = 0
+	v.offset_top = 0
+	v.offset_bottom = 0
+
 ## 0.8.40: small text stays readable in small windows (CrazyGames tests at
 ## 907x510 and 800x450): never below ~13 real pixels, capped at 34.
 func _readable(size: int) -> int:
@@ -423,6 +462,9 @@ func show_title() -> void:
 	main.menu_dim = false
 	main.apply_look()
 	var v := _column(0.30)
+	title_key = layout_key()
+	_tall_menu(v)
+	var deck: bool = main.get_meta("deck_active", false)
 	var ch := int(main.save.data.story_chapter)
 	var cont: bool = ch > 0 and not main.save.data.story_done
 	var first := _item(v, ("Continue the journey" if cont else "Play story"), main.menu_story, 62)
@@ -441,7 +483,8 @@ func show_title() -> void:
 	row.add_theme_constant_override("separation", 26)
 	v.add_child(row)
 	var row_items := [["Garage", show_garage.bind("scarf")], ["Settings", show_settings], ["Tutorial", confirm_tutorial]]
-	if main.can_quit():
+	# 0.8.41: on the handheld the power button is how you quit
+	if main.can_quit() and not deck:
 		row_items.append(["Quit", confirm_quit])
 	for it in row_items:
 		var b := _item(row, it[0], it[1], 30)
@@ -450,6 +493,12 @@ func show_title() -> void:
 	if main.ads.can_show() and not OS.has_feature("portal"):
 		_item(v, "Free gift: a short ad for +1 Spark (%d left)" % main.ads.remaining_today(), main.watch_ad_for_spark, 24).size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_gap(v, 18)
+	if deck:
+		# the handheld shows Stamps, Sparks and the best score on its own
+		# arcade-style display instead (shell.gd)
+		first.grab_focus.call_deferred()
+		_glide_and_stagger(v)
+		return
 	# wallet + best score: bigger, outlined, so it reads over the bright ground
 	var stats := HBoxContainer.new()
 	stats.add_theme_constant_override("separation", 34)
@@ -792,6 +841,8 @@ const HELP := {
 	"Music": "The soundtrack of each country.",
 	"Sound effects": "Hops, perfects, menus and the little world toys.",
 	"World sounds": "Waves, birds, wind and the river around Kavi.",
+	"Vibration": "A tiny buzz when you press the handheld's buttons, and a bump when Kavi trips (phones only).",
+	"Sound style": "Modern: each country's full song, which grows as your Tailwind climbs, plus little live world moments (gulls, bells...). OG: the original short music loops, without the live world moments.",
 	"Button size": "How big the touch buttons are on phones and tablets.",
 	"Left-handed controls": "Swaps the touch buttons left and right.",
 	"Country": "The whole journey goes through all four countries; or stay in one.",
@@ -952,6 +1003,8 @@ func _page_sound(animate := true) -> void:
 	_slider(v, "Music", "music")
 	_slider(v, "Sound effects", "sfx")
 	_slider(v, "World sounds", "world")
+	if not OS.has_feature("portal"):   # the portal build leaves the OG files out (50 MB limit)
+		_cycle_row(v, "Sound style", "sound_style", ["modern", "og"], ["Modern", "OG"])
 	_help_area(v)
 	_gap(v, 6)
 	_item(v, "Back", func(): main.save.save(); show_settings(), 34)
@@ -961,6 +1014,8 @@ func _page_controls(animate := true) -> void:
 	var v := _column(0.16, animate)
 	_heading(v, "Controls")
 	_cycle_row(v, "Button size", "controls_scale", [0.8, 1.0, 1.2, 1.4])
+	if OS.has_feature("mobile") or OS.has_feature("web"):
+		_cycle_row(v, "Vibration", "vibration", [true, false], ["On", "Off"])
 	_toggle_row(v, "Left-handed controls", "left_handed")
 	if not OS.has_feature("mobile"):
 		_cycle_row(v, "Mouse pointer", "pointer", ["kavi", "system"], ["KAVI", "Normal"])

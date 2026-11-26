@@ -29,6 +29,10 @@ const PLASTIC := Color(0.22, 0.22, 0.35)
 const BEZEL := Color(0.05, 0.05, 0.10)
 const POWER_HOLD := 0.9
 const DECK_U := 6.8       # deck height in deck units (chip, pad + buttons, pills)
+const MARQUEE := 0.085   # marquee height above the screen (x screen width)
+const STRIP := 0.092     # power + score display strip under the screen
+const LCD_BG := Color(0.04, 0.09, 0.10)
+const LCD_ON := Color(0.45, 1.0, 0.92)
 const MAX_TALL := 1.5     # tallest game screen, height / width (fills a 20:9 phone)
 const ORANGE := Color(1.0, 0.48, 0.22)
 const TEAL := Color(0.30, 0.86, 0.82)
@@ -52,6 +56,7 @@ var _repeat := {}        # zone -> [next repeat time, keycode]
 var _t := 0.0
 var _over: Control       # drawn above the game screen (rounded glass corners)
 var _power_t := -1.0     # >= 0 while the power button is held
+var _speaker_lvl := 0.0
 var _aa := 1.5           # one real pixel, in layout units (smooth edges)
 
 func _ready() -> void:
@@ -106,10 +111,13 @@ func _layout() -> void:
 		# 0.8.38: the controls sit at the bottom like a keyboard (thumb
 		# reach) and the screen grows taller into the space above them, up
 		# to MAX_TALL (height / width); the game simply sees more world.
-		var gw := S.x * 0.965
+		# 0.8.41 (owner): almost no side border; the top border earns its place
+		# as an arcade marquee (neon name + Tailwind lights), and the strip
+		# under the screen holds the power button and a score display
+		var gw := S.x * 0.985
 		var gx := (S.x - gw) * 0.5
-		var top := S.x * 0.03
-		var strip := S.x * 0.078       # bezel strip under the screen (power + name)
+		var top := S.x * MARQUEE
+		var strip := S.x * STRIP
 		var deck_h := _deck_u(S) * DECK_U
 		var room := S.y - top - strip - S.x * 0.02 - (0.0 if _deck_hidden() else deck_h)
 		if _deck_hidden():
@@ -150,6 +158,7 @@ func _process(dt: float) -> void:
 		if _power_t >= POWER_HOLD:
 			_power_t = -1.0
 			_release_all()
+			_buzz(60, 0.9)
 			game.quit_game()
 	_over.queue_redraw()
 	_mode_k = move_toward(_mode_k, 1.0 if _mode == "game" else 0.0, dt / 0.28)
@@ -285,9 +294,19 @@ func _can_power() -> bool:
 
 func _power_pos() -> Vector2:
 	var S := get_viewport_rect().size
-	return Vector2(game_rect.position.x + S.x * 0.035, game_rect.end.y + S.x * 0.033)
+	return Vector2(game_rect.position.x + S.x * 0.045, game_rect.end.y + S.x * STRIP * 0.5)
+
+## 0.8.41: a tiny buzz under the thumb, like a real button (Settings ›
+## Controls › Vibration). Phones only; ignored where there is no motor.
+func _buzz(ms: int, amp := 0.5) -> void:
+	if game == null or not ("save" in game) or game.save == null:
+		return
+	if not bool(game.save.data.settings.get("vibration", true)):
+		return
+	Input.vibrate_handheld(ms, amp)
 
 func _down(zn: String) -> void:
+	_buzz(14 if zn in ["up", "down", "left", "right"] else 22, 0.45)
 	match zn:
 		"power":
 			_power_t = 0.0
@@ -362,21 +381,22 @@ func _draw() -> void:
 	# modern matte body: even rounded corners, soft vertical gradient, a faint
 	# top highlight
 	draw_rect(Rect2(Vector2.ZERO, S), Color(0.03, 0.03, 0.06))
-	var body := Art.rrect(Rect2(Vector2(4, 4), S - Vector2(8, 8)), S.x * 0.06, 10)
+	var body := Art.rrect(Rect2(Vector2(2, 2), S - Vector2(4, 4)), S.x * 0.06, 10)
 	var cols := PackedColorArray()
 	for p in body:
 		cols.append(BODY_TOP.lerp(BODY_BOT, clampf(p.y / S.y, 0.0, 1.0)))
 	draw_polygon(body, cols)
 	draw_polyline(_closed(body), Color(1, 1, 1, 0.07), _aa * 2.0, true)
-	# glass bezel: thin at the sides, a slim strip below for power + name
+	# glass front: marquee + screen + strip are one dark glass panel
 	var g := game_rect
-	var pad := S.x * 0.012
-	var b := Rect2(g.position - Vector2(pad, pad), g.size + Vector2(pad * 2.0, pad + S.x * 0.066))
-	_rr(b.grow(S.x * 0.004), S.x * 0.035, Color(0, 0, 0, 0.4))
-	_rr(b, S.x * 0.032, BEZEL)
-	draw_arc(b.position + Vector2(S.x * 0.05, S.x * 0.05), S.x * 0.032, PI * 1.1, PI * 1.45, 10, Color(1, 1, 1, 0.08), _aa * 2.0, true)
-	var fs := int(S.x * 0.024)
-	draw_string(font, Vector2(b.position.x, g.end.y + S.x * 0.033 + fs * 0.36), "KAVI  ·  Letters to Lia", HORIZONTAL_ALIGNMENT_RIGHT, b.size.x - S.x * 0.035, fs, Color(1.0, 0.9, 0.78, 0.6))
+	var pad := (S.x - g.size.x) * 0.5
+	var b := Rect2(Vector2(pad * 0.5, pad * 0.5), Vector2(S.x - pad, g.end.y + S.x * STRIP - pad * 0.5))
+	_rr(b.grow(S.x * 0.004), S.x * 0.05, Color(0, 0, 0, 0.45))
+	_rr(b, S.x * 0.048, BEZEL)
+	# a diagonal glass reflection across the top-left of the panel
+	_fill(PackedVector2Array([b.position + Vector2(S.x * 0.08, 0), b.position + Vector2(S.x * 0.30, 0), b.position + Vector2(S.x * 0.12, S.x * MARQUEE), b.position + Vector2(-S.x * 0.10 + S.x * 0.08, S.x * MARQUEE)]), Color(1, 1, 1, 0.025))
+	_draw_marquee(S, font, Rect2(b.position.x, b.position.y, b.size.x, g.position.y - b.position.y))
+	_draw_lcd(S, font, Rect2(g.position.x + S.x * 0.10, g.end.y + S.x * 0.014, g.size.x - S.x * 0.115, S.x * STRIP - S.x * 0.028))
 	_draw_power(S, font)
 	if game == null or game.loading:
 		return
@@ -389,22 +409,118 @@ func _draw() -> void:
 	var u: float = z.u
 	var k := ease(_mode_k, -2.0)   # 0 menu .. 1 game, eased
 	var bounce := 1.0 + 0.08 * sin(clampf(_swap_t / 0.3, 0.0, 1.0) * PI)
-	# mode chip: a small rounded tag
-	var chip := "GAME CONTROLS" if _mode == "game" else "MENU CONTROLS"
+	# a thin accent line where the deck begins, glowing in the mode's colour
 	var chip_c := GREEN if _mode == "game" else ORANGE
-	var cw := u * 2.6
+	var ly := deck_rect.position.y + u * 0.08
+	draw_line(Vector2(S.x * 0.08, ly), Vector2(S.x * 0.92, ly), Color(chip_c, 0.10), u * 0.06, true)
+	draw_line(Vector2(S.x * 0.30, ly), Vector2(S.x * 0.70, ly), Color(chip_c, 0.35), _aa * 2.0, true)
+	# mode chip: a small rounded tag with a status dot
+	var chip := "GAME CONTROLS" if _mode == "game" else "MENU CONTROLS"
+	var cw := u * 2.8
 	var cr := Rect2(deck_rect.position.x + deck_rect.size.x * 0.5 - cw * 0.5, deck_rect.position.y + u * 0.3, cw, u * 0.42)
 	_rr(cr, cr.size.y * 0.5, Color(chip_c, 0.14))
-	draw_string(font, cr.position + Vector2(0, cr.size.y * 0.7), chip, HORIZONTAL_ALIGNMENT_CENTER, cw, int(u * 0.19), Color(chip_c, 0.9))
+	_disc(cr.position + Vector2(cr.size.y * 0.55, cr.size.y * 0.5), cr.size.y * 0.14, Color(chip_c, 0.6 + 0.4 * sin(_t * 3.0)))
+	draw_string(font, cr.position + Vector2(cr.size.y * 0.3, cr.size.y * 0.7), chip, HORIZONTAL_ALIGNMENT_CENTER, cw, int(u * 0.19), Color(chip_c, 0.9))
 	_draw_dpad(z.dpad, u * bounce, k, font)
 	_draw_ab(z, u, k, bounce, font)
 	_pill(z.hide, "HIDE", 1.0, _pressed("hide"), font, u)
 	_pill(z.pause, "PAUSE", k, _pressed("pause"), font, u)
-	# speaker: a neat grid of small holes
+	# speaker: holes that glow softly with the music's loudness
+	var lvl := clampf((AudioServer.get_bus_peak_volume_left_db(0, 0) + 42.0) / 36.0, 0.0, 1.0)
+	_speaker_lvl = lerpf(_speaker_lvl, lvl, 0.35)
 	var sp := Vector2(deck_rect.end.x - u * 1.9, deck_rect.position.y + u * 5.3)
 	for row in 3:
 		for col in 5:
-			_disc(sp + Vector2(col * u * 0.26 + (row % 2) * u * 0.13, row * u * 0.24), u * 0.05, Color(0, 0, 0, 0.5))
+			var hp := sp + Vector2(col * u * 0.26 + (row % 2) * u * 0.13, row * u * 0.24)
+			_disc(hp, u * 0.055, Color(0, 0, 0, 0.55))
+			_disc(hp, u * 0.03, Color(TEAL, 0.05 + 0.30 * _speaker_lvl * (0.6 + 0.4 * sin(_t * 9.0 + col + row * 2.0))))
+	# a small embossed studio mark under the speaker
+	draw_string(font, sp + Vector2(-u * 0.1, u * 0.95), "BADCOOL", HORIZONTAL_ALIGNMENT_LEFT, -1, int(u * 0.17), Color(1, 1, 1, 0.10))
+
+## The top border as an arcade marquee: the game's name in soft neon, and
+## four Tailwind lights (lit by tier in a run, a slow chase in menus).
+func _draw_marquee(S: Vector2, font: Font, r: Rect2) -> void:
+	var cy := r.position.y + r.size.y * 0.56
+	var fs := int(S.x * 0.040)
+	var flick := 0.92 + 0.08 * sin(_t * 1.7) * sin(_t * 5.3)
+	var title := "KAVI"
+	var tw := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	var tx := r.position.x + S.x * 0.06
+	for gl in [[0.30, 6.0], [0.18, 3.0]]:
+		draw_string_outline(font, Vector2(tx, cy + fs * 0.35), title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, int(S.x * 0.004 * gl[1]), Color(ORANGE, gl[0] * flick))
+	draw_string(font, Vector2(tx, cy + fs * 0.35), title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1.0, 0.93, 0.82, flick))
+	draw_string(font, Vector2(tx + tw + S.x * 0.02, cy + fs * 0.28), "LETTERS TO LIA", HORIZONTAL_ALIGNMENT_LEFT, -1, int(S.x * 0.019), Color(TEAL, 0.75 * flick))
+	# Tailwind lights
+	var tier := 0
+	if game != null and not game.loading and str(game.state) in ["run", "recovery", "rescue", "junction", "paused"]:
+		tier = int(game.tw.tier())
+	var lx := r.end.x - S.x * 0.06
+	draw_string(font, Vector2(lx - S.x * 0.20, cy - S.x * 0.019), "TAILWIND", HORIZONTAL_ALIGNMENT_RIGHT, S.x * 0.20 + S.x * 0.012, int(S.x * 0.014), Color(1, 1, 1, 0.35))
+	for i in 4:
+		var c := Vector2(lx - (3 - i) * S.x * 0.034, cy + S.x * 0.006)
+		var on := 0.0
+		if tier > 0:
+			on = 1.0 if i < tier else 0.0
+		else:
+			on = 0.5 + 0.5 * sin(_t * 2.2 - i * 0.9)
+			on *= 0.35
+		var lc: Color = [TEAL, GREEN, ORANGE, PINK][i]
+		_disc(c, S.x * 0.011, Color(0, 0, 0, 0.6))
+		if on > 0.02:
+			_disc(c, S.x * 0.017, Color(lc, 0.14 * on))
+		_disc(c, S.x * 0.008, Color(lc, 0.15 + 0.85 * on))
+
+## Score display under the screen, like an arcade cabinet's LCD: in menus the
+## wallet and best score, in a run the live score, metres and Tailwind.
+func _draw_lcd(S: Vector2, font: Font, r: Rect2) -> void:
+	_rr(r, r.size.y * 0.22, LCD_BG)
+	_rr(Rect2(r.position + Vector2(0, r.size.y * 0.06), Vector2(r.size.x, r.size.y * 0.12)).grow(-r.size.y * 0.1), r.size.y * 0.06, Color(1, 1, 1, 0.03))
+	if game == null or game.loading or not ("save" in game) or game.save == null:
+		return
+	var fields: Array = []
+	if str(game.state) in ["run", "recovery", "rescue", "junction", "paused", "fail"]:
+		var m := int(maxf(game.sim.x - game.dist_start, 0.0) / 40.0) if "sim" in game and game.sim != null else 0
+		fields = [["SCORE", "%06d" % int(game.score)], ["M", "%04d" % mini(m, 9999)], ["STAMPS", "%04d" % mini(int(game.save.data.stamps), 9999)]]
+	else:
+		fields = [["STAMPS", "%04d" % mini(int(game.save.data.stamps), 9999)], ["SPARKS", "%03d" % mini(int(game.save.data.sparks), 999)], ["HI-SCORE", "%06d" % mini(int(game.best_any()), 999999)]]
+	var n := fields.size()
+	var cw := r.size.x / n
+	var dh := r.size.y * 0.46
+	for i in n:
+		var x0 := r.position.x + cw * i
+		draw_string(font, Vector2(x0 + r.size.y * 0.25, r.position.y + r.size.y * 0.33), fields[i][0], HORIZONTAL_ALIGNMENT_LEFT, -1, int(r.size.y * 0.2), Color(LCD_ON, 0.55))
+		var digits: String = fields[i][1]
+		var dw := dh * 0.56
+		var dx := x0 + r.size.y * 0.25
+		for ch in digits:
+			_seg(Vector2(dx, r.position.y + r.size.y * 0.42), dw, dh, int(ch))
+			dx += dw * 1.22
+		if i > 0:
+			draw_line(Vector2(x0, r.position.y + r.size.y * 0.2), Vector2(x0, r.end.y - r.size.y * 0.2), Color(LCD_ON, 0.10), _aa * 1.5, true)
+
+## One seven-segment digit; unlit segments stay as faint ghosts (real LCD).
+func _seg(p: Vector2, w: float, h: float, d: int) -> void:
+	const MAP := [0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F]
+	var bits: int = MAP[clampi(d, 0, 9)]
+	var t := w * 0.17
+	var hh := h * 0.5
+	var segs := [
+		[Vector2(t, 0), Vector2(w - t, 0)],             # a
+		[Vector2(w, t), Vector2(w, hh - t * 0.5)],      # b
+		[Vector2(w, hh + t * 0.5), Vector2(w, h - t)],  # c
+		[Vector2(t, h), Vector2(w - t, h)],             # d
+		[Vector2(0, hh + t * 0.5), Vector2(0, h - t)],  # e
+		[Vector2(0, t), Vector2(0, hh - t * 0.5)],      # f
+		[Vector2(t, hh), Vector2(w - t, hh)],           # g
+	]
+	for i in 7:
+		var on := ((bits >> i) & 1) == 1
+		var col := Color(LCD_ON, 0.95) if on else Color(LCD_ON, 0.07)
+		var a: Vector2 = p + segs[i][0]
+		var b2: Vector2 = p + segs[i][1]
+		if on:
+			draw_line(a, b2, Color(LCD_ON, 0.18), t * 2.2, true)
+		draw_line(a, b2, col, t, true)
 
 ## Power: a round button with the power symbol and a status light. Hold it
 ## (a ring fills) to save and quit; letting go early does nothing.
@@ -450,6 +566,9 @@ func _draw_over() -> void:
 func _draw_dpad(c: Vector2, u: float, k: float, font: Font) -> void:
 	var L := u * 1.35
 	var w := u * 0.95
+	# 0.8.41: the cross sits in a soft round well, like a real handheld
+	_disc(c, L * 1.18, Color(0, 0, 0, 0.16))
+	draw_arc(c, L * 1.18, PI * 0.15, PI * 0.85, 32, Color(1, 1, 1, 0.05), _aa * 2.0, true)
 	for r in [Rect2(c.x - w * 0.5, c.y - L, w, L * 2.0), Rect2(c.x - L, c.y - w * 0.5, L * 2.0, w)]:
 		_rr(r.grow(u * 0.1), u * 0.28, Color(0, 0, 0, 0.35))
 	for r in [Rect2(c.x - w * 0.5, c.y - L, w, L * 2.0), Rect2(c.x - L, c.y - w * 0.5, L * 2.0, w)]:
@@ -471,6 +590,7 @@ func _draw_dpad(c: Vector2, u: float, k: float, font: Font) -> void:
 		else:
 			col.a = lerpf(0.88, 0.22, k)   # left / right do nothing in a run
 		if on:
+			_disc(arm, w * 0.75, Color(col, 0.12))
 			_rr(Rect2(arm - Vector2(w, w) * 0.42, Vector2(w, w) * 0.84), u * 0.16, Color(col, 0.3))
 		var tip := arm + dir * u * 0.2
 		var side := Vector2(-dir.y, dir.x) * u * 0.2
@@ -501,6 +621,9 @@ func _draw_ab(z: Dictionary, u: float, k: float, bounce: float, font: Font) -> v
 		var r := u * 0.74 * bounce
 		var drop := u * (0.03 if on else 0.1)
 		var top := c + Vector2(0, u * 0.1 - drop)
+		if on:
+			_disc(top, r * 1.45, Color(col, 0.10))
+			_disc(top, r * 1.22, Color(col, 0.16))
 		_disc(c + Vector2(0, u * 0.1), r, col.darkened(0.55))
 		_disc(top, r, col.darkened(0.25 if on else 0.08))
 		_disc(top + Vector2(0, -r * 0.08), r * 0.86, col.lightened(0.04 if on else 0.1))
