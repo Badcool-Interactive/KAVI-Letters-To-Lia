@@ -1,68 +1,86 @@
 # KAVI: Letters to Lia
 
-![KAVI: Letters to Lia](docs/media/keyart.jpg)
+![Kavi and Lia meet at last](docs/media/keyart.jpg)
 
-**Kavi** is a little courier robot (his name means "poet") with a screen for a face, a sunset-orange scarf and a bag full of letters. He runs across Europe, from the Greek coast through Bulgarian forests and along the Danube to the Romanian mountains, to reach his friend **Lia**.
+### A little robot. A long road. One letter that has to arrive.
 
-A cozy, family-friendly 2D auto-runner made in Godot 4.7. Everything you see and hear (characters, worlds, obstacles, music) is generated in code.
+**Kavi** (his name means *poet*) is a tiny courier robot with a screen for a face, a sunset-orange scarf and a bag full of letters. Lia is waiting at the other end of Europe. Between them: sea cliffs, lantern forests, a river of mirrors and mountains full of stars.
 
-*(This repo used to be the game VOLT/RUN; Kite and Lumi are now Kavi and Lia.)*
+**A cozy, family-friendly 2D runner** that's quick to pick up and hard to put down. Every picture, song and sound in it is made in code: no stock art, no samples.
 
-## ▶ Play now
+## ▶ Play free, right now
 
-**In your browser, no install: https://badcool-interactive.github.io/KAVI-Letters-To-Lia/**
-Works on desktop, Android (Chrome) and iPhone/iPad (Safari). Turn your phone sideways.
+### **[Play in your browser](https://badcool-interactive.github.io/KAVI-Letters-To-Lia/)** · no install, no account
 
-**Download** the latest build from **[Releases](../../releases/latest)**:
+Or download it from **[Releases](../../releases/latest)**:
 
 | Platform | File | How to run |
 |---|---|---|
 | Windows 10/11 | `KAVI-windows.exe` | Double-click it. It isn't signed yet, so SmartScreen may warn: choose *More info → Run anyway*. |
-| Android | `KAVI-android.apk` | Copy it to the phone, open it, and allow "install unknown apps". Play in landscape. |
+| Android | `KAVI-android.apk` | Open it on the phone and allow "install unknown apps". If Play Protect warns, choose *Install anyway* (preview build). |
 | Linux | `KAVI-linux.x86_64` | `chmod +x KAVI-linux.x86_64 && ./KAVI-linux.x86_64` |
 
-## A world to run through
+## Four countries, one journey
 
-![Four countries](docs/media/countries.jpg)
+![The Amber Shore, Lanternwood, Mirrorwater and Starfall Heights](docs/media/countries.jpg)
 
-Four countries, each with its own sky, music, people and ground: **The Amber Shore** (Greece), **Lanternwood** (Bulgaria), **Mirrorwater** (the Danube) and **Starfall Heights** (Romania). The world changes smoothly as you run, and the sun and moon set behind the hills.
+**The Amber Shore** (Greece) · **Lanternwood** (Bulgaria) · **Mirrorwater** (the Danube) · **Starfall Heights** (Romania)
 
-![Obstacles](docs/media/obstacles.jpg)
+Each country has its own sky, people, ground, obstacles, **its own song** and its own sounds: gulls and waves, a woodpecker in the forest, church bells across the river, cowbells in the mountains. The world flows from one country into the next as you run, and the sun sets behind the hills.
 
-Every country has its own obstacles: Greek amphoras and orange crates, forest log piles, Danube barrels and mountain snowmen to hop over; shop signs on gateways to scoot under; and gaps above the sea, ravines and ice. A perfect clear makes them wobble and burst into confetti.
+## Easy to learn, fun to master
 
-## The title screen is a toy too
+![A runaway cart, a pigeon flock and a parcel tower](docs/media/obstacles.jpg)
 
-![Title screen](docs/media/title.jpg)
+Four moves, one thumb each: **Hop** (hold to hover), **Scoot** (dive in the air), **Gust** (blow things open) and **Letter** (a paper plane that rings bells and drops bridges).
 
-- **Paper-plane mini-game:** click near the plane to push it, and steer it to Kavi so it circles him. Click too fast and it stalls!
-- **Click the sky:** balloons hop and wave (click three times quickly to send one flying), the plane draws a smoke heart, ships toot their horns, and birds scatter.
-- **Kavi's notebook:** his own little poems, mixed with short public-domain love lines from Shakespeare, Byron, Dickinson, Tagore, Burns and others.
+- **Obstacles with personality:** a **runaway fruit cart** rolling straight at you, **pigeons** you can scoot under *or* gust away ("SHOO!"), a wobbly **parcel tower** with a cat napping on top, Greek amphoras, forest log piles, Danube barrels, mountain snowmen, gates, bells and bouncy blooms.
+- **Tailwind:** perfect timing builds x2, x3, x4. **The music grows with you:** at high Tailwind a melody joins the song.
+- **Always fair:** a solver bot checks every stretch of road can be cleared before you see it.
+- **Fail and laugh:** when Kavi trips, he cries dramatically, kicks a rock, or faceplants.
 
 ## Dress him up
 
-![Suits](docs/media/suits.jpg)
+![Kavi in different suits](docs/media/suits.jpg)
 
-Kavi is really a tiny memory chip that can move into new suits: Astro Bubble, Teapot, Bunny, Blocky, Sprout and more. Add paints, visor colours, scarves (stripes and rainbow) and antenna tips, all in the Garage. *Everything is free to try while the game is in development.*
+Kavi is really a tiny memory chip that moves into new suits: **Courier, Explorer, Astro Bubble, Bunny, Lion**, plus kitty, teapot, blocky and a whole zoo of animal costumes. Add paints, visors, faces, scarves, antennas, bags, trails and letter colours in the **Garage**. *Everything is free to try while the game is in development.*
+
+## A pocket console on your phone
+
+![KAVI as a handheld console in portrait](docs/media/handheld.jpg)
+
+Hold your phone upright and KAVI becomes a **handheld console**:
+- a neon marquee and Tailwind lights;
+- an arcade-style score display;
+- a D-pad and A/B buttons that work the menus and swap to game controls when you run;
+- a vibration buzz under your thumb;
+- a power button that saves and turns it off.
+
+Turn the phone sideways for full-screen play.
 
 ## Modes
-- **Story:** four chapters to Lia, with route choices (a countdown, and an easy option if you're unsure), breathers where kind strangers help, a rescue, and the reunion.
-- **Endless Road** and **Daily Relay** (the same track for everyone each day).
-- **Scenic View:** no obstacles, just Kavi running through all four countries.
+- **Story:** four chapters to Lia, with route choices, kind strangers, a rescue, and the reunion.
+- **Endless Road** and **Daily Relay** (the same road for everyone, every day).
+- **Scenic View:** no obstacles. Pick a country, a time of day and the sounds, and just watch Kavi run through Europe.
+- **Tutorial:** 13 quick hands-on lessons; the game pauses until you try each move.
+
+![The title screen](docs/media/title.jpg)
+
+**The title screen is a toy too:** steer the paper plane to Kavi, click balloons, ships and birds, and read Kavi's little poems mixed with public-domain love lines from Shakespeare, Byron, Dickinson and Tagore. Wait too long and he pulls up a chair, or a bed.
 
 ## Controls
 
-| Action | Keyboard | Gamepad | Touch |
+| Action | Keyboard | Gamepad | Touch / handheld |
 |---|---|---|---|
-| Hop (hold for higher; hold in the air to hover) | W / Up / Space | A | left thumb, upper half |
-| Scoot (hold) · dive in the air | S / Down | B | left thumb, lower half |
-| Gust (opens gates) | X | X | right thumb, big button |
-| Letter (paper plane: bells and bridges) | C | Y | right thumb, small button |
-| Pause / back | Esc | Start | top-right button |
+| Hop (hold for higher; hold in the air to hover) | W / Up / Space | A | D-pad up · left thumb, upper half |
+| Scoot (hold) · dive in the air | S / Down | B | D-pad down · left thumb, lower half |
+| Gust (opens gates, shoos pigeons) | X | X | A button · big right button |
+| Letter (paper plane: bells and bridges) | C | Y | B button · small right button |
+| Pause / back | P / Esc / Backspace | Start | Pause button |
 
-Menus work with the mouse, touch, or WASD/arrows plus Enter, Space or E.
-
-**Kind by design:** Kind Mode (no fails), hover assist, relaxed speed, reduced motion, a left-handed layout and bigger buttons. No tracking, and no ads in gameplay.
+**Kind by design:**
+- **Settings:** Kind Mode (no fails), hover assist, relaxed speed, reduced motion, a left-handed layout, bigger buttons, vibration on/off, and Modern or OG sound.
+- **Privacy:** no tracking, no accounts, and no ads during gameplay.
 
 ## For developers
 
@@ -70,6 +88,7 @@ Menus work with the mouse, touch, or WASD/arrows plus Enter, Space or E.
 ../../tools/bin/path/godot --path .                       # run from source (Godot 4.7.2)
 tools/test.sh                                             # headless tests (isolated user data)
 tools/capture.sh /tmp/shots                               # scripted screenshots
+tools/render-music.sh                                     # re-render the songs (synth.gd compose()) to OGG
 VOLT_CAPTURE_ARGS="--obs" tools/capture.sh /tmp/obs       # obstacle review in all four countries
 tools/bench.sh /tmp/bench.json --quality=medium           # performance benchmark
 ```
@@ -79,4 +98,7 @@ Code map: `sim.gd` physics and moves · `track.gd` level generator plus a solver
 See [docs/CHANGELOG.md](docs/CHANGELOG.md) for everything that changed in each version.
 
 ## Credits
-Made by **Badcool Studio**. Fonts: Fredoka and Nunito (SIL Open Font License, in `assets/fonts/`). Title quotes are public-domain poetry, credited in game; the asset ledger is `docs/LEDGER.csv`.
+Made by **BADCOOL INTERACTIVE**. Fonts: Fredoka and Nunito (SIL Open Font License, in `assets/fonts/`). Title quotes are public-domain poetry, credited in game; the asset ledger is `docs/LEDGER.csv`.
+
+---
+© BADCOOL INTERACTIVE · made by Singh Baljeet · all rights reserved for the game, its characters and its art.

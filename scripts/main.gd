@@ -2481,6 +2481,14 @@ func _setup_capture() -> void:
 			cap_steps.append_array([{"do": "skip_t", "s": 12.0}, {"do": "wait", "s": 1.5}, {"shot": "q%d" % (k + 1)}])
 		cap_steps.append({"do": "quit"})
 		return
+	if "--market" in OS.get_cmdline_user_args():
+		# store/README pictures: the Garage trying on suits
+		save.data.tutorial_done = true
+		cap_steps = [{"do": "wait", "s": 2.5}, {"do": "garage", "cat": "suit"}, {"do": "wait", "s": 1.2}, {"shot": "g0"}]
+		for i in [2, 3, 5, 8]:
+			cap_steps.append_array([{"do": "try", "cat": "suit", "i": i}, {"do": "wait", "s": 0.9}, {"shot": "g-suit%d" % i}])
+		cap_steps.append({"do": "quit"})
+		return
 	if "--newobs" in OS.get_cmdline_user_args():
 		# 0.8.40 obstacles: cart rolling in, under the pigeons, over the tower
 		save.data.tutorial_done = true
