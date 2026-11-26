@@ -1423,9 +1423,9 @@ func show_ad_placeholder() -> void:
 
 
 ## About (0.8.24, owner): version, where to get updates, and who made it.
-const LINK_PLAY := "https://singh679.github.io/volt-run-luminous/"
-const LINK_DOWNLOADS := "https://github.com/singh679/volt-run-luminous/releases/latest"
-const LINK_SOURCE := "https://github.com/singh679/volt-run-luminous"
+const LINK_PLAY := "https://badcool-interactive.github.io/KAVI-Letters-To-Lia/"
+const LINK_DOWNLOADS := "https://github.com/Badcool-Interactive/KAVI-Letters-To-Lia/releases/latest"
+const LINK_SOURCE := "https://github.com/Badcool-Interactive/KAVI-Letters-To-Lia"
 
 var _about_update_status: Label
 var _about_update_action: MenuItem

@@ -10,7 +10,7 @@ A cozy, family-friendly 2D auto-runner made in Godot 4.7. Everything you see and
 
 ## ▶ Play now
 
-**In your browser, no install: https://singh679.github.io/volt-run-luminous/**
+**In your browser, no install: https://badcool-interactive.github.io/KAVI-Letters-To-Lia/**
 Works on desktop, Android (Chrome) and iPhone/iPad (Safari). Turn your phone sideways.
 
 **Download** the latest build from **[Releases](../../releases/latest)**:

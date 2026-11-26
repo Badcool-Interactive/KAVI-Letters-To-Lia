@@ -3,9 +3,9 @@ extends Node
 signal changed
 signal restart_requested
 
-const REPO := "https://github.com/singh679/volt-run-luminous"
-const LATEST := "https://api.github.com/repos/singh679/volt-run-luminous/releases/latest"
-const PAGES := "https://singh679.github.io/volt-run-luminous/"
+const REPO := "https://github.com/Badcool-Interactive/KAVI-Letters-To-Lia"
+const LATEST := "https://api.github.com/repos/Badcool-Interactive/KAVI-Letters-To-Lia/releases/latest"
+const PAGES := "https://badcool-interactive.github.io/KAVI-Letters-To-Lia/"
 const INSTALL_ARG := "--kavi-apply-update"
 const CACHE := "user://updates"
 const MAX_ASSET_BYTES := 256 * 1024 * 1024
@@ -223,7 +223,7 @@ func apply() -> void:
 
 static func _on_official_web() -> bool:
 	return OS.has_feature("web") and bool(JavaScriptBridge.eval(
-		"location.origin === 'https://singh679.github.io' && location.pathname.startsWith('/volt-run-luminous/')"
+		"location.origin === 'https://badcool-interactive.github.io' && location.pathname.toLowerCase().startsWith('/kavi-letters-to-lia/')"
 	))
 
 func _install_android() -> void:

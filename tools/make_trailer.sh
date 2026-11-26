@@ -48,7 +48,7 @@ endcard() { # geometry, frame time for background
 $txt:fontsize=$(calc "150*$fs/1"):text='KAVI':y=h*0.30,\
 $txt:fontsize=$(calc "54*$fs/1"):text='Letters to Lia':y=h*0.30+$(calc "190*$fs/1"),\
 $txt:fontsize=$(calc "64*$fs/1"):text='Play free in your browser':y=h*0.58,\
-$txt:fontsize=$(calc "48*$fs/1"):text='singh679.github.io/volt-run-luminous':fontcolor=0xFFD27A:y=h*0.58+$(calc "90*$fs/1"),\
+$txt:fontsize=$(calc "48*$fs/1"):text='badcool-interactive.github.io/KAVI-Letters-To-Lia':fontcolor=0xFFD27A:y=h*0.58+$(calc "90*$fs/1"),\
 $txt:fontsize=$(calc "38*$fs/1"):text='Badcool Studio':y=h*0.88,format=yuv420p,fade=in:0:12,fade=out:st=4.4:d=0.6[v];\
 [1:a]afade=in:d=0.5,afade=out:st=4.0:d=1.0[a]" -map "[v]" -map "[a]" -t 5 "${ENC[@]}" "$TMP/end-$g.mp4"
   echo "file '$TMP/end-$g.mp4'" >> "$TMP/$g.txt"
