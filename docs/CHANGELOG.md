@@ -9,10 +9,12 @@
   - The woodpecker is now a soft wooden "tok" instead of a sharp click.
   - World moments wait 20 s before the first one and play a bit quieter.
 - **Sound board:** every sound is a separate file in `~/Documents/KAVI-sounds` (effects, music layers, world loops, boot sounds; README inside). The owner can point at the exact one that bugs him.
-- **A real BADCOOL boot sound** (Modern style). An original sound logo timed to the boot video:
-  - a soft chime for each letter of BADCOOL as it appears, climbing a scale and moving left to right with the letters;
-  - an airy rise into a warm "hit" when the logo completes;
-  - a sparkle for "INTERACTIVE".
+- **A real BADCOOL boot sound** (Modern style), an original sound logo timed to the boot video.
+  - **Owner:** the first draft's chimes sounded Japanese, but BADCOOL INTERACTIVE is a premium, luxury, established brand of the future world. Redone, same version:
+    - a deep sub swell and a wide, warm analog-style pad on a D major 7 chord;
+    - a tiny, restrained digital glint as each letter of BADCOOL appears, panned with the letters;
+    - a soft shimmer rushing into a cinematic low boom and a big, warm, brassy Dmaj9 chord when the logo completes;
+    - one glassy ping for "INTERACTIVE".
   - Made by `tools/art/make_ident_sound.py`. The video is now silent and its sound plays alongside it, so either style can be used.
 - **The website now has boot sound:** browsers block sound until you click once, so the web version opens on "Click or tap to start", then plays the boot video with sound.
 
@@ -29,6 +31,10 @@
   - Menus: Stamps, Sparks and Hi-score (these left the menu).
   - In a run: Score, metres and Stamps.
 - **Almost no side border:** the screen now reaches nearly edge to edge.
+- **Fits any window shape** (owner screenshots):
+  - in a not-so-tall window the controls used to overlap the screen and the score display; now they shrink to fit (down to 60 %);
+  - a nearly square window uses the normal full-screen layout;
+  - the tall menu is rebuilt for the final size when the window is resized.
 - **Livelier buttons:**
   - the D-pad sits in a round well, and pressed arms glow;
   - A/B light up with a coloured halo when pressed;

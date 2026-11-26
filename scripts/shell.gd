@@ -83,6 +83,9 @@ func _ready() -> void:
 	sub.add_child(game)
 
 ## Deck size unit (button radius scale): set by the phone's width.
+## 0.8.41: the size unit actually used (shrinks when the window is short).
+var _u := 0.0
+
 static func _deck_u(S: Vector2) -> float:
 	return S.x * 0.095
 
@@ -118,13 +121,27 @@ func _layout() -> void:
 		var gx := (S.x - gw) * 0.5
 		var top := S.x * MARQUEE
 		var strip := S.x * STRIP
-		var deck_h := _deck_u(S) * DECK_U
+		_u = _deck_u(S)
+		var deck_h := _u * DECK_U
+		# 0.8.41 (owner screenshots): in a not-so-tall window the controls
+		# overlapped the screen. Shrink them to fit (down to 60 %), and if even
+		# that doesn't fit, use the normal full-screen layout instead.
+		if not _deck_hidden():
+			var avail := S.y - top - strip - S.x * 0.02 - gw * 9.0 / 16.0
+			if avail < deck_h * 0.6:
+				portrait = false
+			elif avail < deck_h:
+				_u *= avail / deck_h
+				deck_h = avail
 		var room := S.y - top - strip - S.x * 0.02 - (0.0 if _deck_hidden() else deck_h)
 		if _deck_hidden():
 			room -= S.x * 0.14            # the "Show controls" pill
 		var gh := clampf(room, gw * 9.0 / 16.0, gw * _max_tall())
 		r = Rect2(gx, (S.y - gh) * 0.42, gw, gh) if _deck_hidden() else Rect2(gx, top, gw, gh)
 		deck_rect = Rect2(0, S.y - deck_h, S.x, deck_h)
+		if not portrait:
+			r = Rect2(Vector2.ZERO, S)
+			deck_rect = Rect2()
 	else:
 		deck_rect = Rect2()
 	game_rect = r
@@ -205,7 +222,7 @@ func _zones() -> Dictionary:
 	# around 2.95, Hide / Pause pills at 5.35, a little room for the
 	# phone's gesture bar below
 	var d := deck_rect
-	var u := _deck_u(get_viewport_rect().size)
+	var u := _u if _u > 0.0 else _deck_u(get_viewport_rect().size)
 	var cy := d.position.y + u * 2.95
 	return {
 		"u": u,

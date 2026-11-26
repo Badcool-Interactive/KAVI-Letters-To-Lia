@@ -393,7 +393,13 @@ func _column(top := 0.24, animate := true) -> VBoxContainer:
 var title_key := ""
 
 func layout_key() -> String:
-	return str(main.get_meta("deck_active", false)) + str(is_tall())
+	var vp := get_viewport_rect().size
+	var key := str(main.get_meta("deck_active", false)) + str(is_tall())
+	if is_tall():
+		# the tall menu's size depends on the screen's shape: rebuild when the
+		# window is resized (snapped, so it doesn't rebuild every pixel)
+		key += str(Vector2i(vp / 96.0))
+	return key
 
 ## True when the game screen is much taller than 16:9 (the portrait handheld).
 func is_tall() -> bool:
