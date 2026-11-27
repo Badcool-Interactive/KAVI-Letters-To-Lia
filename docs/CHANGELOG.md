@@ -1,4 +1,14 @@
 # Changelog
+## 0.8.43 (2026-11-27) · A calm Amber Shore
+
+- **The icon picture's licence is cleared:** it was made with ChatGPT, and under OpenAI's terms the pictures belong to the user and can be used commercially. Re-check before a store release.
+- **The Amber Shore sounds calm now** (owner: "at 3 s there's a rapid tritritri sound, and it's a bad loop"). The old loop had a buzzing cicada (noise switched on and off 45 times a second) and bright, hissy wave blocks that repeated in an obvious pattern every 36 s. It's rebuilt from scratch (`tools/art/make_shore_ambience.py`):
+  - soft rolling waves of different lengths with a gentle backwash;
+  - a breathing breeze and a few distant gulls;
+  - no cicada;
+  - 48 s long, with the end crossfaded into the start so the loop point can't be heard.
+  - Checked: same loudness as before, no clicks.
+- **Smaller web builds:** the app icon used inside the web builds is now 256 px, and the Android and Windows icon files are left out of them. The CrazyGames build is back under its 50 MB limit (49.6 MB); the 0.8.42 icon had pushed it to 54 MB.
 ## 0.8.42 (2026-11-27) · A real KAVI app icon everywhere (test of the owner's picture)
 
 - **App icon on every platform** (owner: "we changed Kavi but his icon isn't; on Windows there is no icon"):
@@ -7,13 +17,6 @@
   - **Web, and the game's own window:** the same icon.
 - **The picture is the owner's Kavi artwork** (cropped to remove its rounded frame), so he can test it on his phone. Its licence still needs checking: it was made on an online AI site, and the site's terms must allow commercial use before a real store release. A clean code-drawn alternative is drawn and waiting (`tools/art/make_kavi_icon.py`, preview in `~/Documents/KAVI-icon-code-preview.png`).
 - The old icon (`icon.svg`, the helmet Kavi) is removed.
-- **The icon picture's licence is cleared:** it was made with ChatGPT, and under OpenAI's terms the pictures belong to the user and can be used commercially. Re-check before a store release.
-- **The Amber Shore sounds calm now** (owner: "at 3 s there's a rapid tritritri sound, and it's a bad loop"). The old loop had a buzzing cicada (noise switched on and off 45 times a second) and bright, hissy wave blocks that repeated in an obvious pattern every 36 s. It's rebuilt from scratch (`tools/art/make_shore_ambience.py`):
-  - soft rolling waves of different lengths with a gentle backwash;
-  - a breathing breeze and a few distant gulls;
-  - no cicada;
-  - 48 s long, with the end crossfaded into the start so the loop point can't be heard.
-  - Checked: same loudness as before, no clicks.
 - Includes the selection-glow fix from 0.8.41: the glow sits on the selected menu item on the phone handheld. Released files now include it.
 ## 0.8.41 (2026-11-27) · Sound style, a real boot sound, the new obstacles in the tutorial, an arcade handheld
 
