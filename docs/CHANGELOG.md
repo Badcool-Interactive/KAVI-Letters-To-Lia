@@ -1,5 +1,5 @@
 # Changelog
-## 0.8.43 (2026-11-27) · A calm Amber Shore
+## 0.8.43 (2026-11-27) · New world sounds, a framed icon, a steady mouse pointer
 
 - **The icon picture's licence is cleared:** it was made with ChatGPT, and under OpenAI's terms the pictures belong to the user and can be used commercially. Re-check before a store release.
 - **The Amber Shore sounds calm now** (owner: "at 3 s there's a rapid tritritri sound, and it's a bad loop"). The old loop had a buzzing cicada (noise switched on and off 45 times a second) and bright, hissy wave blocks that repeated in an obvious pattern every 36 s. It's rebuilt from scratch (`tools/art/make_shore_ambience.py`):
@@ -8,6 +8,17 @@
   - no cicada;
   - 48 s long, with the end crossfaded into the start so the loop point can't be heard.
   - Checked: same loudness as before, no clicks.
+- **All world sounds recomposed** (owner: "recreate all world sounds"). Built the same way as the calm sea: band-limited (no harsh hiss), no buzzing trills, events at irregular times, 48 s seamless loops, the same loudness as before (`tools/art/make_world_ambience.py`):
+  - **Lanternwood:** wind breathing through leaves, soft rustles, distant songbirds singing little phrases, a far owl.
+  - **Mirrorwater:** a gentle river with soft bubbling, water lapping on the boardwalk, reeds in the breeze, a few low frog croaks.
+  - **Starfall Heights:** a wide mountain wind with long swells, a soft whistling gust now and then, far-off flock bells, one eagle cry.
+  - Checked: no clicks, seamless joins, the same loudness. The random world moments (woodpecker, church bell, cowbells...) still play on top.
+- **A framed app icon** (owner: "looks out of place; use some corner framing, but not like a cracked early-2000s game"):
+  - rounded corners like other apps, with a thin glass rim (a warm highlight at the top-left, a soft dark edge at the bottom-right), a faint vignette and a soft top sheen;
+  - on Android the adaptive icon now places it in the visible area on deep navy, and **themed (monochrome) icons show a white Kavi silhouette** instead of Godot's logo;
+  - Windows and the web use the same framed icon.
+  - Made by `tools/art/make_app_icon.py`; preview in `~/Documents/KAVI-icon-framed-preview.png`.
+- **Mouse pointer flicker fixed** (owner's screencast): near the flying paper plane or a sky toy, the pointer flipped between the arrow and the hand every few frames as the toy moved in and out of reach. Now the hand shows at once but only turns back into the arrow after the pointer has been away for a quarter second, with a slightly bigger "leave" zone around the plane.
 - **Smaller web builds:** the app icon used inside the web builds is now 256 px, and the Android and Windows icon files are left out of them. The CrazyGames build is back under its 50 MB limit (49.6 MB); the 0.8.42 icon had pushed it to 54 MB.
 ## 0.8.42 (2026-11-27) · A real KAVI app icon everywhere (test of the owner's picture)
 

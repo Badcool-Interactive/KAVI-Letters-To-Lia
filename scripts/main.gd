@@ -3273,6 +3273,8 @@ func _setup_cursor() -> void:
 
 ## Over something clickable in the scene (sky toys, the paper plane) the
 ## cursor shows the glowing pointer, like it does over menu items.
+var _cursor_hand_seen := 0
+
 func _update_cursor_hover() -> void:
 	if loading:
 		return
@@ -3281,8 +3283,18 @@ func _update_cursor_hover() -> void:
 		var m := get_viewport().get_mouse_position()
 		if world_view.hover_hit(m):
 			want = true
-		elif state == "title" and not plane.is_empty() and plane.state == "fly" and m.distance_to(plane.pos) < 70.0:
+		# a bigger radius to leave than to enter, so a moving plane can't
+		# flip the pointer back and forth
+		elif state == "title" and not plane.is_empty() and plane.state == "fly" and m.distance_to(plane.pos) < (95.0 if _cursor_hand else 70.0):
 			want = true
+	# 0.8.43 (owner's screencast): the pointer flickered between the arrow and
+	# the hand near moving sky toys. The hand shows at once, but only goes
+	# back to the arrow after the pointer has been away for 0.25 s.
+	var now := Time.get_ticks_msec()
+	if want:
+		_cursor_hand_seen = now
+	elif _cursor_hand and now - _cursor_hand_seen < 250:
+		want = true
 	if want != _cursor_hand:
 		_cursor_hand = want
 		Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if want else Input.CURSOR_ARROW)
