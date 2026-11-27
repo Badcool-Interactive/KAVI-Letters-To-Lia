@@ -12,7 +12,7 @@
   - **Lanternwood:** wind breathing through leaves, soft rustles, distant songbirds singing little phrases, a far owl.
   - **Mirrorwater:** a gentle river with soft bubbling, water lapping on the boardwalk, reeds in the breeze, a few low frog croaks.
   - **Starfall Heights:** a wide mountain wind with long swells, a soft whistling gust now and then, far-off flock bells, one eagle cry.
-  - Checked: no clicks, seamless joins, the same loudness. The random world moments (woodpecker, church bell, cowbells...) still play on top.
+  - Checked: no clicks, seamless joins, the same loudness. Stored as smaller OGG files (q1) so the CrazyGames build stays under 50 MB. The random world moments (woodpecker, church bell, cowbells...) still play on top.
 - **A framed app icon** (owner: "looks out of place; use some corner framing, but not like a cracked early-2000s game"):
   - rounded corners like other apps, with a thin glass rim (a warm highlight at the top-left, a soft dark edge at the bottom-right), a faint vignette and a soft top sheen;
   - on Android the adaptive icon now places it in the visible area on deep navy, and **themed (monochrome) icons show a white Kavi silhouette** instead of Godot's logo;
