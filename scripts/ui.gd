@@ -537,8 +537,13 @@ class Glide extends Control:
 			# fit the band to the words, not the whole row
 			var b: Button = f
 			var tw: float = b.get_theme_font("font").get_string_size(b.text, HORIZONTAL_ALIGNMENT_LEFT, -1, b.get_theme_font_size("font_size")).x
-			fr.size.x = minf(fr.size.x, (tw + 90.0) * b.scale.x)
-			var local := Rect2(fr.position - global_position, fr.size)
+			fr.size.x = minf(fr.size.x, (tw + 90.0) * b.scale.x * b.get_global_transform().get_scale().x)
+			# 0.8.41: convert through the full transform, so the glow sits on the
+			# words even when the menu is scaled (the bigger handheld menu)
+			var inv := get_global_transform().affine_inverse()
+			var p0: Vector2 = inv * fr.position
+			var p1: Vector2 = inv * fr.end
+			var local := Rect2(p0, p1 - p0)
 			if r.size == Vector2.ZERO:
 				r = local
 			# critically damped spring toward the focused row

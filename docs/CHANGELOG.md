@@ -35,6 +35,7 @@
   - in a not-so-tall window the controls used to overlap the screen and the score display; now they shrink to fit (down to 60 %);
   - a nearly square window uses the normal full-screen layout;
   - the tall menu is rebuilt for the final size when the window is resized.
+- **Selection glow fixed** (owner's phone video): on the bigger handheld menu, the soft glow that shows the selected item sat in the wrong place. It now sits right on the selected words.
 - **Livelier buttons:**
   - the D-pad sits in a round well, and pressed arms glow;
   - A/B light up with a coloured halo when pressed;
@@ -46,6 +47,8 @@
   - a stronger one when the power button turns the game off;
   - a bump when Kavi trips.
   - On by default, with an on/off switch in Settings › Controls (phones and web). Android gets the vibrate permission.
+
+**Old Kavi styles removed** (owner): the unused sprite parts of the rejected Kavi E version (`assets/kavi/`) are gone from the game, which also makes every build a little smaller. The studio's old character art (Kite and Lumi, the old concepts) moved to `studio/docs/archive/old-character-styles/`.
 
 **Checks:** all 225 pass, including fairness with all 11 obstacle types; the game boots clean; the tutorial finishes with all 13 lessons (captured). Portrait captures at 1080×2400 show the new console.
 
