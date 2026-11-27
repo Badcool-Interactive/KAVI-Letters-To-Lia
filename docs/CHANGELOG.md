@@ -1,4 +1,13 @@
 # Changelog
+## 0.8.42 (2026-11-27) · A real KAVI app icon everywhere (test of the owner's picture)
+
+- **App icon on every platform** (owner: "we changed Kavi but his icon isn't; on Windows there is no icon"):
+  - **Windows:** the .exe now has the KAVI icon (6 sizes from 16 to 256 px) and real version info (BADCOOL INTERACTIVE · KAVI: Letters to Lia · 0.8.42). It showed Godot's robot before, because "modify resources" was off.
+  - **Android:** a new launcher icon (adaptive, so each phone shapes it). It used to be the old helmet Kavi.
+  - **Web, and the game's own window:** the same icon.
+- **The picture is the owner's Kavi artwork** (cropped to remove its rounded frame), so he can test it on his phone. Its licence still needs checking: it was made on an online AI site, and the site's terms must allow commercial use before a real store release. A clean code-drawn alternative is drawn and waiting (`tools/art/make_kavi_icon.py`, preview in `~/Documents/KAVI-icon-code-preview.png`).
+- The old icon (`icon.svg`, the helmet Kavi) is removed.
+- Includes the selection-glow fix from 0.8.41: the glow sits on the selected menu item on the phone handheld. Released files now include it.
 ## 0.8.41 (2026-11-27) · Sound style, a real boot sound, the new obstacles in the tutorial, an arcade handheld
 
 **Sound** (owner feedback on 0.8.40):
